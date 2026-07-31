@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js build output
+.next/
+out/
+build/
+dist/
+.vercel/
+*.tsbuildinfo
+
+# Bun
+.bun/
+
+# Go compiled binaries & test artifacts
+*.exe
+*.exe?
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+apps/engine/engine
+scripts/test-crash/test-crash
+
+# Environment files & secret keys
+.env
+.env*.local
+*.pem
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.gemini/
