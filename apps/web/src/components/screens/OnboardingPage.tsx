@@ -1,0 +1,324 @@
+/**
+ * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { ScreenId } from '../../types';
+import {
+  GitBranch,
+  CheckCircle2,
+  Copy,
+  Check,
+  Search,
+  ArrowRight,
+  Key,
+  Shield,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
+
+interface OnboardingPageProps {
+  onNavigate: (screen: ScreenId) => void;
+}
+
+export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) => {
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedRepo, setSelectedRepo] = useState('algotyrnt/beacon-app');
+  const [generatedKey, setGeneratedKey] = useState('trj_live_9f8a3c2b1e4d7f6a89201bcde');
+  const [copiedKey, setCopiedKey] = useState(false);
+
+  const repos = [
+    { name: 'algotyrnt/beacon-app', visibility: 'Public', branch: 'main', lang: 'Go 1.22' },
+    { name: 'algotyrnt/payments-go', visibility: 'Private', branch: 'main', lang: 'Go 1.22' },
+    { name: 'algotyrnt/go-grpc-auth', visibility: 'Private', branch: 'master', lang: 'Go 1.21' },
+    { name: 'algotyrnt/k8s-operator', visibility: 'Public', branch: 'main', lang: 'Go 1.22' },
+  ];
+
+  const filteredRepos = repos.filter((r) =>
+    r.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      {/* Title */}
+      <div className="border-b border-slate-200 pb-4">
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight font-sans">
+          Project Onboarding & Go AST Setup
+        </h1>
+        <p className="text-xs text-slate-600 font-sans mt-1">
+          Connect your GitHub repository to index Go AST syntax trees and enable live panic crash symbolication.
+        </p>
+      </div>
+
+      {/* 3-Step Indicator Bar with Solid Black Lines */}
+      <div className="grid grid-cols-3 gap-2 bg-white border border-slate-200 p-2 rounded-sm font-mono text-xs">
+        {[
+          { num: 1, title: 'Select Repo', desc: 'Choose target Go project' },
+          { num: 2, title: 'GitHub App Setup', desc: 'Read-only tree permissions' },
+          { num: 3, title: 'SDK Integration Key', desc: 'Generate telemetry token' },
+        ].map((step) => {
+          const isActive = currentStep === step.num;
+          const isDone = currentStep > step.num;
+          return (
+            <button
+              key={step.num}
+              onClick={() => setCurrentStep(step.num as any)}
+              className={`text-left p-2.5 rounded-sm transition-all border ${
+                isActive
+                  ? 'border-black bg-black text-white'
+                  : isDone
+                  ? 'border-emerald-200 bg-emerald-50/50 text-slate-900'
+                  : 'border-slate-100 bg-slate-50 text-slate-500'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm ${
+                    isActive
+                      ? 'bg-white text-black'
+                      : isDone
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  STEP 0{step.num}
+                </span>
+                {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+              </div>
+              <div className="font-bold text-xs">{step.title}</div>
+              <div className={`text-[10px] truncate ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+                {step.desc}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Step Content */}
+      <div className="bg-white border border-slate-200 rounded-sm p-6 space-y-6">
+        {currentStep === 1 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 font-sans">
+                  Select a Go Repository from <span className="font-mono">algotyrnt</span>
+                </h2>
+                <p className="text-xs text-slate-500 font-sans">
+                  Triage will analyze `go.mod` and parse `FuncDecl` AST nodes upon commit webhook.
+                </p>
+              </div>
+              <span className="text-xs font-mono text-slate-500">4 repositories found</span>
+            </div>
+
+            {/* Search Box */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search repository (e.g. beacon-app)..."
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-sm text-xs font-mono focus:bg-white focus:outline-none focus:border-black"
+              />
+            </div>
+
+            {/* Repo List */}
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {filteredRepos.map((repo) => {
+                const isSelected = selectedRepo === repo.name;
+                return (
+                  <div
+                    key={repo.name}
+                    onClick={() => setSelectedRepo(repo.name)}
+                    className={`p-3 rounded-sm border cursor-pointer transition-all flex items-center justify-between font-mono text-xs ${
+                      isSelected
+                        ? 'border-black bg-slate-50'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                          isSelected ? 'border-black bg-black' : 'border-slate-300'
+                        }`}
+                      >
+                        {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                      </div>
+                      <div>
+                        <span className="font-bold text-slate-900">{repo.name}</span>
+                        <span className="text-[11px] text-slate-500 ml-2">({repo.branch})</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-sm border border-slate-200">
+                        {repo.lang}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-sm border ${
+                          repo.visibility === 'Public'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {repo.visibility}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Continue to Step 2 (GitHub App Setup)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 2 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 font-sans">
+                GitHub App Authorization & AST Webhook Ingress
+              </h2>
+              <p className="text-xs text-slate-500 font-sans mt-0.5">
+                Targeting <span className="font-mono text-slate-900 font-bold">{selectedRepo}</span>
+              </p>
+            </div>
+
+            {/* Authorization Banner */}
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-sm space-y-2">
+              <div className="flex items-center gap-2 text-emerald-900 font-mono text-xs font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>GitHub App Authorized for org: algotyrnt</span>
+              </div>
+              <p className="text-xs font-mono text-emerald-800 leading-relaxed">
+                Triage GitHub App installed with read-only tree permissions. Webhook listener configured at:
+                <code className="block mt-1 p-1.5 bg-white border border-emerald-200 rounded-sm text-[11px] text-slate-900 font-mono">
+                  https://api.triage.dev/v1/github/webhook/wh_algotyrnt_beacon
+                </code>
+              </p>
+            </div>
+
+            {/* Scope details */}
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm space-y-1.5 font-mono text-xs">
+              <div className="font-bold text-slate-800">Granted Scopes & Webhook Triggers:</div>
+              <div className="text-slate-600 text-[11px] space-y-1">
+                <div>• <span className="font-semibold text-slate-900">push:</span> Automatically re-indexes Go AST nodes on git push</div>
+                <div>• <span className="font-semibold text-slate-900">issues:write:</span> Automatically links symbolicated panic crashes to GitHub Issues</div>
+                <div>• <span className="font-semibold text-slate-900">pull_requests:write:</span> Enables Gemini automated patch generation comments</div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <button
+                onClick={() => setCurrentStep(1)}
+                className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-mono text-xs py-2 px-3 rounded-sm border border-slate-200"
+              >
+                Back to Repositories
+              </button>
+              <button
+                onClick={() => setCurrentStep(3)}
+                className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Generate Ingestion API Key</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 font-sans">
+                SDK Telemetry Key Generated
+              </h2>
+              <p className="text-xs text-slate-500 font-sans mt-0.5">
+                Use this API key in your Go application initialization script (`defer triage.Recovery()`).
+              </p>
+            </div>
+
+            {/* Key Box */}
+            <div className="bg-slate-900 text-slate-100 p-4 rounded-sm font-mono space-y-2 border border-slate-800">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Production Telemetry Key (Repo: {selectedRepo})</span>
+                </span>
+                <span className="text-[10px] text-emerald-400 font-bold">STATUS: ACTIVE</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 bg-black p-2.5 rounded-sm border border-slate-800">
+                <code className="text-xs text-emerald-400 font-bold tracking-wide select-all break-all">
+                  {generatedKey}
+                </code>
+                <button
+                  onClick={handleCopy}
+                  className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1 rounded-sm border border-slate-700 flex items-center gap-1 shrink-0 font-mono"
+                >
+                  {copiedKey ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Go Code snippet snippet */}
+            <div className="space-y-1.5 font-mono">
+              <div className="text-xs font-bold text-slate-800">Go SDK QuickStart Initialization:</div>
+              <pre className="bg-slate-900 text-slate-100 p-3 rounded-sm text-[11px] overflow-x-auto border border-slate-800 leading-relaxed">
+{`package main
+
+import (
+	"net/http"
+	"github.com/algotyrnt/triage-go/sdk"
+)
+
+func main() {
+	// Initialize Triage Panic Symbolication Engine
+	tr := sdk.Init(sdk.Config{
+		ApiKey: "${generatedKey}",
+		Repo:   "${selectedRepo}",
+	})
+	defer tr.Recovery() // Captures Go runtime panic stack traces & AST offset
+
+	http.ListenAndServe(":8080", nil)
+}`}
+              </pre>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-mono text-xs py-2 px-3 rounded-sm border border-slate-200"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => onNavigate('dashboard')}
+                className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2.5 px-5 rounded-sm transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <span>Complete Setup & Open Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
