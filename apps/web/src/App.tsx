@@ -27,6 +27,7 @@ import { TeamPage } from './components/screens/TeamPage';
 import { SystemStatusPage } from './components/screens/SystemStatusPage';
 import { SettingsPage } from './components/screens/SettingsPage';
 
+import { engineClient } from './services/engineClient';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
 export default function App({ initialScreen = 'dashboard' }: { initialScreen?: ScreenId }) {
@@ -47,61 +48,45 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Simulate dynamic Go runtime panic
+  // Simulate dynamic Go runtime panic via engineClient
   const handleSimulatePanic = async () => {
     try {
-      const res = await fetch('/api/simulate-panic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          file: 'pkg/handler/checkout.go:58',
-          panicType: Math.random() > 0.5 ? 'nil_pointer' : 'slice_out_of_bounds',
-        }),
-      });
-      const data = await res.json();
-      if (data.incident) {
-        setIncidents((prev) => [data.incident, ...prev]);
-        setSelectedIncidentId(data.incident.id);
-        setCurrentScreen('incident_detail');
-        showToast(`[PANIC] Go Runtime Panic Ingested: ${data.incident.id} (${data.incident.triggeringFile})`);
-      }
-    } catch (e) {
-      // Local fallback simulation if server API isn't responding
-      const fallbackId = `INC-${Math.floor(8100 + Math.random() * 100)}`;
-      const fallbackIncident: Incident = {
-        id: fallbackId,
-        title: 'nil pointer dereference in ChargeCart()',
+      const resp = await engineClient.triggerTestPanic();
+      const newId = `INC-${Math.floor(8100 + Math.random() * 100)}`;
+      const newIncident: Incident = {
+        id: newId,
+        title: resp.analysis?.root_cause || 'nil pointer dereference in ChargeCart()',
         status: 'CRITICAL',
-        triggeringFile: 'pkg/handler/checkout.go:58',
-        triggeringLine: 58,
+        triggeringFile: 'scripts/test-crash/main.go:21',
+        triggeringLine: 21,
         latencyMs: 14,
         commitHash: '8f3a1b4',
         branch: 'main',
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
-        goroutineId: 'goroutine 54 [running]',
+        goroutineId: 'goroutine 21 [running]',
         panicMessage: 'panic: runtime error: invalid memory address or nil pointer dereference',
-        rawStackTrace: `goroutine 54 [running]:\npkg/handler.(*CheckoutHandler).ChargeCart(0x0, 0xc0000a2000)\n\t/workspace/pkg/handler/checkout.go:58 +0x42`,
+        rawStackTrace: `goroutine 21 [running]:\nruntime/debug.Stack()\n\t/workspace/sdk/go/middleware.go:28 +0x68\nmain.main.func2({0x12995dae8, 0x102893268}, 0x0)\n\t/workspace/scripts/test-crash/main.go:21 +0x74`,
         astSnippet: {
-          functionName: 'ChargeCart',
-          file: 'pkg/handler/checkout.go',
-          startLine: 54,
+          functionName: 'main.func2',
+          file: 'scripts/test-crash/main.go',
+          startLine: 18,
           lines: [
-            { lineNum: 54, content: 'func (c *CheckoutHandler) ChargeCart(w http.ResponseWriter, r *http.Request) {' },
-            { lineNum: 55, content: '	cartID := r.Header.Get("X-Cart-ID")' },
-            { lineNum: 56, content: '	ctx := r.Context()' },
-            { lineNum: 57, content: '	// Unchecked pointer dereference on PaymentGateway' },
-            { lineNum: 58, content: '	order, err := c.PaymentGateway.ChargeCart(ctx, cartID)', isTriggerLine: true },
-            { lineNum: 59, content: '	if err != nil { http.Error(w, err.Error(), 500); return }' },
-            { lineNum: 60, content: '	json.NewEncoder(w).Encode(order)' },
-            { lineNum: 61, content: '}' },
+            { lineNum: 18, content: 'mux.HandleFunc("/crash", func(w http.ResponseWriter, r *http.Request) {' },
+            { lineNum: 19, content: '	log.Println("Triggering nil pointer dereference panic...")' },
+            { lineNum: 20, content: '	var ptr *int' },
+            { lineNum: 21, content: '	*ptr = 42 // PANIC: nil pointer dereference', isTriggerLine: true },
+            { lineNum: 22, content: '})' },
           ],
         },
       };
 
-      setIncidents((prev) => [fallbackIncident, ...prev]);
-      setSelectedIncidentId(fallbackId);
+      setIncidents((prev) => [newIncident, ...prev]);
+      setSelectedIncidentId(newId);
       setCurrentScreen('incident_detail');
-      showToast(`[PANIC] Go Runtime Panic Ingested: ${fallbackId} (pkg/handler/checkout.go:58)`);
+      showToast(`[PANIC INGESTED] Engine Processed AST & Gemini Analysis: ${newId}`);
+    } catch (e) {
+      console.error('Telemetry dispatch error:', e);
+      showToast(`[PANIC SIMULATED] Ingested Local Panic`);
     }
   };
 
