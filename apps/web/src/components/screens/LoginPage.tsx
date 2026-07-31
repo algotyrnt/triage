@@ -1,0 +1,99 @@
+import React, { useState } from 'react';
+import { ScreenId } from '../../types';
+import { GithubIcon as Github } from '../GithubIcon';
+import { ShieldCheck, Lock, Check, ArrowRight } from 'lucide-react';
+
+interface LoginPageProps {
+  onNavigate: (screen: ScreenId) => void;
+  onLoginSuccess: (username: string) => void;
+}
+
+export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess }) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleGitHubLogin = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      onLoginSuccess('algotyrnt');
+      onNavigate('dashboard');
+    }, 600);
+  };
+
+  return (
+    <div className="min-h-[calc(100vh-100px)] bg-slate-50 flex flex-col items-center justify-center p-4">
+      {/* 420px Centered Card */}
+      <div className="w-full max-w-[420px] bg-white border border-slate-200 rounded-sm p-6 shadow-none space-y-6">
+        {/* Header Block */}
+        <div className="text-center space-y-2">
+          <div className="inline-block bg-black text-white font-mono font-bold text-sm px-3 py-1 rounded-sm tracking-widest uppercase">
+            [TRIAGE]
+          </div>
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+            Go Backend Crash Detection & AST Isolation
+          </h1>
+          <p className="text-xs text-slate-600 font-sans">
+            Automated panic symbolication and syntax tree isolation for enterprise Go microservices.
+          </p>
+        </div>
+
+        {/* Auth Action */}
+        <div className="space-y-3">
+          <button
+            onClick={handleGitHubLogin}
+            disabled={loading}
+            className="w-full bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2.5 px-4 rounded-sm border border-black transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Github className="w-4 h-4" />
+            <span>{loading ? 'Authenticating with GitHub OAuth...' : 'Log in with GitHub'}</span>
+            {!loading && <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" />}
+          </button>
+
+          <button
+            onClick={() => {
+              onLoginSuccess('algotyrnt');
+              onNavigate('dashboard');
+            }}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono text-xs py-2 px-4 rounded-sm border border-slate-200 transition-colors text-center"
+          >
+            Enter Demo Console as <span className="font-semibold text-slate-900">algotyrnt</span>
+          </button>
+        </div>
+
+        {/* Security Disclaimer Box (#F1F5F9) */}
+        <div className="bg-slate-100 border border-slate-200 rounded-sm p-3.5 space-y-2 text-xs font-mono text-slate-600">
+          <div className="flex items-center gap-1.5 text-slate-900 font-semibold text-[11px] uppercase tracking-wider">
+            <ShieldCheck className="w-3.5 h-3.5 text-slate-700" />
+            <span>Security & Data Compliance Scope</span>
+          </div>
+
+          <ul className="space-y-1.5 text-[11px] text-slate-600 leading-relaxed">
+            <li className="flex items-start gap-1.5">
+              <Check className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
+              <span>
+                <strong className="text-slate-800">Read-Only AST Scope:</strong> Parses exported package ASTs, function signatures & byte offsets. Zero write permissions to source.
+              </span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <Check className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
+              <span>
+                <strong className="text-slate-800">Zero-Log Policy:</strong> Runtime stack traces are symbolicated on-the-fly and never stored in unencrypted persistent logs.
+              </span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <Lock className="w-3 h-3 text-slate-700 mt-0.5 shrink-0" />
+              <span>
+                <strong className="text-slate-800">TLS 1.3 Encryption:</strong> Webhooks and telemetry ingress encrypted in transit & at rest.
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        {/* Footer info */}
+        <div className="text-center text-[11px] text-slate-400 font-mono">
+          Triage Engine v1.4.2 • Go 1.22+ Runtime Verified
+        </div>
+      </div>
+    </div>
+  );
+};
