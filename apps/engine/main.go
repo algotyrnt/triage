@@ -13,21 +13,26 @@ import (
 	"time"
 
 	"triage/engine/internal/ast"
+	"triage/engine/internal/github"
 	"triage/engine/internal/llm"
 )
 
 type TelemetryRequest struct {
-	APIKey     string `json:"api_key"`
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	StackTrace string `json:"stack_trace"`
+	APIKey         string `json:"api_key"`
+	File           string `json:"file"`
+	Line           int    `json:"line"`
+	StackTrace     string `json:"stack_trace"`
+	GithubOwner    string `json:"github_owner,omitempty"`
+	GithubRepo     string `json:"github_repo,omitempty"`
+	InstallationID int64  `json:"installation_id,omitempty"`
 }
 
 type TelemetryResponse struct {
-	Status       string              `json:"status"`
-	AST          string              `json:"ast,omitempty"`
-	Analysis     *llm.AnalysisResult `json:"analysis,omitempty"`
-	ErrorMessage string              `json:"error,omitempty"`
+	Status       string                `json:"status"`
+	AST          string                `json:"ast,omitempty"`
+	Analysis     *llm.AnalysisResult   `json:"analysis,omitempty"`
+	GithubIssue  *github.IssueResponse `json:"github_issue,omitempty"`
+	ErrorMessage string                `json:"error,omitempty"`
 }
 
 func main() {
@@ -36,7 +41,10 @@ func main() {
 		port = "8080"
 	}
 
+	webhookSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
+
 	http.HandleFunc("/api/v1/telemetry", handleTelemetryRoute)
+	http.HandleFunc("/api/v1/github/webhook", github.WebhookHandler(webhookSecret))
 
 	log.Printf("Triage Engine server listening on :%s ...", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
@@ -100,13 +108,38 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[ANALYSIS COMPLETE]")
 	log.Printf("  Root Cause: %s", analysis.RootCause)
 	log.Printf("  Suggested Fix: %s", analysis.SuggestedFix)
+
+	var githubIssueResp *github.IssueResponse
+	appID := os.Getenv("GITHUB_APP_ID")
+	privateKeyPem := os.Getenv("GITHUB_PRIVATE_KEY")
+
+	if appID != "" && privateKeyPem != "" && req.GithubOwner != "" && req.GithubRepo != "" && req.InstallationID > 0 {
+		ghClient := github.NewClient(appID, []byte(privateKeyPem))
+		issueReq := &github.IssueRequest{
+			File:       req.File,
+			Line:       req.Line,
+			StackTrace: req.StackTrace,
+			ASTSnippet: astSnippet,
+			Analysis:   analysis,
+		}
+
+		issue, err := ghClient.CreateIssue(ctx, req.GithubOwner, req.GithubRepo, req.InstallationID, issueReq)
+		if err != nil {
+			log.Printf("[WARNING] Failed to post GitHub issue: %v", err)
+		} else {
+			githubIssueResp = issue
+			log.Printf("[GITHUB ISSUE CREATED] #%d: %s", issue.Number, issue.HTMLURL)
+		}
+	}
+
 	log.Printf("==================================================")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(TelemetryResponse{
-		Status:   "success",
-		AST:      astSnippet,
-		Analysis: analysis,
+		Status:      "success",
+		AST:         astSnippet,
+		Analysis:    analysis,
+		GithubIssue: githubIssueResp,
 	})
 }
