@@ -3,13 +3,13 @@
 > **[IMPORTANT] Work In Progress (WIP)**
 > Triage is currently in active early development. Interfaces, telemetry protocols, and SDK signatures may evolve as features are added.
 
-**Triage** is a zero-overhead Go crash isolation tool and AI-powered diagnostic platform. When a panic occurs in a Go service, Triage intercepts the crash non-blockingly, uses Go's standard parser to isolate **ONLY** the surrounding function's AST node (`*ast.FuncDecl`), and queries Google Gemini for instant root-cause analysis and drop-in code fixes.
+**Triage** is a zero-overhead Go crash isolation tool, automated GitHub issue triaging engine, and AI-powered diagnostic platform. When a panic occurs in a Go web application, Triage intercepts the crash non-blockingly, uses Go standard parser to isolate **ONLY** the surrounding function's AST node (`*ast.FuncDecl`), queries Google Gemini for instant root-cause analysis, and automatically posts a detailed issue to your GitHub repository.
 
 ---
 
-## Architecture & How It Works
+## Architecture & System Data Flow
 
-```
+```text
                      ┌──────────────────────────────────────────────┐
                      │          Your Go Application / Service       │
                      └──────────────────────┬───────────────────────┘
@@ -19,12 +19,12 @@
                                             │
                                Async Non-Blocking POST
                                             ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                 Triage Engine (:8080)                                  │
-│                                                                                        │
-│  1. Parse Stack Trace  ──►  2. Extract Func AST  ──►  3. Gemini 2.5 SDK Diagnosis      │
-│     (Top App Frame)            (internal/ast)            (google.golang.org/genai)     │
-└───────────────────────────────────────────┬────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 Triage Engine (:8080)                                      │
+│                                                                                            │
+│  1. Parse Stack Trace  ──►  2. Extract Func AST  ──►  3. Gemini 2.5 SDK  ──►  4. GitHub App│
+│     (Top App Frame)            (internal/ast)            (genai SDK)            Issue Post │
+└───────────────────────────────────────────┬────────────────────────────────────────────────┘
                                             │
                                     JSON Telemetry Stream
                                             ▼
@@ -49,28 +49,35 @@ The SDK provides a lightweight HTTP middleware (`triage.Middleware`) wrapping st
 
 - **AST Node Isolation (`internal/ast`)**: Reads the local `.go` file and uses `go/parser`, `go/token`, `go/ast`, and `go/printer` to extract **ONLY** the `*ast.FuncDecl` enclosing the target crash line.
 - **AI Diagnostics (`internal/llm`)**: Uses the official Google Gemini SDK (`google.golang.org/genai`) to send the stack trace and isolated AST node to Gemini 2.5, generating structured JSON with `root_cause` and `suggested_fix`.
+- **GitHub App Subsystem (`internal/github`)**: Uses pure Go standard library RSA/JWT signing (`RS256`) to exchange installation tokens (`POST /app/installations/{id}/access_tokens`), create formatted Markdown issues (`POST /repos/{owner}/{repo}/issues`), and verify `X-Hub-Signature-256` HMAC webhook signatures.
 
 ### 3. Studio Web App (`apps/web`)
 
-- Built with **Next.js 15** and **Bun**.
+- Built with **Next.js 15 App Router** and **Bun**.
 - **`/`**: Product landing page and SDK integration guide.
 - **`/dashboard`**: Real-time crash isolation dashboard displaying live panic feeds, AST code viewers, and AI fix diffs.
+- **`engineClient` Integration**: Client API service module ([`apps/web/src/services/engineClient.ts`](file:///Users/punjitha/projects/triage/apps/web/src/services/engineClient.ts)) and Next.js API proxy route ([`apps/web/src/app/api/telemetry/route.ts`](file:///Users/punjitha/projects/triage/apps/web/src/app/api/telemetry/route.ts)) connecting the dashboard directly to the Go Engine.
 
 ---
 
 ## Repository Structure
 
-```
+```text
 .
+├── PROJECT_CONTEXT.md    # Master architecture & security reference specification
 ├── apps/
-│   ├── engine/           # Go 1.22+ Core Engine (AST parser & Gemini SDK)
+│   ├── engine/           # Go 1.22+ Core Engine (AST parser, Gemini SDK & GitHub App)
 │   │   ├── internal/ast/ # go/ast function node extractor
+│   │   ├── internal/github/ # GitHub App JWT auth, issue poster & webhook handler
 │   │   ├── internal/llm/ # Gemini 2.5 SDK integration
 │   │   └── main.go       # HTTP Telemetry server listening on :8080
 │   └── web/              # Next.js 15 + Bun Web App (Landing page & Dashboard)
-│       └── src/app/
-│           ├── page.tsx            # Landing Page (domain.com)
-│           └── dashboard/page.tsx  # Studio Dashboard (domain.com/dashboard)
+│       └── src/
+│           ├── app/
+│           │   ├── page.tsx            # Landing Page (domain.com)
+│           │   ├── dashboard/page.tsx  # Studio Dashboard (domain.com/dashboard)
+│           │   └── api/telemetry/      # Next.js API proxy route for engine
+│           └── services/engineClient.ts # Engine client API service
 ├── sdk/
 │   └── go/               # Go Client SDK (panic middleware & telemetry dispatcher)
 └── scripts/
@@ -146,16 +153,9 @@ func main() {
 
 ---
 
-## WIP Roadmap
+## WIP Roadmap & Issue Tracker
 
-- [x] Monorepo structure & Go module separation
-- [x] `go/ast` Function AST Node extraction
-- [x] Official Gemini SDK integration (`google.golang.org/genai`)
-- [x] Client SDK HTTP panic middleware (`sdk/go`)
-- [x] Bun & Next.js 15 Studio Dashboard & Landing Page
-- [ ] Multi-file AST context expanding (tracing struct definitions across files)
-- [ ] Webhook alerts (Slack, Discord, PagerDuty)
-- [ ] Python & Node.js SDK support
+Track all roadmap items on the **[Milestone v1.0.0](https://github.com/algotyrnt/triage/milestone/1)** and **[GitHub Project Board](https://github.com/algotyrnt/triage/projects)**.
 
 ---
 
