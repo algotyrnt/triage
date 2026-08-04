@@ -7,11 +7,27 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
-	"triage/sdk"
+	triage "github.com/algotyrnt/triage/sdk/go"
 )
 
 func main() {
+	apiKey := os.Getenv("TRIAGE_API_KEY")
+	if apiKey == "" {
+		apiKey = "tr_test_key_9042"
+	}
+
+	engineURL := os.Getenv("TRIAGE_ENGINE_URL")
+	if engineURL == "" {
+		engineURL = "http://localhost:8080/api/v1/telemetry"
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081"
+	}
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -25,10 +41,10 @@ func main() {
 	})
 
 	// Wrap server multiplexer in Triage middleware
-	wrappedHandler := triage.Middleware("test_key", "http://localhost:8080/api/v1/telemetry")(mux)
+	wrappedHandler := triage.Middleware(apiKey, engineURL)(mux)
 
-	log.Println("Starting test-crash server on :8081 ...")
-	if err := http.ListenAndServe(":8081", wrappedHandler); err != nil {
+	log.Printf("Starting test-crash server on :%s ...", port)
+	if err := http.ListenAndServe(":"+port, wrappedHandler); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
