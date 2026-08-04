@@ -1,362 +1,156 @@
 /**
  * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  Incident,
-  AstCommitIndex,
-  AstFile,
-  WebhookLog,
-  TeamMember,
-  ApiKey,
-  MetricHourly,
-  SystemHealthComponent,
-} from '../types';
+import { Incident, AstCommitIndex, AstFile, WebhookLog, TeamMember, ApiKey, MetricHourly, SystemHealthComponent } from '../types';
+
+export const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
 
 export const INITIAL_INCIDENTS: Incident[] = [
   {
     id: 'INC-8094',
-    title: 'nil pointer dereference in GetProfile()',
+    title: 'nil pointer dereference in ChargeCart()',
     status: 'CRITICAL',
-    triggeringFile: 'pkg/handler/user.go:42',
-    triggeringLine: 42,
-    latencyMs: 740,
+    triggeringFile: 'pkg/handler/checkout.go:58',
+    triggeringLine: 58,
+    latencyMs: 14,
     commitHash: '8f3a1b4',
     branch: 'main',
-    timestamp: '2026-07-28 12:04:18 UTC',
-    goroutineId: 'goroutine 42 [running]',
+    timestamp: '2026-07-28 14:22:04 UTC',
+    goroutineId: 'goroutine 54 [running]',
     panicMessage: 'panic: runtime error: invalid memory address or nil pointer dereference',
-    githubIssueUrl: 'https://github.com/algotyrnt/beacon-app/issues/104',
-    githubIssueNumber: 104,
-    rawStackTrace: `goroutine 42 [running]:
-pkg/handler.(*UserHandler).GetProfile(0x0, 0xc0000a2000, 0x12)
-	/workspace/pkg/handler/user.go:42 +0x3a
-net/http.HandlerFunc.ServeHTTP(0x10b2d40, 0x1203400, 0xc0000a2000)
-	/go/src/net/http/server.go:2166 +0x2f
-github.com/algotyrnt/triage-go/sdk.RecoveryMiddleware.func1(0x1203400, 0xc0000a2000)
-	/workspace/pkg/middleware/recovery.go:18 +0x85
-net/http.(*ServeMux).ServeHTTP(0x1224100, 0x1203400, 0xc0000a2000)
-	/go/src/net/http/server.go:2488 +0x184`,
+    rawStackTrace: `goroutine 54 [running]:
+pkg/handler.(*CheckoutHandler).ChargeCart(0x0, 0xc0000a2000)
+	/workspace/pkg/handler/checkout.go:58 +0x42
+net/http.HandlerFunc.ServeHTTP(0x1028e3b20?, {0x12995dae8, 0x102893268}, 0x1400018a000?)
+	/usr/local/go/src/net/http/server.go:2166 +0x38
+net/http.(*ServeMux).ServeHTTP(0x102894540?, {0x12995dae8, 0x102893268}, 0x1400018a000)
+	/usr/local/go/src/net/http/server.go:2683 +0x1b8`,
     astSnippet: {
-      functionName: 'GetProfile',
-      file: 'pkg/handler/user.go',
-      startLine: 38,
+      functionName: 'ChargeCart',
+      file: 'pkg/handler/checkout.go',
+      startLine: 54,
       lines: [
-        { lineNum: 38, content: 'func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {' },
-        { lineNum: 39, content: '	userID := r.URL.Query().Get("id")' },
-        { lineNum: 40, content: '	ctx := r.Context()' },
-        { lineNum: 41, content: '	// Unchecked struct pointer dereference on h.Repo' },
-        { lineNum: 42, content: '	profile, err := h.Repo.FindUserByID(ctx, userID)', isTriggerLine: true },
-        { lineNum: 43, content: '	if err != nil {' },
-        { lineNum: 44, content: '		http.Error(w, err.Error(), http.StatusNotFound)' },
-        { lineNum: 45, content: '		return' },
-        { lineNum: 46, content: '	}' },
-        { lineNum: 47, content: '	json.NewEncoder(w).Encode(profile)' },
-        { lineNum: 48, content: '}' },
+        { lineNum: 54, content: 'func (c *CheckoutHandler) ChargeCart(w http.ResponseWriter, r *http.Request) {' },
+        { lineNum: 55, content: '	cartID := r.Header.Get("X-Cart-ID")' },
+        { lineNum: 56, content: '	ctx := r.Context()' },
+        { lineNum: 57, content: '	// Unchecked pointer dereference on PaymentGateway' },
+        { lineNum: 58, content: '	order, err := c.PaymentGateway.ChargeCart(ctx, cartID)', isTriggerLine: true },
+        { lineNum: 59, content: '	if err != nil { http.Error(w, err.Error(), 500); return }' },
+        { lineNum: 60, content: '	json.NewEncoder(w).Encode(order)' },
+        { lineNum: 61, content: '}' },
       ],
     },
     geminiAnalysis: {
-      rootCause: 'Uninitialized Struct Receiver Field (Nil Pointer Dereference)',
+      rootCause: 'Uninitialized Receiver Pointer (PaymentGateway)',
       explanation:
-        'The method receiver `h *UserHandler` was invoked with a `nil` `Repo` instance (0x0 pointer offset). Line 42 attempts to dereference `h.Repo.FindUserByID()`. Because `h.Repo` was never injected during route wireup in `pkg/api/router.go`, evaluating `h.Repo` causes immediate CPU page fault resulting in Go runtime panic.',
+        'The receiver method `ChargeCart` attempted to dereference field `c.PaymentGateway`, which was nil when invoked from HTTP route handler.',
       severity: 'CRITICAL',
       recommendedFix:
-        'Add a nil-check guard before accessing `h.Repo`, or enforce non-nil repository initialization in `NewUserHandler(repo UserRepository)`.',
+        'Add a defensive nil check for `c.PaymentGateway` before dereferencing, or ensure dependency injection initializes `PaymentGateway` during `NewCheckoutHandler()` bootstrap.',
     },
-    suggestedPatch: `// Patch generated by Triage AST Engine
-package handler
-
-import (
-	"errors"
-	"net/http"
-	"encoding/json"
-)
-
-func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("id")
-	ctx := r.Context()
-	
-	// Triage Guard: Validate receiver dependency initialization
-	if h == nil || h.Repo == nil {
-		http.Error(w, "User service unavailable (uninitialized repository)", http.StatusInternalServerError)
-		return
-	}
-
-	profile, err := h.Repo.FindUserByID(ctx, userID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	json.NewEncoder(w).Encode(profile)
-}`,
-  },
-  {
-    id: 'INC-8093',
-    title: 'index out of range [3] with length 3 in ParseHeaders()',
-    status: 'INVESTIGATING',
-    triggeringFile: 'pkg/api/router.go:88',
-    triggeringLine: 88,
-    latencyMs: 320,
-    commitHash: '8f3a1b4',
-    branch: 'main',
-    timestamp: '2026-07-28 11:42:10 UTC',
-    goroutineId: 'goroutine 18 [running]',
-    panicMessage: 'panic: runtime error: index out of range [3] with length 3',
-    githubIssueUrl: 'https://github.com/algotyrnt/beacon-app/issues/102',
-    githubIssueNumber: 102,
-    rawStackTrace: `goroutine 18 [running]:
-pkg/api.ParseHeaders(0xc0000e4100, 0x3, 0x3)
-	/workspace/pkg/api/router.go:88 +0x62
-pkg/api.(*Router).RouteRequest(0xc0000a4180, 0xc0000a2000)
-	/workspace/pkg/api/router.go:45 +0x110`,
-    astSnippet: {
-      functionName: 'ParseHeaders',
-      file: 'pkg/api/router.go',
-      startLine: 84,
-      lines: [
-        { lineNum: 84, content: 'func ParseHeaders(parts []string) map[string]string {' },
-        { lineNum: 85, content: '	res := make(map[string]string)' },
-        { lineNum: 86, content: '	for i := 0; i <= len(parts); i++ {' },
-        { lineNum: 87, content: '		// Off-by-one loop condition i <= len(parts)' },
-        { lineNum: 88, content: '		pair := parts[i]', isTriggerLine: true },
-        { lineNum: 89, content: '		res[pair] = "val"' },
-        { lineNum: 90, content: '	}' },
-        { lineNum: 91, content: '	return res' },
-        { lineNum: 92, content: '}' },
-      ],
-    },
-    geminiAnalysis: {
-      rootCause: 'Off-By-One Array Index Access in For Loop',
-      explanation:
-        'Line 86 uses `i <= len(parts)` as the iteration boundary. For a slice with length 3, valid indices are 0, 1, and 2. When `i == 3`, accessing `parts[3]` causes a runtime panic.',
-      severity: 'HIGH',
-      recommendedFix: 'Change loop condition from `i <= len(parts)` to `i < len(parts)` or use `range`.',
-    },
-    suggestedPatch: `// Patch generated by Triage AST Engine
-package api
-
-func ParseHeaders(parts []string) map[string]string {
-	res := make(map[string]string)
-	for _, pair := range parts {
-		res[pair] = "val"
-	}
-	return res
-}`,
-  },
-  {
-    id: 'INC-8092',
-    title: 'send on closed channel in DispatchEvents()',
-    status: 'RESOLVED',
-    triggeringFile: 'pkg/worker/dispatcher.go:115',
-    triggeringLine: 115,
-    latencyMs: 120,
-    commitHash: '7e2c9d1',
-    branch: 'main',
-    timestamp: '2026-07-28 09:15:33 UTC',
-    goroutineId: 'goroutine 91 [running]',
-    panicMessage: 'panic: send on closed channel',
-    githubIssueUrl: 'https://github.com/algotyrnt/beacon-app/issues/99',
-    githubIssueNumber: 99,
-    rawStackTrace: `goroutine 91 [running]:
-pkg/worker.(*Dispatcher).DispatchEvents(0xc000102000, 0xc000114080)
-	/workspace/pkg/worker/dispatcher.go:115 +0x8e`,
-    astSnippet: {
-      functionName: 'DispatchEvents',
-      file: 'pkg/worker/dispatcher.go',
-      startLine: 110,
-      lines: [
-        { lineNum: 110, content: 'func (d *Dispatcher) DispatchEvents(evt Event) {' },
-        { lineNum: 111, content: '	if d.stopped {' },
-        { lineNum: 112, content: '		return' },
-        { lineNum: 113, content: '	}' },
-        { lineNum: 114, content: '	// Race condition: channel closed concurrently by Stop()' },
-        { lineNum: 115, content: '	d.queue <- evt', isTriggerLine: true },
-        { lineNum: 116, content: '}' },
-      ],
-    },
-    geminiAnalysis: {
-      rootCause: 'Unsynchronized Concurrent Channel Send After Close',
-      explanation:
-        'A worker goroutine attempted to send on `d.queue` after `d.Stop()` closed the channel without mutex synchronization on `d.stopped`.',
-      severity: 'HIGH',
-      recommendedFix: 'Protect `d.stopped` and channel operations with a `sync.RWMutex` or use a select block with context cancellation.',
-    },
+    suggestedPatch: `--- a/pkg/handler/checkout.go
++++ b/pkg/handler/checkout.go
+@@ -57,3 +57,6 @@ func (c *CheckoutHandler) ChargeCart(w http.ResponseWriter, r *http.Request) {
++	if c.PaymentGateway == nil {
++		http.Error(w, "payment gateway uninitialized", http.StatusInternalServerError)
++		return
++	}
+ 	order, err := c.PaymentGateway.ChargeCart(ctx, cartID)`,
+    githubIssueUrl: 'https://github.com/algotyrnt/beacon-app/issues/104',
+    githubIssueNumber: 104,
   },
   {
     id: 'INC-8091',
-    title: 'sync: unlock of unlocked mutex in ReleaseLock()',
-    status: 'RESOLVED',
-    triggeringFile: 'pkg/cache/redis_store.go:64',
-    triggeringLine: 64,
-    latencyMs: 95,
-    commitHash: '6a1d82f',
+    title: 'index out of range [3] with length 3 in ParseHeaders()',
+    status: 'INVESTIGATING',
+    triggeringFile: 'pkg/api/router.go:112',
+    triggeringLine: 112,
+    latencyMs: 18,
+    commitHash: '8f3a1b4',
     branch: 'main',
-    timestamp: '2026-07-28 07:02:00 UTC',
+    timestamp: '2026-07-28 12:08:19 UTC',
     goroutineId: 'goroutine 12 [running]',
-    panicMessage: 'panic: sync: unlock of unlocked mutex',
+    panicMessage: 'panic: runtime error: index out of range [3] with length 3',
     rawStackTrace: `goroutine 12 [running]:
-pkg/cache.(*RedisStore).ReleaseLock(0xc000012090)
-	/workspace/pkg/cache/redis_store.go:64 +0x24`,
+pkg/api.ParseHeaders({0xc000120100, 0x3, 0x3})
+	/workspace/pkg/api/router.go:112 +0x11a
+pkg/api.(*Router).ServeHTTP(0xc000098000, {0x12995dae8, 0x102893268}, 0x1400018a000)
+	/workspace/pkg/api/router.go:45 +0x62`,
     astSnippet: {
-      functionName: 'ReleaseLock',
-      file: 'pkg/cache/redis_store.go',
-      startLine: 60,
+      functionName: 'ParseHeaders',
+      file: 'pkg/api/router.go',
+      startLine: 108,
       lines: [
-        { lineNum: 60, content: 'func (s *RedisStore) ReleaseLock() {' },
-        { lineNum: 61, content: '	defer s.mu.Unlock()' },
-        { lineNum: 62, content: '	if s.closed {' },
-        { lineNum: 63, content: '		s.mu.Unlock() // Double unlock!' },
-        { lineNum: 64, content: '		return', isTriggerLine: true },
-        { lineNum: 65, content: '	}' },
-        { lineNum: 66, content: '}' },
+        { lineNum: 108, content: 'func ParseHeaders(parts []string) map[string]string {' },
+        { lineNum: 109, content: '	headers := make(map[string]string)' },
+        { lineNum: 110, content: '	for i := 0; i <= len(parts); i++ {' },
+        { lineNum: 111, content: '		// Off-by-one comparison (i <= len(parts))' },
+        { lineNum: 112, content: '		headers[fmt.Sprintf("H-%d", i)] = parts[i]', isTriggerLine: true },
+        { lineNum: 113, content: '	}' },
+        { lineNum: 114, content: '	return headers' },
+        { lineNum: 115, content: '}' },
       ],
     },
-  },
-];
-
-export const MOCK_AST_FILES: AstFile[] = [
-  {
-    path: 'pkg',
-    name: 'pkg',
-    isDir: true,
-    children: [
-      {
-        path: 'pkg/handler',
-        name: 'handler',
-        isDir: true,
-        children: [
-          {
-            path: 'pkg/handler/user.go',
-            name: 'user.go',
-            totalFuncs: 6,
-            totalLines: 142,
-            sizeBytes: 4210,
-            nodes: [
-              {
-                id: 'ast-node-1',
-                name: 'UserHandler',
-                kind: 'TypeSpec',
-                pos: 120,
-                end: 280,
-                line: 14,
-                signature: 'type UserHandler struct { Repo UserRepository; Cache CacheClient }',
-              },
-              {
-                id: 'ast-node-2',
-                name: 'GetProfile',
-                kind: 'FuncDecl',
-                pos: 410,
-                end: 980,
-                line: 38,
-                receiver: '(h *UserHandler)',
-                signature: 'func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request)',
-                children: [
-                  { id: 'node-2-1', name: 'r.URL.Query().Get("id")', kind: 'CallExpr', pos: 460, end: 495, line: 39 },
-                  { id: 'node-2-2', name: 'h.Repo.FindUserByID(ctx, userID)', kind: 'CallExpr', pos: 540, end: 590, line: 42 },
-                  { id: 'node-2-3', name: 'http.Error(w, err.Error(), ...)', kind: 'CallExpr', pos: 620, end: 680, line: 44 },
-                ],
-              },
-              {
-                id: 'ast-node-3',
-                name: 'UpdateSettings',
-                kind: 'FuncDecl',
-                pos: 1010,
-                end: 1540,
-                line: 52,
-                receiver: '(h *UserHandler)',
-                signature: 'func (h *UserHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)',
-              },
-            ],
-          },
-          {
-            path: 'pkg/handler/auth.go',
-            name: 'auth.go',
-            totalFuncs: 4,
-            totalLines: 98,
-            sizeBytes: 2840,
-            nodes: [
-              {
-                id: 'ast-node-4',
-                name: 'AuthenticateToken',
-                kind: 'FuncDecl',
-                pos: 210,
-                end: 620,
-                line: 18,
-                signature: 'func AuthenticateToken(tokenStr string) (*Claims, error)',
-              },
-            ],
-          },
-        ],
-      },
-      {
-        path: 'pkg/api',
-        name: 'api',
-        isDir: true,
-        children: [
-          {
-            path: 'pkg/api/router.go',
-            name: 'router.go',
-            totalFuncs: 8,
-            totalLines: 210,
-            sizeBytes: 6120,
-            nodes: [
-              {
-                id: 'ast-node-5',
-                name: 'ParseHeaders',
-                kind: 'FuncDecl',
-                pos: 1800,
-                end: 2150,
-                line: 84,
-                signature: 'func ParseHeaders(parts []string) map[string]string',
-              },
-            ],
-          },
-        ],
-      },
-      {
-        path: 'pkg/worker',
-        name: 'worker',
-        isDir: true,
-        children: [
-          {
-            path: 'pkg/worker/dispatcher.go',
-            name: 'dispatcher.go',
-            totalFuncs: 5,
-            totalLines: 160,
-            sizeBytes: 4500,
-          },
-        ],
-      },
-    ],
+    geminiAnalysis: {
+      rootCause: 'Off-By-One Slice Bounds Access',
+      explanation:
+        'The loop condition `i <= len(parts)` evaluates to true when `i == len(parts)`, causing a slice index out of bounds panic.',
+      severity: 'HIGH',
+      recommendedFix: 'Change loop bounds condition to `i < len(parts)`.',
+    },
+    suggestedPatch: `--- a/pkg/api/router.go
++++ b/pkg/api/router.go
+@@ -110,1 +110,1 @@ func ParseHeaders(parts []string) map[string]string {
+-	for i := 0; i <= len(parts); i++ {
++	for i := 0; i < len(parts); i++ {`,
+    githubIssueUrl: 'https://github.com/algotyrnt/beacon-app/issues/102',
+    githubIssueNumber: 102,
   },
   {
-    path: 'main.go',
-    name: 'main.go',
-    totalFuncs: 2,
-    totalLines: 48,
-    sizeBytes: 1280,
-    nodes: [
-      {
-        id: 'ast-node-6',
-        name: 'main',
-        kind: 'FuncDecl',
-        pos: 100,
-        end: 850,
-        line: 12,
-        signature: 'func main()',
-      },
-    ],
+    id: 'INC-8088',
+    title: 'interface conversion: interface {} is nil, not string',
+    status: 'RESOLVED',
+    triggeringFile: 'pkg/auth/token.go:42',
+    triggeringLine: 42,
+    latencyMs: 9,
+    commitHash: '2c9e4a1',
+    branch: 'main',
+    timestamp: '2026-07-27 18:45:00 UTC',
+    goroutineId: 'goroutine 88 [running]',
+    panicMessage: 'panic: interface conversion: interface {} is nil, not string',
+    rawStackTrace: `goroutine 88 [running]:
+pkg/auth.ExtractUserID({0x129910a20, 0x0})
+	/workspace/pkg/auth/token.go:42 +0x88`,
+    astSnippet: {
+      functionName: 'ExtractUserID',
+      file: 'pkg/auth/token.go',
+      startLine: 38,
+      lines: [
+        { lineNum: 38, content: 'func ExtractUserID(ctx context.Context) string {' },
+        { lineNum: 39, content: '	val := ctx.Value("user_id")' },
+        { lineNum: 40, content: '	// Unsafe type assertion without comma-ok check' },
+        { lineNum: 41, content: '	return val.(string)' },
+        { lineNum: 42, content: '}', isTriggerLine: true },
+      ],
+    },
+    geminiAnalysis: {
+      rootCause: 'Unchecked Type Assertion on Nil Interface',
+      explanation: 'The context value `user_id` was nil, causing a panic during string type assertion.',
+      severity: 'MEDIUM',
+      recommendedFix: 'Use comma-ok type assertion `uid, ok := val.(string)` and handle `!ok`.',
+    },
+    suggestedPatch: `--- a/pkg/auth/token.go
++++ b/pkg/auth/token.go
+@@ -41,1 +41,4 @@ func ExtractUserID(ctx context.Context) string {
+-	return val.(string)
++	if uid, ok := val.(string); ok {
++		return uid
++	}
++	return ""`,
+    githubIssueUrl: 'https://github.com/algotyrnt/beacon-app/issues/98',
+    githubIssueNumber: 98,
   },
 ];
 
@@ -364,79 +158,220 @@ export const MOCK_COMMIT_INDEXES: AstCommitIndex[] = [
   {
     commitHash: '8f3a1b4',
     branch: 'main',
-    parsedFilesCount: 28,
+    parsedFilesCount: 42,
     totalFunctionsCount: 1420,
+    indexedAt: '2026-07-28 14:20:11 UTC',
     status: 'INDEXED',
-    indexedAt: '2026-07-28 12:00:00 UTC',
   },
   {
-    commitHash: '7e2c9d1',
-    branch: 'feat/auth-v2',
-    parsedFilesCount: 26,
-    totalFunctionsCount: 1395,
-    status: 'INDEXED',
-    indexedAt: '2026-07-28 09:10:00 UTC',
-  },
-  {
-    commitHash: '6a1d82f',
+    commitHash: '2c9e4a1',
     branch: 'main',
-    parsedFilesCount: 25,
-    totalFunctionsCount: 1380,
+    parsedFilesCount: 41,
+    totalFunctionsCount: 1408,
+    indexedAt: '2026-07-27 18:00:00 UTC',
     status: 'INDEXED',
-    indexedAt: '2026-07-27 18:45:12 UTC',
+  },
+  {
+    commitHash: '1a8f902',
+    branch: 'dev/auth-v2',
+    parsedFilesCount: 39,
+    totalFunctionsCount: 1395,
+    indexedAt: '2026-07-25 09:12:44 UTC',
+    status: 'INDEXED',
+  },
+];
+
+export const MOCK_AST_FILES: AstFile[] = [
+  {
+    name: 'pkg',
+    path: 'pkg',
+    isDir: true,
+    children: [
+      {
+        name: 'handler',
+        path: 'pkg/handler',
+        isDir: true,
+        children: [
+          {
+            name: 'checkout.go',
+            path: 'pkg/handler/checkout.go',
+            isDir: false,
+            totalLines: 120,
+            totalFuncs: 4,
+            sizeBytes: 3840,
+            nodes: [
+              {
+                id: 'ast-node-1',
+                kind: 'FuncDecl',
+                name: 'ChargeCart',
+                receiver: '(c *CheckoutHandler)',
+                signature: 'func (c *CheckoutHandler) ChargeCart(w http.ResponseWriter, r *http.Request)',
+                line: 54,
+                pos: 1480,
+                end: 1820,
+                children: [
+                  { id: 'ast-sub-1', kind: 'CallExpr', name: 'r.Header.Get("X-Cart-ID")', line: 55, pos: 1510, end: 1545 },
+                  { id: 'ast-sub-2', kind: 'SelectorExpr', name: 'c.PaymentGateway.ChargeCart', line: 58, pos: 1600, end: 1650 },
+                ],
+              },
+              {
+                id: 'ast-node-2',
+                kind: 'FuncDecl',
+                name: 'NewCheckoutHandler',
+                signature: 'func NewCheckoutHandler(gw PaymentGateway) *CheckoutHandler',
+                line: 18,
+                pos: 420,
+                end: 680,
+              },
+            ],
+          },
+          {
+            name: 'user.go',
+            path: 'pkg/handler/user.go',
+            isDir: false,
+            totalLines: 185,
+            totalFuncs: 6,
+            sizeBytes: 5210,
+            nodes: [
+              {
+                id: 'ast-node-3',
+                kind: 'FuncDecl',
+                name: 'GetUserProfile',
+                receiver: '(h *UserHandler)',
+                signature: 'func (h *UserHandler) GetUserProfile(w http.ResponseWriter, r *http.Request)',
+                line: 32,
+                pos: 890,
+                end: 1240,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'api',
+        path: 'pkg/api',
+        isDir: true,
+        children: [
+          {
+            name: 'router.go',
+            path: 'pkg/api/router.go',
+            isDir: false,
+            totalLines: 140,
+            totalFuncs: 5,
+            sizeBytes: 4120,
+            nodes: [
+              {
+                id: 'ast-node-4',
+                kind: 'FuncDecl',
+                name: 'ParseHeaders',
+                signature: 'func ParseHeaders(parts []string) map[string]string',
+                line: 108,
+                pos: 3100,
+                end: 3340,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'auth',
+        path: 'pkg/auth',
+        isDir: true,
+        children: [
+          {
+            name: 'token.go',
+            path: 'pkg/auth/token.go',
+            isDir: false,
+            totalLines: 95,
+            totalFuncs: 3,
+            sizeBytes: 2890,
+            nodes: [
+              {
+                id: 'ast-node-5',
+                kind: 'FuncDecl',
+                name: 'ExtractUserID',
+                signature: 'func ExtractUserID(ctx context.Context) string',
+                line: 38,
+                pos: 1100,
+                end: 1280,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'main.go',
+    path: 'main.go',
+    isDir: false,
+    totalLines: 48,
+    totalFuncs: 1,
+    sizeBytes: 1240,
+    nodes: [
+      {
+        id: 'ast-node-6',
+        kind: 'FuncDecl',
+        name: 'main',
+        signature: 'func main()',
+        line: 12,
+        pos: 240,
+        end: 890,
+      },
+    ],
   },
 ];
 
 export const MOCK_WEBHOOK_LOGS: WebhookLog[] = [
   {
-    id: 'wh-9021',
+    id: 'wh-9022',
     status: 'SUCCESS',
     statusCode: 200,
     eventType: 'panic.ingested',
     sourceIp: '34.120.45.12',
-    timestamp: '2026-07-28 12:04:18.421 UTC',
+    timestamp: '2026-07-28 14:22:05.142 UTC',
     latencyMs: 14,
     headers: {
       'Content-Type': 'application/json',
-      'X-Triage-Signature': 'sha256=9f8a3c2b1e4d7f6a',
-      'X-Triage-SdkVersion': 'triage-go/v1.4.2',
-      'User-Agent': 'Triage-Go-Agent/1.4',
+      'X-Triage-Signature': 'sha256=8f9a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a',
+      'User-Agent': 'Triage-Go-SDK/v1.2.0',
     },
     requestBody: JSON.stringify(
       {
-        incident_id: 'INC-8094',
-        repository: 'algotyrnt/beacon-app',
-        commit: '8f3a1b4',
-        panic: 'runtime error: invalid memory address or nil pointer dereference',
-        goroutine: 42,
-        triggering_file: 'pkg/handler/user.go:42',
+        api_key: 'trj_demo_XXXXXXXXXXXX',
+        repo: 'algotyrnt/beacon-app',
+        panic_message: 'panic: runtime error: invalid memory address or nil pointer dereference',
+        file: 'pkg/handler/checkout.go',
+        line: 58,
+        goroutine: 'goroutine 54 [running]',
       },
       null,
       2
     ),
     responseBody: JSON.stringify(
       {
-        status: 'accepted',
+        incident_id: 'INC-8094',
+        status: 'CRITICAL',
         ast_symbolicated: true,
-        isolated_func: 'GetProfile',
-        github_issue: 'https://github.com/algotyrnt/beacon-app/issues/104',
+        gemini_model: GEMINI_MODEL_NAME,
+        github_issue_created: 104,
       },
       null,
       2
     ),
   },
   {
-    id: 'wh-9020',
+    id: 'wh-9021',
     status: 'SUCCESS',
     statusCode: 200,
     eventType: 'ast.reindexed',
     sourceIp: '140.82.112.4',
-    timestamp: '2026-07-28 12:00:02.105 UTC',
-    latencyMs: 28,
+    timestamp: '2026-07-28 14:20:12.004 UTC',
+    latencyMs: 85,
     headers: {
       'Content-Type': 'application/json',
       'X-GitHub-Event': 'push',
-      'X-Triage-Signature': 'sha256=1a2b3c4d5e6f7a8b',
+      'X-Hub-Signature-256': 'sha256=4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b',
     },
     requestBody: JSON.stringify(
       {
@@ -444,7 +379,7 @@ export const MOCK_WEBHOOK_LOGS: WebhookLog[] = [
         head_commit: {
           id: '8f3a1b4',
           message: 'fix: update user handler dependencies',
-          author: { name: 'algotyrnt', email: 'punjitha@gmail.com' },
+          author: { name: 'algotyrnt', email: 'algotyrnt@example.com' },
         },
       },
       null,
@@ -504,8 +439,8 @@ export const MOCK_API_KEYS: ApiKey[] = [
   {
     id: 'key-1',
     name: 'Production Cloud Run Engine Key',
-    keyMasked: 'trj_live_9f8a3c2b...f6a',
-    fullKey: 'trj_live_9f8a3c2b1e4d7f6a89201bcde',
+    keyMasked: 'trj_demo_XXXXXXXX...8f',
+    fullKey: 'trj_demo_XXXXXXXXXXXX',
     createdAt: '2026-05-10',
     lastUsed: '14 seconds ago',
     status: 'ACTIVE',
@@ -547,7 +482,7 @@ export const MOCK_SYSTEM_HEALTH: SystemHealthComponent[] = [
     detail: '1,420 Go function signatures indexed for commit 8f3a1b4',
   },
   {
-    name: 'Gemini 3.6 Diagnostic Client',
+    name: `${GEMINI_MODEL_NAME} Diagnostic Client`,
     service: 'Gemini AI API Proxy',
     status: 'OPERATIONAL',
     latency: '420ms',

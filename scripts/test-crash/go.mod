@@ -1,7 +1,7 @@
 module test-crash
 
-go 1.22
+go 1.26
 
-require triage/sdk v0.0.0
+require github.com/algotyrnt/triage/sdk/go v0.0.0
 
-replace triage/sdk => ../../sdk/go
+replace github.com/algotyrnt/triage/sdk/go => ../../sdk/go

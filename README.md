@@ -136,7 +136,7 @@ package main
 
 import (
 	"net/http"
-	"triage/sdk"
+	triage "github.com/algotyrnt/triage/sdk/go"
 )
 
 func main() {
@@ -163,4 +163,4 @@ Track all roadmap items on the **[Milestone v1.0.0](https://github.com/algotyrnt
 
 Created by **Punjitha Bandara (algotyrnt)** - [https://algotyrnt.com](https://algotyrnt.com)
 
-Licensed under the **Apache License, Version 2.0**. See [LICENSE](file:///Users/punjitha/projects/triage/LICENSE) for the full license text.
+Licensed under the **Apache License, Version 2.0**. See [LICENSE](LICENSE) for the full license text.

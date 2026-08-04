@@ -52,7 +52,8 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
   const handleSimulatePanic = async () => {
     try {
       const resp = await engineClient.triggerTestPanic();
-      const newId = `INC-${Math.floor(8100 + Math.random() * 100)}`;
+      const uuidSuffix = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8).toUpperCase() : `${Date.now()}`;
+      const newId = `INC-${uuidSuffix}`;
       const newIncident: Incident = {
         id: newId,
         title: resp.analysis?.root_cause || 'nil pointer dereference in ChargeCart()',
@@ -151,7 +152,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
 
         {currentScreen === 'team' && (
           <TeamPage
-            members={MOCK_TEAM_MEMBERS}
+            teamMembers={MOCK_TEAM_MEMBERS}
             onNavigate={(screen) => setCurrentScreen(screen)}
           />
         )}

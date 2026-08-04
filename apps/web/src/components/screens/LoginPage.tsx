@@ -88,7 +88,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
             <li className="flex items-start gap-1.5">
               <Lock className="w-3 h-3 text-slate-700 mt-0.5 shrink-0" />
               <span>
-                <strong className="text-slate-800">TLS 1.3 Encryption:</strong> Webhooks and telemetry ingress encrypted in transit & at rest.
+                <strong className="text-slate-800">TLS 1.3 Encryption:</strong> Webhooks and telemetry ingress protected in transit.
               </span>
             </li>
           </ul>

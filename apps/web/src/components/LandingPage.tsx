@@ -28,7 +28,7 @@ export function LandingPage() {
 
   const sdkCode = `import (
     "net/http"
-    "triage/sdk"
+    triage "github.com/algotyrnt/triage/sdk/go"
 )
 
 func main() {

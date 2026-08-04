@@ -10,6 +10,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"triage/engine/internal/ast"
@@ -46,8 +48,15 @@ func main() {
 	http.HandleFunc("/api/v1/telemetry", handleTelemetryRoute)
 	http.HandleFunc("/api/v1/github/webhook", github.WebhookHandler(webhookSecret))
 
+	server := &http.Server{
+		Addr:         ":" + port,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	log.Printf("Triage Engine server listening on :%s ...", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server stopped: %v", err)
 	}
 }
@@ -60,39 +69,97 @@ func handleTelemetryRoute(w http.ResponseWriter, r *http.Request) {
 	handleTelemetry(w, r)
 }
 
+func isValidAPIKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	expected := os.Getenv("TRIAGE_API_KEY")
+	if expected != "" {
+		return key == expected
+	}
+	return true
+}
+
+func validateAndResolveFilePath(reqFile string) (string, error) {
+	if reqFile == "" {
+		return "", fmt.Errorf("file path is empty")
+	}
+	if filepath.IsAbs(reqFile) {
+		return "", fmt.Errorf("absolute paths are not allowed: %s", reqFile)
+	}
+	if strings.Contains(reqFile, "..") {
+		return "", fmt.Errorf("path traversal segments '..' are not allowed: %s", reqFile)
+	}
+
+	root := os.Getenv("AST_WORKSPACE_ROOT")
+	if root == "" {
+		root = "."
+	}
+	cleanRoot := filepath.Clean(root)
+	resolved := filepath.Join(cleanRoot, filepath.Clean(reqFile))
+
+	rel, err := filepath.Rel(cleanRoot, resolved)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("resolved path outside project root: %s", reqFile)
+	}
+	return resolved, nil
+}
+
 func handleTelemetry(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size to 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	var req TelemetryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("[ERROR] Invalid request payload: %v", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(TelemetryResponse{
 			Status:       "error",
-			ErrorMessage: "invalid JSON body",
+			ErrorMessage: "invalid JSON body or body size limit exceeded",
+		})
+		return
+	}
+
+	// Validate API Key before file reads, Gemini calls, or issue creation
+	if !isValidAPIKey(req.APIKey) {
+		log.Printf("[WARNING] Unauthorized telemetry request attempt")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(TelemetryResponse{
+			Status:       "error",
+			ErrorMessage: "unauthorized: missing or invalid API key",
 		})
 		return
 	}
 
 	log.Printf("==================================================")
-	log.Printf("[TELEMETRY RECEIVED] API Key: %s | File: %s | Line: %d", req.APIKey, req.File, req.Line)
+	log.Printf("[TELEMETRY RECEIVED] File: %s | Line: %d", req.File, req.Line)
 	log.Printf("Stack Trace:\n%s", req.StackTrace)
 
 	var astSnippet string
 	var astErr error
 	if req.File != "" && req.Line > 0 {
-		astSnippet, astErr = ast.ExtractFuncAST(req.File, req.Line)
-		if astErr != nil {
-			log.Printf("[WARNING] AST extraction failed: %v", astErr)
+		resolvedPath, valErr := validateAndResolveFilePath(req.File)
+		if valErr != nil {
+			log.Printf("[WARNING] AST extraction file validation failed: %v", valErr)
 		} else {
-			log.Printf("[AST EXTRACTED] Surrounding Function Node:\n%s", astSnippet)
+			astSnippet, astErr = ast.ExtractFuncAST(resolvedPath, req.Line)
+			if astErr != nil {
+				log.Printf("[WARNING] AST extraction failed: %v", astErr)
+			} else {
+				log.Printf("[AST EXTRACTED] Surrounding Function Node:\n%s", astSnippet)
+			}
 		}
 	} else {
 		log.Printf("[WARNING] File or Line not provided in telemetry")
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
+	// Separate context for LLM analysis
+	analysisCtx, cancelAnalysis := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancelAnalysis()
 
-	analysis, llmErr := llm.AnalyzeCrash(ctx, req.StackTrace, astSnippet)
+	analysis, llmErr := llm.AnalyzeCrash(analysisCtx, req.StackTrace, astSnippet)
 	if llmErr != nil {
 		log.Printf("[ERROR] Gemini analysis failed: %v", llmErr)
 		w.Header().Set("Content-Type", "application/json")
@@ -123,7 +190,11 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 			Analysis:   analysis,
 		}
 
-		issue, err := ghClient.CreateIssue(ctx, req.GithubOwner, req.GithubRepo, req.InstallationID, issueReq)
+		// Dedicated context for GitHub issue creation
+		ghCtx, cancelGH := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancelGH()
+
+		issue, err := ghClient.CreateIssue(ghCtx, req.GithubOwner, req.GithubRepo, req.InstallationID, issueReq)
 		if err != nil {
 			log.Printf("[WARNING] Failed to post GitHub issue: %v", err)
 		} else {
