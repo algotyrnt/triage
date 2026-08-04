@@ -27,7 +27,9 @@ scripts/test-crash/test-crash
 
 # Environment files & secret keys
 .env
-.env*.local
+.env.*
+!.env.example
+!**/.env.example
 *.pem
 
 # Operating System & IDE
