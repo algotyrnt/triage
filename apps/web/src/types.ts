@@ -63,6 +63,7 @@ export type AstNodeKind =
   | 'BlockStmt'
   | 'AssignStmt'
   | 'CallExpr'
+  | 'SelectorExpr'
   | 'ReturnStmt';
 
 export interface AstNode {

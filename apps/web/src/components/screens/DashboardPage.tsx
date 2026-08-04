@@ -37,7 +37,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
-  const apiKey = 'trj_live_9f8a3c2b1e4d7f6a89201bcde';
+  const apiKey = 'trj_demo_XXXXXXXXXXXX';
 
   const codeSnippets = {
     'main.go': `package main
@@ -45,7 +45,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 import (
 	"log"
 	"net/http"
-	"github.com/algotyrnt/triage-go/sdk"
+	triage "github.com/algotyrnt/triage/sdk/go"
 	"algotyrnt/beacon-app/pkg/handler"
 )
 
@@ -307,8 +307,16 @@ require (
                 return (
                   <div
                     key={incident.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectIncident(incident.id)}
-                    className="p-3 hover:bg-slate-50 transition-colors cursor-pointer space-y-1.5 group"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectIncident(incident.id);
+                      }
+                    }}
+                    className="p-3 hover:bg-slate-50 transition-colors cursor-pointer space-y-1.5 group focus:outline-none focus:ring-1 focus:ring-black"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 font-mono text-xs">

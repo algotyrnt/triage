@@ -168,7 +168,7 @@ export const SystemStatusPage: React.FC<SystemStatusPageProps> = ({
         </div>
 
         <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-3">
-          <span>Peak Panic Ingestion Rate: 4 events/hr</span>
+          <span>Peak Panic Ingestion Rate: {maxPanic} events/hr</span>
           <span>Sample Rate: 100% (Zero-drop telemetry)</span>
         </div>
       </div>

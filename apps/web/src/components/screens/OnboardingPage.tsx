@@ -22,11 +22,12 @@ interface OnboardingPageProps {
   onNavigate: (screen: ScreenId) => void;
 }
 
+const DEMO_GENERATED_KEY = 'trj_demo_example_key_not_real';
+
 export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRepo, setSelectedRepo] = useState('algotyrnt/beacon-app');
-  const [generatedKey, setGeneratedKey] = useState('trj_live_9f8a3c2b1e4d7f6a89201bcde');
   const [copiedKey, setCopiedKey] = useState(false);
 
   const repos = [
@@ -40,10 +41,14 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(generatedKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(DEMO_GENERATED_KEY);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
+    } catch (e) {
+      console.error('Failed to copy API key', e);
+    }
   };
 
   return (
@@ -58,7 +63,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
         </p>
       </div>
 
-      {/* 3-Step Indicator Bar with Solid Black Lines */}
+      {/* 3-Step Indicator Bar */}
       <div className="grid grid-cols-3 gap-2 bg-white border border-slate-200 p-2 rounded-sm font-mono text-xs">
         {[
           { num: 1, title: 'Select Repo', desc: 'Choose target Go project' },
@@ -81,7 +86,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
             >
               <div className="flex items-center justify-between mb-1">
                 <span
-                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm ${
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${
                     isActive
                       ? 'bg-white text-black'
                       : isDone
@@ -115,7 +120,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                   Triage will analyze `go.mod` and parse `FuncDecl` AST nodes upon commit webhook.
                 </p>
               </div>
-              <span className="text-xs font-mono text-slate-500">4 repositories found</span>
+              <span className="text-xs font-mono text-slate-500">{filteredRepos.length} repositories found</span>
             </div>
 
             {/* Search Box */}
@@ -131,14 +136,23 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
             </div>
 
             {/* Repo List */}
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+            <div role="radiogroup" aria-label="Select Repository" className="space-y-2 max-h-60 overflow-y-auto">
               {filteredRepos.map((repo) => {
                 const isSelected = selectedRepo === repo.name;
                 return (
                   <div
                     key={repo.name}
+                    role="radio"
+                    aria-checked={isSelected}
+                    tabIndex={0}
                     onClick={() => setSelectedRepo(repo.name)}
-                    className={`p-3 rounded-sm border cursor-pointer transition-all flex items-center justify-between font-mono text-xs ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedRepo(repo.name);
+                      }
+                    }}
+                    className={`p-3 rounded-sm border cursor-pointer transition-all flex items-center justify-between font-mono text-xs focus:outline-none focus:ring-1 focus:ring-black ${
                       isSelected
                         ? 'border-black bg-slate-50'
                         : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -249,7 +263,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                 SDK Telemetry Key Generated
               </h2>
               <p className="text-xs text-slate-500 font-sans mt-0.5">
-                Use this API key in your Go application initialization script (`defer triage.Recovery()`).
+                Use this API key in your Go application initialization script (`triage.Middleware`).
               </p>
             </div>
 
@@ -265,7 +279,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
 
               <div className="flex items-center justify-between gap-2 bg-black p-2.5 rounded-sm border border-slate-800">
                 <code className="text-xs text-emerald-400 font-bold tracking-wide select-all break-all">
-                  {generatedKey}
+                  {DEMO_GENERATED_KEY}
                 </code>
                 <button
                   onClick={handleCopy}
@@ -277,7 +291,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
               </div>
             </div>
 
-            {/* Go Code snippet snippet */}
+            {/* Go Code snippet */}
             <div className="space-y-1.5 font-mono">
               <div className="text-xs font-bold text-slate-800">Go SDK QuickStart Initialization:</div>
               <pre className="bg-slate-900 text-slate-100 p-3 rounded-sm text-[11px] overflow-x-auto border border-slate-800 leading-relaxed">
@@ -285,18 +299,17 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
 
 import (
 	"net/http"
-	"github.com/algotyrnt/triage-go/sdk"
+	triage "github.com/algotyrnt/triage/sdk/go"
 )
 
 func main() {
-	// Initialize Triage Panic Symbolication Engine
-	tr := sdk.Init(sdk.Config{
-		ApiKey: "${generatedKey}",
-		Repo:   "${selectedRepo}",
-	})
-	defer tr.Recovery() // Captures Go runtime panic stack traces & AST offset
+	mux := http.NewServeMux()
 
-	http.ListenAndServe(":8080", nil)
+	// Wrap HTTP multiplexer with Triage panic recovery middleware
+	telemetryURL := "http://localhost:8080/api/v1/telemetry"
+	handler := triage.Middleware("${DEMO_GENERATED_KEY}", telemetryURL)(mux)
+
+	http.ListenAndServe(":8080", handler)
 }`}
               </pre>
             </div>

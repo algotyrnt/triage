@@ -8,16 +8,14 @@ import { WebhookLog, ScreenId } from '../../types';
 import {
   Webhook,
   CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Clock,
-  ArrowRight,
+  AlertTriangle,
   Code2,
   Copy,
   Check,
   RefreshCw,
-  Search,
   Filter,
+  ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 
 interface WebhooksPageProps {
@@ -40,9 +38,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
     return true;
   });
 
+  const visibleLog = filteredLogs.find((l) => l.id === selectedLog?.id) || filteredLogs[0] || null;
+
   const handleCopyPayload = () => {
-    if (selectedLog) {
-      navigator.clipboard.writeText(selectedLog.requestBody);
+    if (visibleLog) {
+      navigator.clipboard.writeText(visibleLog.requestBody);
       setCopiedPayload(true);
       setTimeout(() => setCopiedPayload(false), 2000);
     }
@@ -101,9 +101,9 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
         <span className="text-slate-500 text-[11px]">{filteredLogs.length} logs recorded</span>
       </div>
 
-      {/* Main Grid: Left Audit Table (60%) vs Right JSON Inspector (40%) */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Audit Table (60% -> col-span-7) */}
+        {/* Left Audit Table */}
         <div className="lg:col-span-7 bg-white border border-slate-200 rounded-sm overflow-hidden space-y-0">
           <div className="bg-slate-100 border-b border-slate-200 p-3 font-mono text-xs font-bold text-slate-900 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -125,19 +125,19 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
                 {filteredLogs.map((log) => {
-                  const isSelected = selectedLog?.id === log.id;
+                  const isSelected = visibleLog?.id === log.id;
                   const isSuccess = log.status === 'SUCCESS';
                   return (
                     <tr
                       key={log.id}
                       onClick={() => setSelectedLog(log)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-slate-100 font-bold' : 'hover:bg-slate-50'
+                      className={`hover:bg-slate-50 cursor-pointer select-none transition-colors ${
+                        isSelected ? 'bg-slate-100/80 font-bold' : ''
                       }`}
                     >
                       <td className="py-2.5 px-3">
                         <span
-                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm border ${
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm border ${
                             isSuccess
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : log.status === 'UNAUTHORIZED'
@@ -164,7 +164,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
           </div>
         </div>
 
-        {/* Right Column: JSON Payload Inspector Drawer (40% -> col-span-5) */}
+        {/* Right Column: JSON Payload Inspector Drawer */}
         <div className="lg:col-span-5 bg-white border border-slate-200 rounded-sm overflow-hidden flex flex-col justify-between">
           <div>
             {/* Header */}
@@ -174,7 +174,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
                 <span>JSON Payload Inspector</span>
               </div>
 
-              {selectedLog && (
+              {visibleLog && (
                 <button
                   onClick={handleReplayWebhook}
                   disabled={replaying}
@@ -193,7 +193,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
               </div>
             )}
 
-            {selectedLog ? (
+            {visibleLog ? (
               <div className="p-4 space-y-4 font-mono text-xs">
                 {/* HTTP Headers */}
                 <div className="space-y-1.5">
@@ -201,7 +201,7 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
                     HTTP Request Headers:
                   </div>
                   <div className="bg-slate-50 p-2.5 border border-slate-200 rounded-sm space-y-1 text-[11px] text-slate-700">
-                    {Object.entries(selectedLog.headers).map(([k, v]) => (
+                    {Object.entries(visibleLog.headers).map(([k, v]) => (
                       <div key={k} className="flex justify-between border-b border-slate-100 pb-0.5 last:border-0">
                         <span className="font-bold text-slate-900">{k}:</span>
                         <span className="text-slate-600 truncate ml-2">{v}</span>
@@ -225,17 +225,17 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
                     </button>
                   </div>
                   <pre className="bg-slate-900 text-slate-100 p-3 rounded-sm text-[11px] overflow-x-auto border border-slate-800 leading-relaxed font-mono">
-                    {selectedLog.requestBody}
+                    {visibleLog.requestBody}
                   </pre>
                 </div>
 
                 {/* Response Body */}
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    Ingress Response ({selectedLog.statusCode}):
+                    Ingress Response ({visibleLog.statusCode}):
                   </div>
                   <pre className="bg-slate-100 text-slate-800 p-2.5 rounded-sm text-[11px] overflow-x-auto border border-slate-200 leading-relaxed font-mono">
-                    {selectedLog.responseBody}
+                    {visibleLog.responseBody}
                   </pre>
                 </div>
               </div>
