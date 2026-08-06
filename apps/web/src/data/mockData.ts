@@ -5,7 +5,7 @@
 
 import { Incident, AstCommitIndex, AstFile, WebhookLog, TeamMember, ApiKey, MetricHourly, SystemHealthComponent } from '../types';
 
-export const GEMINI_MODEL_NAME = 'gemini-2.5-flash';
+export const GEMINI_MODEL_NAME = 'gemini-3.6-flash';
 
 export const INITIAL_INCIDENTS: Incident[] = [
   {
