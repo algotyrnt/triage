@@ -18,7 +18,7 @@ type AnalysisResult struct {
 	SuggestedFix string `json:"suggested_fix"`
 }
 
-// AnalyzeCrash queries Gemini using google.golang.org/genai to diagnose the stack trace and AST node.
+// AnalyzeCrash queries Gemini 3.6 Flash using google.golang.org/genai to diagnose the stack trace and AST node.
 func AnalyzeCrash(ctx context.Context, stackTrace string, astSnippet string) (*AnalysisResult, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	clientConfig := &genai.ClientConfig{
@@ -45,7 +45,7 @@ Respond ONLY with a valid JSON object with the following schema:
   "suggested_fix": "Detailed solution or code modification to fix the issue"
 }`, stackTrace, astSnippet)
 
-	resp, err := client.Models.GenerateContent(ctx, "gemini-2.5-flash", genai.Text(prompt), &genai.GenerateContentConfig{
+	resp, err := client.Models.GenerateContent(ctx, "gemini-3.6-flash", genai.Text(prompt), &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
 	})
 	if err != nil {
