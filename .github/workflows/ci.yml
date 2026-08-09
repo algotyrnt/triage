@@ -1,54 +1,52 @@
 name: Triage CI Pipeline
 
 on:
-  push:
-    branches: [ main, dev ]
-  pull_request:
-    branches: [ main, dev ]
+    pull_request:
+        branches: [main]
 
 jobs:
-  test-go:
-    name: Go Engine & SDK Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    test-go:
+        name: Go Engine & SDK Tests
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
+            - name: Set up Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.26"
 
-      - name: Run Engine Tests
-        run: |
-          cd apps/engine
-          go test -v ./...
+            - name: Run Engine Tests
+              run: |
+                  cd apps/engine
+                  go test -v ./...
 
-      - name: Run SDK Tests
-        run: |
-          cd sdk/go
-          go test -v ./...
+            - name: Run SDK Tests
+              run: |
+                  cd sdk/go
+                  go test -v ./...
 
-  build-web:
-    name: Next.js Web App Build & Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+    build-web:
+        name: Next.js Web App Build & Lint
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+            - name: Set up Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
 
-      - name: Install Dependencies
-        working-directory: apps/web
-        run: bun install --frozen-lockfile
+            - name: Install Dependencies
+              working-directory: apps/web
+              run: bun install --frozen-lockfile
 
-      - name: Run ESLint
-        working-directory: apps/web
-        run: bun run lint
+            - name: Run ESLint
+              working-directory: apps/web
+              run: bun run lint
 
-      - name: Build Next.js Web App
-        working-directory: apps/web
-        run: bun run build
+            - name: Build Next.js Web App
+              working-directory: apps/web
+              run: bun run build
