@@ -38,6 +38,6 @@ jobs:
                   flags: >-
                       --allow-unauthenticated
                       --port=8080
-                      --min-instances=1
+                      --min-instances=0
                       --max-instances=10
                       --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest,TRIAGE_API_KEY=TRIAGE_API_KEY:latest,GITHUB_APP_ID=GITHUB_APP_ID:latest,GITHUB_PRIVATE_KEY=GITHUB_PRIVATE_KEY:latest,GITHUB_WEBHOOK_SECRET=GITHUB_WEBHOOK_SECRET:latest
