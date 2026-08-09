@@ -2,7 +2,10 @@ module triage/engine
 
 go 1.26
 
-require google.golang.org/genai v1.66.0
+require (
+	github.com/joho/godotenv v1.5.1
+	google.golang.org/genai v1.66.0
+)
 
 require (
 	cloud.google.com/go v0.123.0 // indirect
