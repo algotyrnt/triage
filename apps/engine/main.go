@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"triage/engine/internal/ast"
 	"triage/engine/internal/github"
 	"triage/engine/internal/llm"
@@ -40,6 +41,8 @@ type TelemetryResponse struct {
 }
 
 func main() {
+	_ = godotenv.Load(".env.local", ".env")
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -110,9 +113,6 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 	if reqFile == "" {
 		return "", fmt.Errorf("file path is empty")
 	}
-	if filepath.IsAbs(reqFile) {
-		return "", fmt.Errorf("absolute paths are not allowed: %s", reqFile)
-	}
 	if strings.Contains(reqFile, "..") {
 		return "", fmt.Errorf("path traversal segments '..' are not allowed: %s", reqFile)
 	}
@@ -121,14 +121,43 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 	if root == "" {
 		root = "."
 	}
-	cleanRoot := filepath.Clean(root)
-	resolved := filepath.Join(cleanRoot, filepath.Clean(reqFile))
+	cleanRoot, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		cleanRoot = filepath.Clean(root)
+	}
 
-	rel, err := filepath.Rel(cleanRoot, resolved)
+	cleanReq := filepath.Clean(reqFile)
+	var targetPath string
+
+	if filepath.IsAbs(cleanReq) {
+		rel, relErr := filepath.Rel(cleanRoot, cleanReq)
+		if relErr == nil && !strings.HasPrefix(rel, "..") {
+			targetPath = filepath.Join(cleanRoot, rel)
+		} else {
+			parts := strings.Split(filepath.ToSlash(cleanReq), "/")
+			found := false
+			for i := 0; i < len(parts); i++ {
+				subPath := filepath.Join(parts[i:]...)
+				candidate := filepath.Join(cleanRoot, subPath)
+				if _, statErr := os.Stat(candidate); statErr == nil {
+					targetPath = candidate
+					found = true
+					break
+				}
+			}
+			if !found {
+				return "", fmt.Errorf("absolute path cannot be mapped to workspace root: %s", reqFile)
+			}
+		}
+	} else {
+		targetPath = filepath.Join(cleanRoot, cleanReq)
+	}
+
+	rel, err := filepath.Rel(cleanRoot, targetPath)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("resolved path outside project root: %s", reqFile)
 	}
-	return resolved, nil
+	return targetPath, nil
 }
 
 func handleTelemetry(w http.ResponseWriter, r *http.Request) {
