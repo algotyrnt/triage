@@ -45,7 +45,7 @@ Respond ONLY with a valid JSON object with the following schema:
   "suggested_fix": "Detailed solution or code modification to fix the issue"
 }`, stackTrace, astSnippet)
 
-	resp, err := client.Models.GenerateContent(ctx, "gemini-3.6-flash", genai.Text(prompt), &genai.GenerateContentConfig{
+	resp, err := client.Models.GenerateContent(ctx, "gemini-3.5-flash", genai.Text(prompt), &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
 	})
 	if err != nil {
