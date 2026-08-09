@@ -1,0 +1,43 @@
+name: Triage Production CD Pipeline
+
+on:
+    push:
+        branches: [main]
+
+jobs:
+    deploy-engine:
+        name: Deploy Engine to GCP Cloud Run
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: Authenticate to Google Cloud
+              uses: google-github-actions/auth@v2
+              with:
+                  credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+            - name: Set up Cloud SDK
+              uses: google-github-actions/setup-gcloud@v2
+
+            - name: Authorize Docker for GCP Container Registry
+              run: gcloud auth configure-docker --quiet
+
+            - name: Build & Push Engine Docker Image
+              run: |
+                  docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/triage-engine:${{ github.sha }} -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/triage-engine:latest apps/engine/
+                  docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/triage-engine:${{ github.sha }}
+                  docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/triage-engine:latest
+
+            - name: Deploy to Cloud Run
+              uses: google-github-actions/deploy-cloudrun@v2
+              with:
+                  service: triage-engine
+                  region: us-central1
+                  image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/triage-engine:${{ github.sha }}
+                  flags: >-
+                      --allow-unauthenticated
+                      --port=8080
+                      --min-instances=1
+                      --max-instances=10
+                      --set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest,TRIAGE_API_KEY=TRIAGE_API_KEY:latest,GITHUB_APP_ID=GITHUB_APP_ID:latest,GITHUB_PRIVATE_KEY=GITHUB_PRIVATE_KEY:latest,GITHUB_WEBHOOK_SECRET=GITHUB_WEBHOOK_SECRET:latest

@@ -10,8 +10,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"triage/engine/internal/ast"
@@ -45,6 +47,7 @@ func main() {
 
 	webhookSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 
+	http.HandleFunc("/health", handleHealthRoute)
 	http.HandleFunc("/api/v1/telemetry", handleTelemetryRoute)
 	http.HandleFunc("/api/v1/github/webhook", github.WebhookHandler(webhookSecret))
 
@@ -55,10 +58,33 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	log.Printf("Triage Engine server listening on :%s ...", port)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server stopped: %v", err)
+	stopCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("Triage Engine server listening on :%s ...", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server stopped unexpectedly: %v", err)
+		}
+	}()
+
+	<-stopCtx.Done()
+	log.Println("Received termination signal. Shutting down Triage Engine gracefully...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Engine server forced shutdown error: %v", err)
+	} else {
+		log.Println("Engine server exited cleanly.")
 	}
+}
+
+func handleHealthRoute(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"ok","component":"triage-engine","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
 }
 
 func handleTelemetryRoute(w http.ResponseWriter, r *http.Request) {
