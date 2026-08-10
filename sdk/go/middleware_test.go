@@ -4,18 +4,31 @@
 package triage
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMiddlewarePanicRecovery(t *testing.T) {
+	telemetryChan := make(chan []byte, 1)
+
+	// Isolated mock telemetry engine server
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		telemetryChan <- body
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"success"}`))
+	}))
+	defer ts.Close()
+
 	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic("simulated test crash")
 	})
 
-	mw := Middleware("test_key")
+	mw := Middleware("test_key", WithGatewayURL(ts.URL))
 	handler := mw(panicHandler)
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -31,15 +44,35 @@ func TestMiddlewarePanicRecovery(t *testing.T) {
 	if body != "Internal Server Error" {
 		t.Errorf("expected generic body 'Internal Server Error', got '%s'", body)
 	}
+
+	select {
+	case payload := <-telemetryChan:
+		if len(payload) == 0 {
+			t.Errorf("expected non-empty telemetry payload")
+		}
+		if !strings.Contains(string(payload), "test_key") || !strings.Contains(string(payload), "stack_trace") {
+			t.Errorf("expected telemetry payload to contain api_key and stack_trace, got: %s", string(payload))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout waiting for async telemetry payload to arrive at telemetry engine")
+	}
 }
 
 func TestMiddlewareWithGatewayURLOption(t *testing.T) {
+	telemetryChan := make(chan []byte, 1)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		telemetryChan <- body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
 	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		panic("simulated self-hosted crash")
 	})
 
-	customURL := "https://triage.internal.company.com/api/telemetry"
-	mw := Middleware("test_selfhosted_key", WithGatewayURL(customURL))
+	mw := Middleware("test_selfhosted_key", WithGatewayURL(ts.URL))
 	handler := mw(panicHandler)
 
 	req := httptest.NewRequest("GET", "/self-hosted", nil)
@@ -49,5 +82,14 @@ func TestMiddlewareWithGatewayURLOption(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+
+	select {
+	case payload := <-telemetryChan:
+		if !strings.Contains(string(payload), "test_selfhosted_key") || !strings.Contains(string(payload), "stack_trace") {
+			t.Errorf("expected payload to contain test_selfhosted_key and stack_trace, got %s", string(payload))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout waiting for telemetry payload on custom Gateway URL")
 	}
 }
