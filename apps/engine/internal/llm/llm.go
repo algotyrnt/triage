@@ -60,11 +60,7 @@ Respond ONLY with a valid JSON object with the following schema:
 		return nil, fmt.Errorf("gemini api call failed: %w", err)
 	}
 
-	rawText, err := resp.Text()
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract text from gemini response: %w", err)
-	}
-
+	rawText := resp.Text()
 	rawText = strings.TrimSpace(rawText)
 	if strings.HasPrefix(rawText, "```json") {
 		rawText = strings.TrimPrefix(rawText, "```json")
