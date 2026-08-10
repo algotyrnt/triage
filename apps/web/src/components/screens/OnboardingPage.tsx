@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { ScreenId } from '../../types';
+import React, { useState } from "react";
+import { ScreenId } from "../../types";
 import {
   GitBranch,
   CheckCircle2,
@@ -16,29 +16,51 @@ import {
   Shield,
   Layers,
   Sparkles,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface OnboardingPageProps {
   onNavigate: (screen: ScreenId) => void;
 }
 
-const DEMO_GENERATED_KEY = 'trj_demo_example_key_not_real';
+const DEMO_GENERATED_KEY = "trj_demo_example_key_not_real";
 
-export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) => {
+export const OnboardingPage: React.FC<OnboardingPageProps> = ({
+  onNavigate,
+}) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRepo, setSelectedRepo] = useState('algotyrnt/beacon-app');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRepo, setSelectedRepo] = useState("algotyrnt/beacon-app");
   const [copiedKey, setCopiedKey] = useState(false);
 
   const repos = [
-    { name: 'algotyrnt/beacon-app', visibility: 'Public', branch: 'main', lang: 'Go 1.22' },
-    { name: 'algotyrnt/payments-go', visibility: 'Private', branch: 'main', lang: 'Go 1.22' },
-    { name: 'algotyrnt/go-grpc-auth', visibility: 'Private', branch: 'master', lang: 'Go 1.21' },
-    { name: 'algotyrnt/k8s-operator', visibility: 'Public', branch: 'main', lang: 'Go 1.22' },
+    {
+      name: "algotyrnt/beacon-app",
+      visibility: "Public",
+      branch: "main",
+      lang: "Go 1.22",
+    },
+    {
+      name: "algotyrnt/payments-go",
+      visibility: "Private",
+      branch: "main",
+      lang: "Go 1.22",
+    },
+    {
+      name: "algotyrnt/go-grpc-auth",
+      visibility: "Private",
+      branch: "master",
+      lang: "Go 1.21",
+    },
+    {
+      name: "algotyrnt/k8s-operator",
+      visibility: "Public",
+      branch: "main",
+      lang: "Go 1.22",
+    },
   ];
 
   const filteredRepos = repos.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase())
+    r.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleCopy = async () => {
@@ -47,7 +69,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
       setCopiedKey(true);
       setTimeout(() => setCopiedKey(false), 2000);
     } catch (e) {
-      console.error('Failed to copy API key', e);
+      console.error("Failed to copy API key", e);
     }
   };
 
@@ -59,16 +81,25 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
           Project Onboarding & Go AST Setup
         </h1>
         <p className="text-xs text-slate-600 font-sans mt-1">
-          Connect your GitHub repository to index Go AST syntax trees and enable live panic crash symbolication.
+          Connect your GitHub repository to index Go AST syntax trees and enable
+          live panic crash symbolication.
         </p>
       </div>
 
       {/* 3-Step Indicator Bar */}
       <div className="grid grid-cols-3 gap-2 bg-white border border-slate-200 p-2 rounded-sm font-mono text-xs">
         {[
-          { num: 1, title: 'Select Repo', desc: 'Choose target Go project' },
-          { num: 2, title: 'GitHub App Setup', desc: 'Read-only tree permissions' },
-          { num: 3, title: 'SDK Integration Key', desc: 'Generate telemetry token' },
+          { num: 1, title: "Select Repo", desc: "Choose target Go project" },
+          {
+            num: 2,
+            title: "GitHub App Setup",
+            desc: "Read-only tree permissions",
+          },
+          {
+            num: 3,
+            title: "SDK Integration Key",
+            desc: "Generate telemetry token",
+          },
         ].map((step) => {
           const isActive = currentStep === step.num;
           const isDone = currentStep > step.num;
@@ -78,28 +109,32 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
               onClick={() => setCurrentStep(step.num as any)}
               className={`text-left p-2.5 rounded-sm transition-all border ${
                 isActive
-                  ? 'border-black bg-black text-white'
+                  ? "border-black bg-black text-white"
                   : isDone
-                  ? 'border-emerald-200 bg-emerald-50/50 text-slate-900'
-                  : 'border-slate-100 bg-slate-50 text-slate-500'
+                    ? "border-emerald-200 bg-emerald-50/50 text-slate-900"
+                    : "border-slate-100 bg-slate-50 text-slate-500"
               }`}
             >
               <div className="flex items-center justify-between mb-1">
                 <span
                   className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${
                     isActive
-                      ? 'bg-white text-black'
+                      ? "bg-white text-black"
                       : isDone
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-200 text-slate-700'
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-200 text-slate-700"
                   }`}
                 >
                   STEP 0{step.num}
                 </span>
-                {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                {isDone && (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                )}
               </div>
               <div className="font-bold text-xs">{step.title}</div>
-              <div className={`text-[10px] truncate ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+              <div
+                className={`text-[10px] truncate ${isActive ? "text-slate-300" : "text-slate-500"}`}
+              >
                 {step.desc}
               </div>
             </button>
@@ -114,13 +149,17 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 font-sans">
-                  Select a Go Repository from <span className="font-mono">algotyrnt</span>
+                  Select a Go Repository from{" "}
+                  <span className="font-mono">algotyrnt</span>
                 </h2>
                 <p className="text-xs text-slate-500 font-sans">
-                  Triage will analyze `go.mod` and parse `FuncDecl` AST nodes upon commit webhook.
+                  Triage will analyze `go.mod` and parse `FuncDecl` AST nodes
+                  upon commit webhook.
                 </p>
               </div>
-              <span className="text-xs font-mono text-slate-500">{filteredRepos.length} repositories found</span>
+              <span className="text-xs font-mono text-slate-500">
+                {filteredRepos.length} repositories found
+              </span>
             </div>
 
             {/* Search Box */}
@@ -136,39 +175,63 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
             </div>
 
             {/* Repo List */}
-            <div role="radiogroup" aria-label="Select Repository" className="space-y-2 max-h-60 overflow-y-auto">
-              {filteredRepos.map((repo) => {
+            <div
+              role="radiogroup"
+              aria-label="Select Repository"
+              className="space-y-2 max-h-60 overflow-y-auto"
+            >
+              {filteredRepos.map((repo, index) => {
                 const isSelected = selectedRepo === repo.name;
                 return (
                   <div
                     key={repo.name}
                     role="radio"
                     aria-checked={isSelected}
-                    tabIndex={0}
+                    tabIndex={
+                      isSelected || (index === 0 && !selectedRepo) ? 0 : -1
+                    }
                     onClick={() => setSelectedRepo(repo.name)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+                        e.preventDefault();
+                        const nextIdx = (index + 1) % filteredRepos.length;
+                        setSelectedRepo(filteredRepos[nextIdx].name);
+                      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+                        e.preventDefault();
+                        const prevIdx =
+                          (index - 1 + filteredRepos.length) %
+                          filteredRepos.length;
+                        setSelectedRepo(filteredRepos[prevIdx].name);
+                      } else if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedRepo(repo.name);
                       }
                     }}
                     className={`p-3 rounded-sm border cursor-pointer transition-all flex items-center justify-between font-mono text-xs focus:outline-none focus:ring-1 focus:ring-black ${
                       isSelected
-                        ? 'border-black bg-slate-50'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        ? "border-black bg-slate-50"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <div
                         className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                          isSelected ? 'border-black bg-black' : 'border-slate-300'
+                          isSelected
+                            ? "border-black bg-black"
+                            : "border-slate-300"
                         }`}
                       >
-                        {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                        {isSelected && (
+                          <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                        )}
                       </div>
                       <div>
-                        <span className="font-bold text-slate-900">{repo.name}</span>
-                        <span className="text-[11px] text-slate-500 ml-2">({repo.branch})</span>
+                        <span className="font-bold text-slate-900">
+                          {repo.name}
+                        </span>
+                        <span className="text-[11px] text-slate-500 ml-2">
+                          ({repo.branch})
+                        </span>
                       </div>
                     </div>
 
@@ -178,9 +241,9 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                       </span>
                       <span
                         className={`px-2 py-0.5 rounded-sm border ${
-                          repo.visibility === 'Public'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                          repo.visibility === "Public"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
                         }`}
                       >
                         {repo.visibility}
@@ -210,7 +273,10 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                 GitHub App Authorization & AST Webhook Ingress
               </h2>
               <p className="text-xs text-slate-500 font-sans mt-0.5">
-                Targeting <span className="font-mono text-slate-900 font-bold">{selectedRepo}</span>
+                Targeting{" "}
+                <span className="font-mono text-slate-900 font-bold">
+                  {selectedRepo}
+                </span>
               </p>
             </div>
 
@@ -221,7 +287,8 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                 <span>GitHub App Authorized for org: algotyrnt</span>
               </div>
               <p className="text-xs font-mono text-emerald-800 leading-relaxed">
-                Triage GitHub App installed with read-only tree permissions. Webhook listener configured at:
+                Triage GitHub App installed with read-only tree permissions.
+                Webhook listener configured at:
                 <code className="block mt-1 p-1.5 bg-white border border-emerald-200 rounded-sm text-[11px] text-slate-900 font-mono">
                   https://api.triage.dev/v1/github/webhook/wh_algotyrnt_beacon
                 </code>
@@ -230,11 +297,29 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
 
             {/* Scope details */}
             <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm space-y-1.5 font-mono text-xs">
-              <div className="font-bold text-slate-800">Granted Scopes & Webhook Triggers:</div>
+              <div className="font-bold text-slate-800">
+                Granted Scopes & Webhook Triggers:
+              </div>
               <div className="text-slate-600 text-[11px] space-y-1">
-                <div>• <span className="font-semibold text-slate-900">push:</span> Automatically re-indexes Go AST nodes on git push</div>
-                <div>• <span className="font-semibold text-slate-900">issues:write:</span> Automatically links symbolicated panic crashes to GitHub Issues</div>
-                <div>• <span className="font-semibold text-slate-900">pull_requests:write:</span> Enables Gemini automated patch generation comments</div>
+                <div>
+                  • <span className="font-semibold text-slate-900">push:</span>{" "}
+                  Automatically re-indexes Go AST nodes on git push
+                </div>
+                <div>
+                  •{" "}
+                  <span className="font-semibold text-slate-900">
+                    issues:write:
+                  </span>{" "}
+                  Automatically links symbolicated panic crashes to GitHub
+                  Issues
+                </div>
+                <div>
+                  •{" "}
+                  <span className="font-semibold text-slate-900">
+                    pull_requests:write:
+                  </span>{" "}
+                  Enables Gemini automated patch generation comments
+                </div>
               </div>
             </div>
 
@@ -263,7 +348,8 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                 SDK Telemetry Key Generated
               </h2>
               <p className="text-xs text-slate-500 font-sans mt-0.5">
-                Use this API key in your Go application initialization script (`triage.Middleware`).
+                Use this API key in your Go application initialization script
+                (`triage.Middleware`).
               </p>
             </div>
 
@@ -274,7 +360,9 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                   <Key className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Production Telemetry Key (Repo: {selectedRepo})</span>
                 </span>
-                <span className="text-[10px] text-emerald-400 font-bold">STATUS: ACTIVE</span>
+                <span className="text-[10px] text-emerald-400 font-bold">
+                  STATUS: ACTIVE
+                </span>
               </div>
 
               <div className="flex items-center justify-between gap-2 bg-black p-2.5 rounded-sm border border-slate-800">
@@ -285,17 +373,23 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onNavigate }) =>
                   onClick={handleCopy}
                   className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1 rounded-sm border border-slate-700 flex items-center gap-1 shrink-0 font-mono"
                 >
-                  {copiedKey ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
+                  {copiedKey ? (
+                    <Check className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                  <span>{copiedKey ? "Copied!" : "Copy"}</span>
                 </button>
               </div>
             </div>
 
             {/* Go Code snippet */}
             <div className="space-y-1.5 font-mono">
-              <div className="text-xs font-bold text-slate-800">Go SDK QuickStart Initialization:</div>
+              <div className="text-xs font-bold text-slate-800">
+                Go SDK QuickStart Initialization:
+              </div>
               <pre className="bg-slate-900 text-slate-100 p-3 rounded-sm text-[11px] overflow-x-auto border border-slate-800 leading-relaxed">
-{`package main
+                {`package main
 
 import (
 	"net/http"
@@ -305,11 +399,11 @@ import (
 func main() {
 	mux := http.NewServeMux()
 
-	// Wrap HTTP multiplexer with Triage panic recovery middleware
-	telemetryURL := "http://localhost:8080/api/v1/telemetry"
-	handler := triage.Middleware("${DEMO_GENERATED_KEY}", telemetryURL)(mux)
+	// Wrap HTTP multiplexer with triage panic recovery middleware
+	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
+	handler := triage.Middleware("${DEMO_GENERATED_KEY}", triage.WithGatewayURL(telemetryURL))(mux)
 
-	http.ListenAndServe(":8080", handler)
+	http.ListenAndServe(":8081", handler)
 }`}
               </pre>
             </div>
@@ -322,7 +416,7 @@ func main() {
                 Back
               </button>
               <button
-                onClick={() => onNavigate('dashboard')}
+                onClick={() => onNavigate("dashboard")}
                 className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2.5 px-5 rounded-sm transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <span>Complete Setup & Open Dashboard</span>
