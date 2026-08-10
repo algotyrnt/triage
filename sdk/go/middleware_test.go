@@ -15,7 +15,7 @@ func TestMiddlewarePanicRecovery(t *testing.T) {
 		panic("simulated test crash")
 	})
 
-	mw := Middleware("test_key", "http://localhost:8080/api/v1/telemetry")
+	mw := Middleware("test_key")
 	handler := mw(panicHandler)
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -30,5 +30,24 @@ func TestMiddlewarePanicRecovery(t *testing.T) {
 	body := strings.TrimSpace(rec.Body.String())
 	if body != "Internal Server Error" {
 		t.Errorf("expected generic body 'Internal Server Error', got '%s'", body)
+	}
+}
+
+func TestMiddlewareWithGatewayURLOption(t *testing.T) {
+	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("simulated self-hosted crash")
+	})
+
+	customURL := "https://triage.internal.company.com/api/telemetry"
+	mw := Middleware("test_selfhosted_key", WithGatewayURL(customURL))
+	handler := mw(panicHandler)
+
+	req := httptest.NewRequest("GET", "/self-hosted", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
 	}
 }
