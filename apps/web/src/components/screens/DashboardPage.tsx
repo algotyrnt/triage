@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Incident, ScreenId } from '../../types';
+import React, { useState } from "react";
+import { Incident, ScreenId } from "../../types";
 import {
   Key,
   GitBranch,
@@ -18,7 +18,7 @@ import {
   Zap,
   Terminal,
   RefreshCw,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface DashboardPageProps {
   incidents: Incident[];
@@ -33,14 +33,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigate,
   onSimulatePanic,
 }) => {
-  const [activeCodeTab, setActiveCodeTab] = useState<'main.go' | 'middleware.go' | 'go.mod'>('main.go');
+  const [activeCodeTab, setActiveCodeTab] = useState<
+    "main.go" | "middleware.go" | "go.mod"
+  >("main.go");
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
-  const apiKey = 'trj_demo_XXXXXXXXXXXX';
+  const apiKey = "trj_demo_XXXXXXXXXXXX";
 
   const codeSnippets = {
-    'main.go': `package main
+    "main.go": `package main
 
 import (
 	"log"
@@ -55,7 +57,7 @@ func main() {
 		ApiKey: "${apiKey}",
 		Repo:   "algotyrnt/beacon-app",
 	})
-	
+
 	// Global recovery deferred guard (captures runtime stack & isolated AST offset)
 	defer triage.Recovery()
 
@@ -66,7 +68,7 @@ func main() {
 	log.Println("[INFO] Server listening on :8080...")
 	http.ListenAndServe(":8080", mux)
 }`,
-    'middleware.go': `package middleware
+    "middleware.go": `package middleware
 
 import (
 	"net/http"
@@ -80,7 +82,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }`,
-    'go.mod': `module algotyrnt/beacon-app
+    "go.mod": `module algotyrnt/beacon-app
 
 go 1.22
 
@@ -124,7 +126,7 @@ require (
             <span>Engine Operational</span>
           </div>
           <button
-            onClick={() => onNavigate('status')}
+            onClick={() => onNavigate("status")}
             className="text-xs font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-sm transition-colors"
           >
             Metrics
@@ -145,15 +147,19 @@ require (
               onClick={handleCopyKey}
               className="text-slate-600 hover:text-black font-mono text-[11px] underline flex items-center gap-0.5"
             >
-              {copiedKey ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-              <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+              {copiedKey ? (
+                <Check className="w-3 h-3 text-emerald-600" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+              <span>{copiedKey ? "Copied" : "Copy"}</span>
             </button>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900 truncate">
-            trj_live_9f8a3c...89201
+            {apiKey}
           </div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
-            <span>Env: Production</span>
+            <span>Env: Demo</span>
             <span className="text-emerald-600 font-semibold">Active</span>
           </div>
         </div>
@@ -186,7 +192,7 @@ require (
               <span>AST Index Status</span>
             </span>
             <button
-              onClick={() => onNavigate('ast')}
+              onClick={() => onNavigate("ast")}
               className="text-slate-600 hover:text-black text-[11px] underline"
             >
               Tree
@@ -209,14 +215,15 @@ require (
               <span>Total Dispatches</span>
             </span>
             <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.2 rounded-sm font-mono font-bold">
-              {incidents.filter((i) => i.status === 'CRITICAL').length} Critical
+              {incidents.filter((i) => i.status === "CRITICAL").length} Critical
             </span>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900">
             3,842 Telemetry Events
           </div>
           <div className="text-[11px] font-mono text-slate-500">
-            Avg Latency: <span className="text-slate-800 font-semibold">14ms</span>
+            Avg Latency:{" "}
+            <span className="text-slate-800 font-semibold">14ms</span>
           </div>
         </div>
       </div>
@@ -236,14 +243,14 @@ require (
 
             {/* Tab Switcher */}
             <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-sm p-0.5">
-              {(['main.go', 'middleware.go', 'go.mod'] as const).map((tab) => (
+              {(["main.go", "middleware.go", "go.mod"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveCodeTab(tab)}
                   className={`px-2 py-0.5 text-[11px] font-mono rounded-sm transition-colors ${
                     activeCodeTab === tab
-                      ? 'bg-black text-white font-bold'
-                      : 'text-slate-600 hover:text-black'
+                      ? "bg-black text-white font-bold"
+                      : "text-slate-600 hover:text-black"
                   }`}
                 >
                   {tab}
@@ -258,8 +265,12 @@ require (
               onClick={handleCopySnippet}
               className="absolute top-3 right-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded-sm text-[11px] border border-slate-700 flex items-center gap-1 transition-colors font-mono"
             >
-              {copiedSnippet ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-              <span>{copiedSnippet ? 'Copied' : 'Copy'}</span>
+              {copiedSnippet ? (
+                <Check className="w-3 h-3 text-emerald-400" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+              <span>{copiedSnippet ? "Copied" : "Copy"}</span>
             </button>
 
             <pre className="overflow-x-auto leading-relaxed text-[11.5px] text-slate-200">
@@ -274,7 +285,10 @@ require (
               <span>How `defer triage.Recovery()` works under the hood:</span>
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              When a Go goroutine panics, `Recovery()` inspects `runtime/debug.Stack()`, extracts the exact source file and byte line offset (e.g. `user.go:42`), and queries Triage AST repository index to isolate the crashing `FuncDecl` block in under 15ms.
+              When a Go goroutine panics, `Recovery()` inspects
+              `runtime/debug.Stack()`, extracts the exact source file and byte
+              line offset (e.g. `user.go:42`), and queries Triage AST repository
+              index to isolate the crashing `FuncDecl` block in under 15ms.
             </p>
           </div>
         </div>
@@ -303,7 +317,7 @@ require (
             {/* Event List */}
             <div className="divide-y divide-slate-100">
               {incidents.map((incident) => {
-                const isCritical = incident.status === 'CRITICAL';
+                const isCritical = incident.status === "CRITICAL";
                 return (
                   <div
                     key={incident.id}
@@ -311,7 +325,7 @@ require (
                     tabIndex={0}
                     onClick={() => onSelectIncident(incident.id)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         onSelectIncident(incident.id);
                       }
@@ -326,10 +340,10 @@ require (
                         <span
                           className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm border ${
                             isCritical
-                              ? 'bg-red-50 text-red-700 border-red-200'
-                              : incident.status === 'INVESTIGATING'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : incident.status === "INVESTIGATING"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
                           }`}
                         >
                           {incident.status}
@@ -345,8 +359,10 @@ require (
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
-                      <span className="text-slate-600">{incident.triggeringFile}</span>
-                      <span>{incident.timestamp.split(' ')[1]}</span>
+                      <span className="text-slate-600">
+                        {incident.triggeringFile}
+                      </span>
+                      <span>{incident.timestamp.split(" ")[1]}</span>
                     </div>
                   </div>
                 );
@@ -357,7 +373,7 @@ require (
           {/* Footer Action */}
           <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
             <button
-              onClick={() => onNavigate('incident_detail')}
+              onClick={() => onNavigate("incident_detail")}
               className="w-full bg-slate-900 hover:bg-black text-white font-mono text-xs py-2 px-3 rounded-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>Inspect All Incidents in AST Inspector</span>
