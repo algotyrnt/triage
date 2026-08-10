@@ -5,16 +5,6 @@
 
 import React, { useState } from 'react';
 import { Incident, ScreenId } from './types';
-import {
-  INITIAL_INCIDENTS,
-  MOCK_AST_FILES,
-  MOCK_COMMIT_INDEXES,
-  MOCK_WEBHOOK_LOGS,
-  MOCK_TEAM_MEMBERS,
-  MOCK_API_KEYS,
-  MOCK_HOURLY_METRICS,
-  MOCK_SYSTEM_HEALTH,
-} from './data/mockData';
 
 import { Header } from './components/Header';
 import { LoginPage } from './components/screens/LoginPage';
@@ -28,17 +18,16 @@ import { SystemStatusPage } from './components/screens/SystemStatusPage';
 import { SettingsPage } from './components/screens/SettingsPage';
 
 import { engineClient } from './services/engineClient';
-import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
+import { CheckCircle2, X } from 'lucide-react';
 
 export default function App({ initialScreen = 'dashboard' }: { initialScreen?: ScreenId }) {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(initialScreen);
-  const [incidents, setIncidents] = useState<Incident[]>(INITIAL_INCIDENTS);
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string>('INC-8094');
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Selected incident object
-  const selectedIncident =
-    incidents.find((i) => i.id === selectedIncidentId) || incidents[0] || INITIAL_INCIDENTS[0];
+  const selectedIncident = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
 
   const criticalCount = incidents.filter((i) => i.status === 'CRITICAL').length;
 
@@ -58,7 +47,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
         id: newId,
         title: resp.analysis?.root_cause || 'nil pointer dereference in ChargeCart()',
         status: 'CRITICAL',
-        triggeringFile: 'scripts/test-crash/main.go:21',
+        triggeringFile: 'test-service/main.go:21',
         triggeringLine: 21,
         latencyMs: 14,
         commitHash: '8f3a1b4',
@@ -66,67 +55,79 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
         goroutineId: 'goroutine 21 [running]',
         panicMessage: 'panic: runtime error: invalid memory address or nil pointer dereference',
-        rawStackTrace: `goroutine 21 [running]:\nruntime/debug.Stack()\n\t/workspace/sdk/go/middleware.go:28 +0x68\nmain.main.func2({0x12995dae8, 0x102893268}, 0x0)\n\t/workspace/scripts/test-crash/main.go:21 +0x74`,
+        rawStackTrace: `goroutine 21 [running]:\nruntime/debug.Stack()\n\t/workspace/sdk/go/middleware.go:28 +0x68\nmain.main.func2({0x12995dae8, 0x102893268}, 0x0)\n\t/workspace/test-service/main.go:21 +0x74`,
         astSnippet: {
           functionName: 'main.func2',
-          file: 'scripts/test-crash/main.go',
+          file: 'test-service/main.go',
           startLine: 18,
           lines: [
-            { lineNum: 18, content: 'mux.HandleFunc("/crash", func(w http.ResponseWriter, r *http.Request) {' },
-            { lineNum: 19, content: '	log.Println("Triggering nil pointer dereference panic...")' },
-            { lineNum: 20, content: '	var ptr *int' },
-            { lineNum: 21, content: '	*ptr = 42 // PANIC: nil pointer dereference', isTriggerLine: true },
-            { lineNum: 22, content: '})' },
+            { lineNum: 18, content: 'func main() {' },
+            { lineNum: 19, content: '	http.HandleFunc("/crash", func(w http.ResponseWriter, r *http.Request) {' },
+            { lineNum: 20, content: '		var ptr *string' },
+            { lineNum: 21, content: '		_ = *ptr // nil pointer dereference', isTriggerLine: true },
+            { lineNum: 22, content: '	})' },
+            { lineNum: 23, content: '}' },
           ],
         },
+        geminiAnalysis: resp.analysis
+          ? {
+              rootCause: resp.analysis.root_cause,
+              explanation: resp.analysis.root_cause,
+              severity: 'CRITICAL',
+              recommendedFix: resp.analysis.suggested_fix,
+            }
+          : undefined,
+        suggestedPatch: resp.analysis?.suggested_fix,
+        githubIssueUrl: resp.github_issue?.html_url,
+        githubIssueNumber: resp.github_issue?.number,
       };
 
       setIncidents((prev) => [newIncident, ...prev]);
       setSelectedIncidentId(newId);
-      setCurrentScreen('incident_detail');
-      showToast(`[PANIC INGESTED] Engine Processed AST & Gemini Analysis: ${newId}`);
-    } catch (e) {
-      console.error('Telemetry dispatch error:', e);
-      showToast(`[PANIC SIMULATED] Ingested Local Panic`);
+      showToast(`Live Panic Telemetry Ingested: ${newId}`);
+    } catch (err) {
+      console.error(err);
+      showToast('Engine Ingestion Error: Ensure apps/engine is running');
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased flex flex-col selection:bg-black selection:text-white">
-      {/* Top Header */}
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Global Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-slate-900 border border-slate-800 text-slate-100 px-4 py-3 rounded-lg shadow-xl animate-in fade-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-sm font-medium">{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <Header
         currentScreen={currentScreen}
         onNavigate={(screen) => setCurrentScreen(screen)}
-        onSimulatePanic={handleSimulatePanic}
         criticalCount={criticalCount}
+        onSimulatePanic={handleSimulatePanic}
       />
 
-      {/* Main Content Render Area */}
-      <main className="flex-1">
-        {currentScreen === 'login' && (
-          <LoginPage
-            onNavigate={(screen) => setCurrentScreen(screen)}
-            onLoginSuccess={(user) => showToast(`Welcome back, ${user}!`)}
-          />
-        )}
-
-        {currentScreen === 'new' && (
-          <OnboardingPage onNavigate={(screen) => setCurrentScreen(screen)} />
-        )}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {currentScreen === 'login' && <LoginPage onLoginSuccess={() => setCurrentScreen('dashboard')} onNavigate={(screen) => setCurrentScreen(screen)} />}
+        {currentScreen === 'new' && <OnboardingPage onNavigate={(screen) => setCurrentScreen(screen)} />}
 
         {currentScreen === 'dashboard' && (
           <DashboardPage
             incidents={incidents}
+            onNavigate={(screen) => setCurrentScreen(screen)}
+            onSimulatePanic={handleSimulatePanic}
             onSelectIncident={(id) => {
               setSelectedIncidentId(id);
               setCurrentScreen('incident_detail');
             }}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-            onSimulatePanic={handleSimulatePanic}
           />
         )}
 
-        {currentScreen === 'incident_detail' && (
+        {currentScreen === 'incident_detail' && selectedIncident && (
           <IncidentDetailPage
             incident={selectedIncident}
             allIncidents={incidents}
@@ -135,70 +136,24 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           />
         )}
 
-        {currentScreen === 'ast' && (
-          <AstExplorerPage
-            commitIndexes={MOCK_COMMIT_INDEXES}
-            astFiles={MOCK_AST_FILES}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-          />
-        )}
-
-        {currentScreen === 'webhooks' && (
-          <WebhooksPage
-            logs={MOCK_WEBHOOK_LOGS}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-          />
-        )}
-
-        {currentScreen === 'team' && (
-          <TeamPage
-            teamMembers={MOCK_TEAM_MEMBERS}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-          />
-        )}
-
-        {currentScreen === 'status' && (
-          <SystemStatusPage
-            health={MOCK_SYSTEM_HEALTH}
-            metrics={MOCK_HOURLY_METRICS}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-          />
-        )}
-
-        {currentScreen === 'settings' && (
-          <SettingsPage
-            apiKeys={MOCK_API_KEYS}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-          />
-        )}
+        {currentScreen === 'ast' && <AstExplorerPage onNavigate={(screen) => setCurrentScreen(screen)} commitIndexes={[]} astFiles={[]} />}
+        {currentScreen === 'webhooks' && <WebhooksPage onNavigate={(screen) => setCurrentScreen(screen)} logs={[]} />}
+        {currentScreen === 'team' && <TeamPage teamMembers={[]} onNavigate={(screen) => setCurrentScreen(screen)} />}
+        {currentScreen === 'status' && <SystemStatusPage onNavigate={(screen) => setCurrentScreen(screen)} health={[]} metrics={[]} />}
+        {currentScreen === 'settings' && <SettingsPage apiKeys={[]} onNavigate={(screen) => setCurrentScreen(screen)} />}
       </main>
 
-      {/* Notification Toast */}
-      {toastMessage && (
-        <div className="fixed bottom-4 right-4 bg-black text-white font-mono text-xs px-4 py-3 rounded-sm shadow-none z-50 flex items-center gap-3 border border-slate-800 animate-in fade-in slide-in-from-bottom-2">
-          <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-          <span className="font-semibold">{toastMessage}</span>
-          <button
-            onClick={() => setToastMessage(null)}
-            className="text-slate-400 hover:text-white ml-2"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-slate-200 mt-12 py-4">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-slate-500 gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900">[TRIAGE]</span>
-            <span>Go Crash Detection & AST Isolation Engine</span>
+      <footer className="border-t border-slate-200 bg-white py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>triage Core Engine Active</span>
+            <span className="text-slate-300">•</span>
+            <span>Zero-Overhead Go Crash Isolation</span>
           </div>
-
-          <div className="flex items-center gap-4 text-[11px]">
-            <span>Org: algotyrnt</span>
-            <span>Repo: beacon-app</span>
-            <span className="text-emerald-700 font-bold">● Operational</span>
+          <div>
+            Powered by{' '}
+            <span className="text-slate-900 font-medium">Google Gemini 3.5 Flash</span> &amp; AST Parser
           </div>
         </div>
       </footer>
