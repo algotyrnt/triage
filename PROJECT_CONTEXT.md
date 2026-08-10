@@ -1,56 +1,61 @@
-# Triage — Project Context & System Architecture
+# triage: Architectural & Context Reference Specification
 
-## 1. Executive Summary
-**Triage** is a lightweight, zero-log automated crash detection and root-cause triaging engine for Go web applications. When a Go service panics in production, Triage intercepts the stack trace, extracts the specific failing function's Abstract Syntax Tree (AST) node, performs root-cause analysis via Gemini, and automatically opens a detailed issue on the project's GitHub repository.
+## 1. Executive Summary & Purpose
 
-### Key Value Propositions
-* **Zero Log Retention:** Crash logs and source code snippets pass through temporary memory only—never stored in a database.
-* **Minimal DB Footprint:** Operates strictly on project metadata (GitHub installation IDs and hashed API keys).
-* **AST Isolation:** Sends only the isolated, failing Go function snippet to Gemini rather than entire source files, keeping context tight, fast, and precise.
+**triage** is an enterprise-grade developer tool designed to isolate Go application crashes, extract function-level Abstract Syntax Tree (AST) context, and leverage **Google Gemini 3.5 Flash** to diagnose root causes and post automated GitHub issues.
+
+This document serves as the ground-truth technical specification for the repository architecture, data flows, security boundaries, and design systems.
 
 ---
 
-## 2. Monorepo Architecture & Tech Stack
+## 2. System Architecture & Monorepo Topology
 
 ```text
-triage/
-├── PROJECT_CONTEXT.md       # Master project reference
+algotyrnt/triage
 ├── apps/
-│   ├── web/                # Dashboard (Next.js 15 App Router, Tailwind CSS, Firebase)
-│   └── engine/             # Core Telemetry Engine (Go 1.22+, Cloud Run)
+│   ├── engine/             # Core AI Telemetry & AST Engine (Go 1.26+, Cloud Run :8080)
+│   ├── manager/            # Control Plane, Gateway & DB Manager (Go 1.26+, Cloud Run :8000)
+│   │   ├── db/             # Database Models & Helper Methods (package db)
+│   │   └── migrations/     # SQL DDL Migration Scripts
+│   └── web/                # Web Platform, Docs & Studio Dashboard (Next.js 16 :3000)
 ├── sdk/
 │   └── go/                 # Lightweight Panic Interceptor Middleware
-└── scripts/
-    └── test-crash/         # Local dummy web app to trigger panics for testing
+└── test-service/           # Local dummy web app to trigger panics for testing (:8081)
 ```
 
 | Component | Technology | Deployment Target | Cost Model |
 | --- | --- | --- | --- |
-| **Dashboard (`apps/web`)** | Next.js 15 App Router + Tailwind | Firebase App Hosting | Free Tier (Scales to $0) |
-| **Auth** | Firebase Auth (GitHub OAuth) | Firebase | 50k MAUs Free |
-| **Database** | Cloud Firestore | GCP | 50k Reads / 20k Writes daily Free |
-| **AST Storage** | Google Cloud Storage (GCS) | GCP | 5 GB Free |
-| **Telemetry Engine (`apps/engine`)** | Go 1.22+ (`go/ast`, Gemini SDK) | GCP Cloud Run | 2 Million Invocations/mo Free |
-| **SDK (`sdk/go`)** | Pure Go Standard Library | Go Package Import | N/A |
+| **Triage Manager (`apps/manager`)** | Go 1.26+ (`net/http`, `pgxpool`) | GCP Cloud Run Function | Free Tier (< 15MB RAM, :8000) |
+| **Triage Engine (`apps/engine`)** | Go 1.26+ (`go/ast`, Gemini SDK) | GCP Cloud Run | 2 Million Invocations/mo Free (:8080) |
+| **Web Platform & Dashboard (`apps/web`)** | Next.js 16 + Bun + React 19 | GCP Cloud Run / Vercel | Free Tier (:3000) |
+| **Test Service (`test-service`)** | Go 1.26+ Dummy HTTP App | Docker Container | Testing (:8081) |
+| **Database Module (`apps/manager/db`)** | Go Package (`package db`) | PostgreSQL (Cloud SQL / Neon) | Free Tier |
+| **Triage SDK (`sdk/go`)** | Pure Go Standard Library | Go Package Import | N/A |
 
 ---
 
 ## 3. High-Level Data Flow
 
 ```text
-[ Target Go Application ] 
+[ Target Go Application (test-service) ] 
        │ 1. Intercept Panic (sdk/go)
-       │    Sends: Stack Trace + API Key
+       │    Dispatches HTTP POST to Triage Manager
        ▼
-[ GCP Cloud Run Engine (apps/engine) ]
-       │ 2. Validate API Key (In-Memory LRU Cache)
-       │ 3. Fetch pre-parsed AST snippet from GCS (or local file)
-       │ 4. Isolate failing *ast.FuncDecl via line number
-       │ 5. Query Gemini 2.5 API (Root cause + Suggested Fix)
-       │ 6. POST GitHub Issue via GitHub App API
+[ Go Triage Manager Cloud Function (apps/manager :8000) ]
+       │ 2. Validates API Key in PostgreSQL DB (api_keys table)
+       │ 3. Fetches pre-parsed AST snippet from PostgreSQL DB (ast_nodes table)
+       │ 4. Proxies payload to Core AI Engine (:8080/api/v1/telemetry)
+       ▼
+[ GCP Cloud Run Engine (apps/engine :8080) ]
+       │ 5. Queries Gemini 3.5 Flash (Root cause + Suggested Fix)
+       │ 6. Returns JSON diagnostics to Triage Manager
+       ▼
+[ Studio Dashboard & GitHub ]
+       │ 7. Persists Incident to PostgreSQL DB (incidents table)
+       │ 8. Updates Real-Time Studio Dashboard (/dashboard)
+       │ 9. POST GitHub Issue via GitHub App API
        ▼
 [ GitHub Repository ] <--- Issue Created (#104)
-[ Memory Garbage Collected ] <--- Zero Logs Stored in DB
 ```
 
 ---
@@ -59,26 +64,29 @@ triage/
 
 ### A. Client SDK (`sdk/go`)
 * **Purpose:** Non-intrusive HTTP middleware wrapping standard Go routers (`net/http`, `chi`, `gin`).
-* **Behavior:** Captures panics via `defer` + `recover()`, pulls raw trace via `runtime/debug.Stack()`, extracts caller line/file, and dispatches an asynchronous, non-blocking HTTP POST request to the Triage Engine.
+* **Behavior:** Captures panics via `defer` + `recover()`, pulls raw trace via `runtime/debug.Stack()`, extracts caller line/file, generates OpenTelemetry Trace ID (`X-Triage-Trace-ID`), and dispatches an asynchronous, non-blockingly queued HTTP POST request to the Triage Manager.
+* **Usage:** `triage.Middleware(apiKey, opts...)` (supports optional `triage.WithGatewayURL(...)` for self-hosted deployments).
 
-### B. Core Telemetry Engine (`apps/engine`)
+### B. Triage Engine (`apps/engine`)
 * **Purpose:** Stateless pipeline that processes incoming crashes and handles LLM analysis.
 * **Key Modules:**
-  * `internal/ast`: Uses Go standard packages (`go/parser`, `go/token`, `go/ast`) to isolate the exact function declaration (`*ast.FuncDecl`) surrounding the line where the panic occurred.
+  * `internal/ast`: PostgreSQL-backed AST manager (`pgxpool`) and background repository indexer (`POST /api/v1/ast/index`).
   * `internal/llm`: Uses `google.golang.org/genai` to analyze the stack trace alongside the isolated AST snippet. Requests structured JSON output containing root cause, severity, and suggested code fix.
-  * `internal/github`: Uses GitHub App Installation Tokens to construct and post formatted Markdown issues (`POST /repos/{owner}/{repo}/issues`).
 
-### C. Web Dashboard (`apps/web`)
-* **Purpose:** Minimalist developer dashboard for connecting GitHub repositories, managing API keys, and monitoring webhook delivery health.
-* **Design Guidelines (Strict):**
-  * **Theme:** Light mode canvas (`#F8FAFC`), pure white cards (`#FFFFFF`), crisp 1px light gray borders (`#E2E8F0`).
-  * **Palette:** Pitch Black (`#000000`) primary actions, Charcoal (`#111827`) text, Emerald Green (`#059669`) for operational states, Red (`#DC2626`) for panics/danger zone. Zero secondary accent colors.
-  * **Typography:** Inter / System Sans-Serif for UI; JetBrains Mono / SF Mono for code, hashes, and line numbers.
+### C. Triage Manager (`apps/manager`)
+* **Purpose:** High-performance Go Cloud Run control-plane function handling crash ingestion (`/api/telemetry`), API key verification, PostgreSQL connection pooling (`apps/manager/db`), and GitHub App webhooks (`/api/github/webhook`). Single `go.mod` file module.
+* **Performance:** Default port **`:8000`**, boot time **< 50ms**, memory footprint **< 15 MB**. Enforces **Webhook Delivery Idempotency** (`webhook_logs` table).
+
+### D. Web Platform & Studio Dashboard (`apps/web`)
+* **Purpose:** Unified Next.js 16 web application integrating the product marketing landing page (`/`), SDK integration docs (`/docs`), and Studio Dashboard UI (`/dashboard`).
+
+### E. Test Service (`test-service`)
+* **Purpose:** Dummy Go web application harness on `:8081` designed to simulate panics (`GET /crash`) and test end-to-end telemetry ingestion.
 
 ---
 
 ## 5. Security & Edge Case Policies
 
-1. **Unique Project Indexing:** Firestore documents are keyed by `{github_owner}_{github_repo}`. Duplicate initialization attempts by team members are blocked with a notification that the repository is already configured.
-2. **Automated Cleanup:** When a user uninstalls the Triage GitHub App, GitHub dispatches an `installation.deleted` webhook. The engine verifies the `X-Hub-Signature-256` HMAC signature, revokes all associated API keys, and removes stored AST artifacts from Cloud Storage.
-3. **In-Memory Caching:** To prevent Firestore pay-per-read billing spikes, valid API keys are cached in memory inside the Cloud Run Go engine using an LRU cache.
+1. **Path Traversal Protection:** Sanitize all incoming file paths. Reject any path containing `..` or leading slashes outside the project root context.
+2. **Zero Storage of Secrets in Engine:** Storage of repository access tokens, GitHub RSA keys, and database passwords is strictly restricted to `apps/manager` and `apps/web`.
+3. **Payload Truncation:** Limit request body sizes to 1MB to prevent Denial of Service (DoS) memory exhaustion.
