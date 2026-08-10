@@ -21,7 +21,7 @@ import {
   ChevronRight,
   ExternalLink,
 } from 'lucide-react';
-import { GEMINI_MODEL_NAME } from '../../data/mockData';
+import { GEMINI_MODEL_NAME } from '../../types';
 
 interface IncidentDetailPageProps {
   incident: Incident;
