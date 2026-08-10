@@ -16,9 +16,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
 	"triage/engine/internal/ast"
 	"triage/engine/internal/llm"
+
+	"github.com/joho/godotenv"
 )
 
 type TelemetryRequest struct {
@@ -55,13 +56,15 @@ func main() {
 	loadEnvLocal()
 
 	dbURL := os.Getenv("DATABASE_URL")
-	var err error
-	astManager, err = ast.NewManager(context.Background(), dbURL)
-	if err != nil {
-		log.Printf("[WARNING] PostgreSQL AST Manager initialization: %v", err)
-	} else {
-		defer astManager.Close()
-		log.Printf("[CONFIG] Connected AST Manager to PostgreSQL DB")
+	if dbURL != "" {
+		var err error
+		astManager, err = ast.NewManager(context.Background(), dbURL)
+		if err != nil {
+			log.Printf("[WARNING] Failed to connect AST Manager to PostgreSQL: %v", err)
+		} else {
+			defer astManager.Close()
+			log.Println("[AST MANAGER] Connected Engine to PostgreSQL Database Pool")
+		}
 	}
 
 	port := os.Getenv("PORT")
@@ -76,7 +79,7 @@ func main() {
 	server := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -154,10 +157,11 @@ func isValidAPIKey(key string) bool {
 		return false
 	}
 	expected := os.Getenv("TRIAGE_API_KEY")
-	if expected != "" {
-		return key == expected
+	if expected == "" {
+		// Fail closed if TRIAGE_API_KEY is unset
+		return false
 	}
-	return true
+	return key == expected
 }
 
 func validateAndResolveFilePath(reqFile string) (string, error) {
@@ -175,6 +179,9 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 	cleanRoot, err := filepath.Abs(filepath.Clean(root))
 	if err != nil {
 		cleanRoot = filepath.Clean(root)
+	}
+	if evalRoot, evalErr := filepath.EvalSymlinks(cleanRoot); evalErr == nil {
+		cleanRoot = evalRoot
 	}
 
 	cleanReq := filepath.Clean(reqFile)
@@ -202,6 +209,10 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 		}
 	} else {
 		targetPath = filepath.Join(cleanRoot, cleanReq)
+	}
+
+	if evalTarget, evalErr := filepath.EvalSymlinks(targetPath); evalErr == nil {
+		targetPath = evalTarget
 	}
 
 	rel, err := filepath.Rel(cleanRoot, targetPath)
