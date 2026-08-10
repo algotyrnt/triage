@@ -384,7 +384,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-xs">{inc.id}</span>
                       <span
-                        className={`text-[9px] px-1.5 py-0.2 font-bold rounded-sm border ${
+                        className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm border ${
                           inc.status === 'CRITICAL'
                             ? 'bg-red-50 text-red-700 border-red-200'
                             : inc.status === 'INVESTIGATING'
