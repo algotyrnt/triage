@@ -18,41 +18,60 @@ import (
 
 	"github.com/joho/godotenv"
 	"triage/engine/internal/ast"
-	"triage/engine/internal/github"
 	"triage/engine/internal/llm"
 )
 
 type TelemetryRequest struct {
-	APIKey         string `json:"api_key"`
-	File           string `json:"file"`
-	Line           int    `json:"line"`
-	StackTrace     string `json:"stack_trace"`
-	GithubOwner    string `json:"github_owner,omitempty"`
-	GithubRepo     string `json:"github_repo,omitempty"`
-	InstallationID int64  `json:"installation_id,omitempty"`
+	APIKey     string `json:"api_key"`
+	File       string `json:"file"`
+	Line       int    `json:"line"`
+	StackTrace string `json:"stack_trace"`
+	ASTSnippet string `json:"ast_snippet,omitempty"`
+	TraceID    string `json:"trace_id,omitempty"`
 }
 
 type TelemetryResponse struct {
-	Status       string                `json:"status"`
-	AST          string                `json:"ast,omitempty"`
-	Analysis     *llm.AnalysisResult   `json:"analysis,omitempty"`
-	GithubIssue  *github.IssueResponse `json:"github_issue,omitempty"`
-	ErrorMessage string                `json:"error,omitempty"`
+	Status       string              `json:"status"`
+	TraceID      string              `json:"trace_id,omitempty"`
+	AST          string              `json:"ast,omitempty"`
+	Analysis     *llm.AnalysisResult `json:"analysis,omitempty"`
+	ErrorMessage string              `json:"error,omitempty"`
+}
+
+type IndexRequest struct {
+	Owner         string `json:"owner"`
+	Repo          string `json:"repo"`
+	Commit        string `json:"commit"`
+	WorkspacePath string `json:"workspace_path"`
+}
+
+var astManager *ast.Manager
+
+func loadEnvLocal() {
+	_ = godotenv.Load(".env.local", ".env")
 }
 
 func main() {
-	_ = godotenv.Load(".env.local", ".env")
+	loadEnvLocal()
+
+	dbURL := os.Getenv("DATABASE_URL")
+	var err error
+	astManager, err = ast.NewManager(context.Background(), dbURL)
+	if err != nil {
+		log.Printf("[WARNING] PostgreSQL AST Manager initialization: %v", err)
+	} else {
+		defer astManager.Close()
+		log.Printf("[CONFIG] Connected AST Manager to PostgreSQL DB")
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	webhookSecret := os.Getenv("GITHUB_WEBHOOK_SECRET")
-
 	http.HandleFunc("/health", handleHealthRoute)
 	http.HandleFunc("/api/v1/telemetry", handleTelemetryRoute)
-	http.HandleFunc("/api/v1/github/webhook", github.WebhookHandler(webhookSecret))
+	http.HandleFunc("/api/v1/ast/index", handleASTIndexRoute)
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -96,6 +115,38 @@ func handleTelemetryRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	handleTelemetry(w, r)
+}
+
+func handleASTIndexRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req IndexRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	if astManager == nil {
+		http.Error(w, "Database AST Manager uninitialized", http.StatusInternalServerError)
+		return
+	}
+
+	count, err := astManager.IndexRepositoryAST(r.Context(), req.Owner, req.Repo, req.Commit, req.WorkspacePath)
+	if err != nil {
+		log.Printf("[ERROR] AST indexing failed: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "error": err.Error()})
+		return
+	}
+
+	log.Printf("[AST INDEXING COMPLETE] Indexed %d function nodes into PostgreSQL for %s/%s", count, req.Owner, req.Repo)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "indexed_count": count})
 }
 
 func isValidAPIKey(key string) bool {
@@ -160,6 +211,24 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 	return targetPath, nil
 }
 
+func ExtractASTContext(ctx context.Context, reqFile string, line int) (string, error) {
+	if astManager != nil {
+		node, err := astManager.GetASTNode(ctx, reqFile, line)
+		if err == nil && node != nil && node.Snippet != "" {
+			log.Printf("[AST DB HIT] %s:%d", reqFile, line)
+			return node.Snippet, nil
+		}
+		log.Printf("[AST DB MISS] %s:%d - %v", reqFile, line, err)
+	}
+
+	resolvedPath, valErr := validateAndResolveFilePath(reqFile)
+	if valErr != nil {
+		return "", valErr
+	}
+
+	return ast.ExtractFuncAST(resolvedPath, line)
+}
+
 func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	// Limit request body size to 1MB
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -176,96 +245,76 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate API Key before file reads, Gemini calls, or issue creation
+	traceID := req.TraceID
+	if traceID == "" {
+		traceID = r.Header.Get("X-Triage-Trace-ID")
+	}
+	if traceID != "" {
+		w.Header().Set("X-Triage-Trace-ID", traceID)
+	}
+
+	// Validate API Key before file reads or Gemini calls
 	if !isValidAPIKey(req.APIKey) {
-		log.Printf("[WARNING] Unauthorized telemetry request attempt")
+		log.Printf("[WARNING] [TRACE %s] Unauthorized telemetry request attempt", traceID)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(TelemetryResponse{
 			Status:       "error",
+			TraceID:      traceID,
 			ErrorMessage: "unauthorized: missing or invalid API key",
 		})
 		return
 	}
 
 	log.Printf("==================================================")
-	log.Printf("[TELEMETRY RECEIVED] File: %s | Line: %d", req.File, req.Line)
+	log.Printf("[TELEMETRY RECEIVED] Trace: %s | File: %s | Line: %d", traceID, req.File, req.Line)
 	log.Printf("Stack Trace:\n%s", req.StackTrace)
 
 	var astSnippet string
 	var astErr error
-	if req.File != "" && req.Line > 0 {
-		resolvedPath, valErr := validateAndResolveFilePath(req.File)
-		if valErr != nil {
-			log.Printf("[WARNING] AST extraction file validation failed: %v", valErr)
+	if req.ASTSnippet != "" {
+		astSnippet = req.ASTSnippet
+		log.Printf("[AST SNIPPET PROVIDED IN PAYLOAD]\n%s", astSnippet)
+	} else if req.File != "" && req.Line > 0 {
+		astSnippet, astErr = ExtractASTContext(r.Context(), req.File, req.Line)
+		if astErr != nil {
+			log.Printf("[WARNING] [TRACE %s] AST extraction failed: %v", traceID, astErr)
 		} else {
-			astSnippet, astErr = ast.ExtractFuncAST(resolvedPath, req.Line)
-			if astErr != nil {
-				log.Printf("[WARNING] AST extraction failed: %v", astErr)
-			} else {
-				log.Printf("[AST EXTRACTED] Surrounding Function Node:\n%s", astSnippet)
-			}
+			log.Printf("[AST RESOLVED] [TRACE %s] Surrounding Function Node:\n%s", traceID, astSnippet)
 		}
 	} else {
-		log.Printf("[WARNING] File or Line not provided in telemetry")
+		log.Printf("[WARNING] [TRACE %s] File or Line not provided in telemetry", traceID)
 	}
 
-	// Separate context for LLM analysis
+	// Context for LLM analysis
 	analysisCtx, cancelAnalysis := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancelAnalysis()
 
 	analysis, llmErr := llm.AnalyzeCrash(analysisCtx, req.StackTrace, astSnippet)
 	if llmErr != nil {
-		log.Printf("[ERROR] Gemini analysis failed: %v", llmErr)
+		log.Printf("[ERROR] [TRACE %s] Gemini analysis failed: %v", traceID, llmErr)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(TelemetryResponse{
 			Status:       "partial_success",
+			TraceID:      traceID,
 			AST:          astSnippet,
 			ErrorMessage: fmt.Sprintf("LLM analysis error: %v", llmErr),
 		})
 		return
 	}
 
-	log.Printf("[ANALYSIS COMPLETE]")
+	log.Printf("[ANALYSIS COMPLETE] [TRACE %s]", traceID)
 	log.Printf("  Root Cause: %s", analysis.RootCause)
 	log.Printf("  Suggested Fix: %s", analysis.SuggestedFix)
-
-	var githubIssueResp *github.IssueResponse
-	appID := os.Getenv("GITHUB_APP_ID")
-	privateKeyPem := os.Getenv("GITHUB_PRIVATE_KEY")
-
-	if appID != "" && privateKeyPem != "" && req.GithubOwner != "" && req.GithubRepo != "" && req.InstallationID > 0 {
-		ghClient := github.NewClient(appID, []byte(privateKeyPem))
-		issueReq := &github.IssueRequest{
-			File:       req.File,
-			Line:       req.Line,
-			StackTrace: req.StackTrace,
-			ASTSnippet: astSnippet,
-			Analysis:   analysis,
-		}
-
-		// Dedicated context for GitHub issue creation
-		ghCtx, cancelGH := context.WithTimeout(r.Context(), 15*time.Second)
-		defer cancelGH()
-
-		issue, err := ghClient.CreateIssue(ghCtx, req.GithubOwner, req.GithubRepo, req.InstallationID, issueReq)
-		if err != nil {
-			log.Printf("[WARNING] Failed to post GitHub issue: %v", err)
-		} else {
-			githubIssueResp = issue
-			log.Printf("[GITHUB ISSUE CREATED] #%d: %s", issue.Number, issue.HTMLURL)
-		}
-	}
-
 	log.Printf("==================================================")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(TelemetryResponse{
-		Status:      "success",
-		AST:         astSnippet,
-		Analysis:    analysis,
-		GithubIssue: githubIssueResp,
+		Status:   "success",
+		TraceID:  traceID,
+		AST:      astSnippet,
+		Analysis: analysis,
 	})
 }
