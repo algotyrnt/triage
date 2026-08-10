@@ -19,8 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
 	triagedb "triage/manager/db"
+
+	"github.com/joho/godotenv"
 )
 
 type TelemetryPayload struct {
@@ -78,7 +79,7 @@ func main() {
 		Addr:         ":" + port,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -167,7 +168,7 @@ func handleTelemetryIngest(w http.ResponseWriter, r *http.Request) {
 		engineReq.Header.Set("X-Triage-Trace-ID", traceID)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(engineReq)
 	if err != nil {
 		log.Printf("[ERROR] Engine connection error: %v", err)
@@ -248,7 +249,7 @@ func handleWebhookProxy(w http.ResponseWriter, r *http.Request) {
 	engineReq.Header.Set("X-GitHub-Delivery", deliveryID)
 	engineReq.Header.Set("X-Hub-Signature-256", r.Header.Get("X-Hub-Signature-256"))
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(engineReq)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
