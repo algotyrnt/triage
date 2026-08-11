@@ -93,3 +93,45 @@ func TestMiddlewareWithGatewayURLOption(t *testing.T) {
 		t.Fatalf("timeout waiting for telemetry payload on custom Gateway URL")
 	}
 }
+
+func TestMiddlewarePreservesInboundTraceparent(t *testing.T) {
+	telemetryChan := make(chan []byte, 1)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		telemetryChan <- body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("traceparent panic test")
+	})
+
+	mw := Middleware("test_key", WithGatewayURL(ts.URL))
+	handler := mw(panicHandler)
+
+	req := httptest.NewRequest("GET", "/traceparent-test", nil)
+	expectedTraceID := "4bf92f3577b34da6a3ce929d0e0e4736"
+	req.Header.Set("traceparent", "00-"+expectedTraceID+"-00f067aa0ba902b7-01")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+
+	if traceIDHeader := rec.Header().Get("X-Triage-Trace-ID"); traceIDHeader != expectedTraceID {
+		t.Errorf("expected response header X-Triage-Trace-ID to be %s, got %s", expectedTraceID, traceIDHeader)
+	}
+
+	select {
+	case payload := <-telemetryChan:
+		if !strings.Contains(string(payload), expectedTraceID) {
+			t.Errorf("expected telemetry payload to contain trace ID %s, got: %s", expectedTraceID, string(payload))
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timeout waiting for telemetry payload")
+	}
+}

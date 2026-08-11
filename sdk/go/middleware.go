@@ -81,6 +81,37 @@ func generateTraceID() string {
 	return hex.EncodeToString(b)
 }
 
+func isValidTraceID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, ch := range id {
+		if !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func parseOrGenerateTraceID(r *http.Request) string {
+	if r != nil {
+		if triageHeader := r.Header.Get("X-Triage-Trace-ID"); triageHeader != "" {
+			if isValidTraceID(triageHeader) {
+				return triageHeader
+			}
+		}
+		if tp := r.Header.Get("traceparent"); tp != "" {
+			parts := strings.Split(tp, "-")
+			if len(parts) == 4 && len(parts[1]) == 32 {
+				if isValidTraceID(parts[1]) {
+					return parts[1]
+				}
+			}
+		}
+	}
+	return generateTraceID()
+}
+
 func enqueueTelemetry(job TelemetryJob) {
 	select {
 	case telemetryQueue <- job:
@@ -111,7 +142,7 @@ func Middleware(apiKey string, opts ...Option) func(http.Handler) http.Handler {
 					stackStr := string(stack)
 
 					file, line := parseTopApplicationFrame(stackStr)
-					traceID := generateTraceID()
+					traceID := parseOrGenerateTraceID(r)
 
 					// Non-blocking enqueue to bounded telemetry worker pool
 					enqueueTelemetry(TelemetryJob{
