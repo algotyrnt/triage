@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -18,8 +19,8 @@ type AnalysisResult struct {
 	SuggestedFix string `json:"suggested_fix"`
 }
 
-// AnalyzeCrash sends the crash stack trace and isolated AST snippet to Gemini 3.5 Flash
-// and returns a structured root cause analysis and suggested fix.
+// AnalyzeCrash sends the crash stack trace and isolated AST snippet to the Gemini model
+// selected from configuration via GEMINI_MODEL_NAME and returns a structured root cause analysis and suggested fix.
 func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet string) (*AnalysisResult, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
@@ -73,7 +74,8 @@ Respond ONLY with a valid JSON object with the following schema:
 
 	var analysis AnalysisResult
 	if err := json.Unmarshal([]byte(rawText), &analysis); err != nil {
-		return nil, fmt.Errorf("failed to parse Gemini JSON response (%s): %w", rawText, err)
+		log.Printf("[GEMINI UNMARSHAL ERROR] Raw response: %s", rawText)
+		return nil, fmt.Errorf("failed to parse Gemini JSON response: %w", err)
 	}
 
 	return &analysis, nil
