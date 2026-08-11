@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,6 +25,9 @@ import (
 
 type TelemetryRequest struct {
 	APIKey     string `json:"api_key"`
+	Owner      string `json:"owner,omitempty"`
+	Repo       string `json:"repo,omitempty"`
+	Commit     string `json:"commit,omitempty"`
 	File       string `json:"file"`
 	Line       int    `json:"line"`
 	StackTrace string `json:"stack_trace"`
@@ -40,6 +44,7 @@ type TelemetryResponse struct {
 }
 
 type IndexRequest struct {
+	APIKey        string `json:"api_key,omitempty"`
 	Owner         string `json:"owner"`
 	Repo          string `json:"repo"`
 	Commit        string `json:"commit"`
@@ -132,12 +137,37 @@ func handleASTIndexRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	apiKey := req.APIKey
+	if apiKey == "" {
+		apiKey = r.Header.Get("X-Triage-API-Key")
+	}
+	if !isValidAPIKey(apiKey) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "error": "unauthorized: missing or invalid API key"})
+		return
+	}
+
 	if astManager == nil {
 		http.Error(w, "Database AST Manager uninitialized", http.StatusInternalServerError)
 		return
 	}
 
-	count, err := astManager.IndexRepositoryAST(r.Context(), req.Owner, req.Repo, req.Commit, req.WorkspacePath)
+	workspacePath := req.WorkspacePath
+	if workspacePath != "" {
+		resolvedPath, valErr := validateAndResolveFilePath(workspacePath)
+		if valErr != nil {
+			log.Printf("[WARNING] WorkspacePath validation failed: %v", valErr)
+			workspacePath = os.Getenv("AST_WORKSPACE_ROOT")
+		} else {
+			workspacePath = resolvedPath
+		}
+	}
+	if workspacePath == "" {
+		workspacePath = os.Getenv("AST_WORKSPACE_ROOT")
+	}
+
+	count, err := astManager.IndexRepositoryAST(r.Context(), req.Owner, req.Repo, req.Commit, workspacePath)
 	if err != nil {
 		log.Printf("[ERROR] AST indexing failed: %v", err)
 		w.Header().Set("Content-Type", "application/json")
@@ -161,7 +191,22 @@ func isValidAPIKey(key string) bool {
 		// Fail closed if TRIAGE_API_KEY is unset
 		return false
 	}
-	return key == expected
+	return subtle.ConstantTimeCompare([]byte(key), []byte(expected)) == 1
+}
+
+func isValidTraceID(id string) bool {
+	if id == "" {
+		return true
+	}
+	if len(id) > 64 {
+		return false
+	}
+	for _, ch := range id {
+		if !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 func validateAndResolveFilePath(reqFile string) (string, error) {
@@ -222,14 +267,14 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 	return targetPath, nil
 }
 
-func ExtractASTContext(ctx context.Context, reqFile string, line int) (string, error) {
+func ExtractASTContext(ctx context.Context, owner, repo, commit, reqFile string, line int) (string, error) {
 	if astManager != nil {
-		node, err := astManager.GetASTNode(ctx, reqFile, line)
+		node, err := astManager.GetASTNode(ctx, owner, repo, commit, reqFile, line)
 		if err == nil && node != nil && node.Snippet != "" {
-			log.Printf("[AST DB HIT] %s:%d", reqFile, line)
+			log.Printf("[AST DB HIT] %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
 			return node.Snippet, nil
 		}
-		log.Printf("[AST DB MISS] %s:%d - %v", reqFile, line, err)
+		log.Printf("[AST DB MISS] %s/%s@%s %s:%d - %v", owner, repo, commit, reqFile, line, err)
 	}
 
 	resolvedPath, valErr := validateAndResolveFilePath(reqFile)
@@ -260,6 +305,10 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	if traceID == "" {
 		traceID = r.Header.Get("X-Triage-Trace-ID")
 	}
+	if !isValidTraceID(traceID) {
+		log.Printf("[WARNING] Invalid trace ID format received: %s, ignoring", traceID)
+		traceID = ""
+	}
 	if traceID != "" {
 		w.Header().Set("X-Triage-Trace-ID", traceID)
 	}
@@ -284,10 +333,14 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	var astSnippet string
 	var astErr error
 	if req.ASTSnippet != "" {
-		astSnippet = req.ASTSnippet
+		if len(req.ASTSnippet) > 8192 {
+			astSnippet = req.ASTSnippet[:8192] + "\n... [truncated]"
+		} else {
+			astSnippet = req.ASTSnippet
+		}
 		log.Printf("[AST SNIPPET PROVIDED IN PAYLOAD]\n%s", astSnippet)
 	} else if req.File != "" && req.Line > 0 {
-		astSnippet, astErr = ExtractASTContext(r.Context(), req.File, req.Line)
+		astSnippet, astErr = ExtractASTContext(r.Context(), req.Owner, req.Repo, req.Commit, req.File, req.Line)
 		if astErr != nil {
 			log.Printf("[WARNING] [TRACE %s] AST extraction failed: %v", traceID, astErr)
 		} else {
@@ -301,7 +354,8 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	analysisCtx, cancelAnalysis := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancelAnalysis()
 
-	analysis, llmErr := llm.AnalyzeCrash(analysisCtx, req.StackTrace, astSnippet)
+	delimitedSnippet := fmt.Sprintf("```go\n%s\n```", astSnippet)
+	analysis, llmErr := llm.AnalyzeCrash(analysisCtx, req.StackTrace, delimitedSnippet)
 	if llmErr != nil {
 		log.Printf("[ERROR] [TRACE %s] Gemini analysis failed: %v", traceID, llmErr)
 		w.Header().Set("Content-Type", "application/json")
