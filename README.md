@@ -29,19 +29,27 @@
    │
    ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
+│                           Go Triage Manager (:8000) Ingestion                              │
+│                                                                                            │
+│  1. Receive SDK Telemetry  ──►  2. Verify API Key  ──►  3. Proxy Payload to Triage Engine  │
+│     (/api/telemetry)               (PostgreSQL DB)            (:8080)                      │
+└───────────────────────────────────────────┬────────────────────────────────────────────────┘
+                                            │
+                                            ▼
+┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                 Triage Engine (:8080)                                      │
 │                                                                                            │
-│  1. Parse Stack Trace  ──►  2. Query Pre-Parsed AST  ──►  3. Gemini 3.5 Flash ──► 4. Return │
+│  1. Parse Stack Trace  ──►  2. Query Pre-Parsed AST  ──►  3. Gemini Model  ──►  4. Return  │
 │     (Top App Frame)            From PostgreSQL DB           (genai SDK)            JSON    │
 └───────────────────────────────────────────┬────────────────────────────────────────────────┘
                                             │
-                                    JSON Telemetry Stream
+                                  Engine JSON Response
                                             ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
-│                           Triage Production Ecosystem                                      │
+│                      Manager Routing & Production Ecosystem                                │
 │                                                                                            │
 │  1. Go Triage Manager (:8000)   ──► 2. Web Platform & Studio Dashboard (:3000)            │
-│     (/api/telemetry, webhook)        (Landing page /, Docs, /dashboard UI)                 │
+│     (Save Incident Audit Log)        (Landing page /, Docs, /dashboard UI)                 │
 └────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,7 +69,7 @@ The Triage SDK provides a lightweight HTTP middleware (`triage.Middleware`) wrap
 
 ### 2. Core Go Engine (`apps/engine`)
 
-- **PostgreSQL Pre-Parsed AST Querying ([`internal/ast`](file:///Users/punjitha/projects/triage/apps/engine/internal/ast/node.go))**: Connects directly to PostgreSQL database via `pgxpool`. Queries pre-parsed `*ast.FuncDecl` snippets directly from the database (**0 disk I/O, zero on-demand file parsing, minimal RAM usage**).
+- **PostgreSQL Pre-Parsed AST Querying ([`internal/ast`](apps/engine/internal/ast))**: Connects directly to PostgreSQL database via `pgxpool`. Queries pre-parsed `*ast.FuncDecl` snippets directly from the database (**0 disk I/O, zero on-demand file parsing, minimal RAM usage**).
 - **Background AST Indexer**: `POST /api/v1/ast/index` endpoint parses repository `.go` files once, extracts function nodes, and populates PostgreSQL `ast_nodes`.
 - **AI Diagnostics (`internal/llm`)**: Uses official Google Gemini SDK (`google.golang.org/genai`) to send stack trace + AST snippet to Gemini 3.5 Flash (`GEMINI_MODEL_NAME`), generating structured JSON with `root_cause` and `suggested_fix`.
 
