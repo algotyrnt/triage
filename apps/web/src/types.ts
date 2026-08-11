@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-export const GEMINI_MODEL_NAME = process.env.NEXT_PUBLIC_GEMINI_MODEL_NAME || '';
+export const GEMINI_MODEL_NAME = process.env.NEXT_PUBLIC_GEMINI_MODEL_NAME || 'gemini-3.5-flash';
 
 export type ScreenId =
   | 'login'
