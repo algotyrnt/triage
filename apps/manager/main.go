@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	triagedb "triage/manager/db"
 
@@ -25,7 +26,10 @@ import (
 )
 
 type TelemetryPayload struct {
-	APIKey     string `json:"api_key"`
+	APIKey     string `json:"api_key,omitempty"`
+	Owner      string `json:"owner,omitempty"`
+	Repo       string `json:"repo,omitempty"`
+	Commit     string `json:"commit,omitempty"`
 	File       string `json:"file"`
 	Line       int    `json:"line"`
 	StackTrace string `json:"stack_trace"`
@@ -59,11 +63,10 @@ func main() {
 	var err error
 	database, err = triagedb.NewDB(context.Background(), dbURL)
 	if err != nil {
-		log.Printf("[WARNING] Failed to connect to PostgreSQL DB: %v", err)
-	} else {
-		defer database.Close()
-		log.Println("[MANAGER] Connected Manager Gateway to Database (triage/manager/db)")
+		log.Fatalf("[FATAL] Failed to connect to PostgreSQL DB: %v", err)
 	}
+	defer database.Close()
+	log.Println("[MANAGER] Connected Manager Gateway to Database (triage/manager/db)")
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -107,10 +110,26 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"status":"ok","component":"triage-manager-go","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
 }
 
-func generateUUID() string {
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+func generateID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func truncateUTF8(s string, maxChars int) string {
+	if utf8.RuneCountInString(s) <= maxChars {
+		return s
+	}
+	var count int
+	for idx := range s {
+		if count == maxChars {
+			return s[:idx]
+		}
+		count++
+	}
+	return s
 }
 
 func handleTelemetryIngest(w http.ResponseWriter, r *http.Request) {
@@ -135,28 +154,49 @@ func handleTelemetryIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Verify API Key via database package
-	if database != nil && payload.APIKey != "" {
-		_ = database.VerifyAPIKey(r.Context(), payload.APIKey)
-		log.Printf("[MANAGER] Verified API Key (%s) | Trace: %s", payload.APIKey, traceID)
+	if payload.APIKey == "" || database == nil || !database.VerifyAPIKey(r.Context(), payload.APIKey) {
+		log.Printf("[MANAGER WARNING] Unauthorized telemetry ingest attempt | Trace: %s", traceID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "unauthorized: missing or invalid API key"})
+		return
 	}
+	log.Printf("[MANAGER] Verified API Key | Trace: %s", traceID)
 
 	// 2. Query pre-parsed AST snippet via database package
 	if payload.ASTSnippet == "" && database != nil && payload.File != "" && payload.Line > 0 {
-		node, err := database.GetASTNode(r.Context(), payload.File, payload.Line)
+		node, err := database.GetASTNode(r.Context(), payload.Owner, payload.Repo, payload.File, payload.Line)
 		if err == nil && node != nil && node.Snippet != "" {
 			payload.ASTSnippet = node.Snippet
-			log.Printf("[MANAGER AST DB HIT] Injected pre-parsed AST snippet for %s:%d", payload.File, payload.Line)
+			log.Printf("[MANAGER AST DB HIT] Injected pre-parsed AST snippet for %s/%s %s:%d", payload.Owner, payload.Repo, payload.File, payload.Line)
 		}
 	}
 
+	// Clear API key before forwarding to Engine
+	payload.APIKey = ""
+
 	// 3. Proxy payload to internal AI Engine (:8080)
-	engineURL := os.Getenv("TRIAGE_ENGINE_URL")
-	if engineURL == "" {
-		engineURL = "http://localhost:8080/api/v1/telemetry"
+	engineBaseURL := os.Getenv("TRIAGE_ENGINE_BASE_URL")
+	if engineBaseURL == "" {
+		engineBaseURL = os.Getenv("TRIAGE_ENGINE_URL")
+		if engineBaseURL == "" {
+			engineBaseURL = "http://localhost:8080"
+		}
+	}
+	engineBaseURL = strings.TrimRight(engineBaseURL, "/")
+	if !strings.HasSuffix(engineBaseURL, "/api/v1/telemetry") {
+		engineBaseURL += "/api/v1/telemetry"
 	}
 
-	data, _ := json.Marshal(payload)
-	engineReq, err := http.NewRequestWithContext(r.Context(), "POST", engineURL, bytes.NewBuffer(data))
+	data, err := json.Marshal(payload)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "failed to marshal engine payload"})
+		return
+	}
+
+	engineReq, err := http.NewRequestWithContext(r.Context(), "POST", engineBaseURL, bytes.NewBuffer(data))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -179,35 +219,47 @@ func handleTelemetryIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20+1))
+	if err != nil || len(respBody) > 1<<20 {
+		log.Printf("[ERROR] Engine response read failed or size limit exceeded: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "engine response invalid or oversized"})
+		return
+	}
 
 	var engineResp EngineResponse
 	_ = json.Unmarshal(respBody, &engineResp)
 
 	// 4. Save Incident Audit Log via database package
 	if database != nil && engineResp.Status == "success" && engineResp.Analysis != nil {
-		incidentID := fmt.Sprintf("INC-%s", generateUUID())
-		panicMsg := "Runtime panic"
-		if payload.StackTrace != "" {
-			lines := strings.Split(payload.StackTrace, "\n")
-			if len(lines) > 0 {
-				panicMsg = lines[0]
+		randID, idErr := generateID()
+		if idErr != nil {
+			log.Printf("[ERROR] Failed to generate incident ID: %v", idErr)
+		} else {
+			incidentID := fmt.Sprintf("INC-%s", randID)
+			panicMsg := "Runtime panic"
+			if payload.StackTrace != "" {
+				lines := strings.Split(payload.StackTrace, "\n")
+				if len(lines) > 0 {
+					panicMsg = lines[0]
+				}
 			}
-		}
 
-		_ = database.SaveIncident(r.Context(), &triagedb.Incident{
-			ID:           incidentID,
-			Title:        fmt.Sprintf("Panic in %s:%d", payload.File, payload.Line),
-			Status:       "CRITICAL",
-			File:         payload.File,
-			Line:         payload.Line,
-			PanicMessage: panicMsg,
-			StackTrace:   payload.StackTrace,
-			ASTSnippet:   engineResp.AST,
-			RootCause:    engineResp.Analysis.RootCause,
-			SuggestedFix: engineResp.Analysis.SuggestedFix,
-		})
-		log.Printf("[MANAGER DB SAVE] Created Incident %s in PostgreSQL", incidentID)
+			_ = database.SaveIncident(r.Context(), &triagedb.Incident{
+				ID:           incidentID,
+				Title:        fmt.Sprintf("Panic in %s:%d", payload.File, payload.Line),
+				Status:       "CRITICAL",
+				File:         payload.File,
+				Line:         payload.Line,
+				PanicMessage: panicMsg,
+				StackTrace:   payload.StackTrace,
+				ASTSnippet:   engineResp.AST,
+				RootCause:    engineResp.Analysis.RootCause,
+				SuggestedFix: engineResp.Analysis.SuggestedFix,
+			})
+			log.Printf("[MANAGER DB SAVE] Created Incident %s in PostgreSQL", incidentID)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -224,10 +276,47 @@ func handleWebhookProxy(w http.ResponseWriter, r *http.Request) {
 	deliveryID := r.Header.Get("X-GitHub-Delivery")
 	eventType := r.Header.Get("X-GitHub-Event")
 
-	// Webhook Delivery Idempotency Check via database package
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "invalid request body or size limit exceeded"})
+		return
+	}
+
+	var logID string
+	// Pre-dispatch Webhook Delivery Idempotency Check & Log Insertion
 	if database != nil && deliveryID != "" {
-		if database.IsWebhookDuplicate(r.Context(), deliveryID) {
-			log.Printf("[MANAGER IDEMPOTENT WEBHOOK] Duplicate delivery skipped: %s", deliveryID)
+		isDup, dupErr := database.IsWebhookDuplicate(r.Context(), deliveryID)
+		if dupErr != nil || isDup {
+			log.Printf("[MANAGER IDEMPOTENT WEBHOOK] Duplicate delivery or check error skipped: %s (err: %v)", deliveryID, dupErr)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"skipped","message":"Duplicate webhook delivery skipped"}`))
+			return
+		}
+
+		randID, idErr := generateID()
+		if idErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "failed to generate log ID"})
+			return
+		}
+		logID = fmt.Sprintf("wh-%s", randID)
+
+		initErr := database.SaveWebhookLog(r.Context(), &triagedb.WebhookLog{
+			ID:           logID,
+			DeliveryID:   deliveryID,
+			EventType:    eventType,
+			Status:       "PENDING",
+			StatusCode:   0,
+			RequestBody:  truncateUTF8(string(rawBody), 2000),
+			ResponseBody: "",
+		})
+		if initErr != nil {
+			log.Printf("[MANAGER WEBHOOK DUP] Duplicate delivery constraint failure: %v", initErr)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"skipped","message":"Duplicate webhook delivery skipped"}`))
@@ -235,15 +324,19 @@ func handleWebhookProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rawBody, _ := io.ReadAll(r.Body)
-
-	engineURL := os.Getenv("TRIAGE_ENGINE_URL")
-	if engineURL == "" {
-		engineURL = "http://localhost:8080/api/v1/telemetry"
+	engineBaseURL := os.Getenv("TRIAGE_ENGINE_BASE_URL")
+	if engineBaseURL == "" {
+		engineBaseURL = "http://localhost:8080"
 	}
-	webhookURL := strings.Replace(engineURL, "/api/v1/telemetry", "/api/v1/github/webhook", 1)
+	webhookURL := strings.TrimRight(engineBaseURL, "/") + "/api/v1/github/webhook"
 
-	engineReq, _ := http.NewRequestWithContext(r.Context(), "POST", webhookURL, bytes.NewBuffer(rawBody))
+	engineReq, reqErr := http.NewRequestWithContext(r.Context(), "POST", webhookURL, bytes.NewBuffer(rawBody))
+	if reqErr != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "error", "error": "failed to build engine request"})
+		return
+	}
 	engineReq.Header.Set("Content-Type", "application/json")
 	engineReq.Header.Set("X-GitHub-Event", eventType)
 	engineReq.Header.Set("X-GitHub-Delivery", deliveryID)
@@ -252,6 +345,17 @@ func handleWebhookProxy(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(engineReq)
 	if err != nil {
+		if database != nil && logID != "" {
+			_ = database.SaveWebhookLog(r.Context(), &triagedb.WebhookLog{
+				ID:           logID,
+				DeliveryID:   deliveryID,
+				EventType:    eventType,
+				Status:       "ERROR",
+				StatusCode:   http.StatusBadGateway,
+				RequestBody:  truncateUTF8(string(rawBody), 2000),
+				ResponseBody: "engine connection failed",
+			})
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(`{"status":"error","error":"engine connection failed"}`))
@@ -259,11 +363,10 @@ func handleWebhookProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20+1))
 
-	// Save Webhook Delivery Log via database package
-	if database != nil && deliveryID != "" {
-		logID := fmt.Sprintf("wh-%s", generateUUID())
+	// Update Webhook Delivery Log via database package
+	if database != nil && logID != "" {
 		statusStr := "SUCCESS"
 		if resp.StatusCode != 200 {
 			statusStr = "ERROR"
@@ -274,19 +377,12 @@ func handleWebhookProxy(w http.ResponseWriter, r *http.Request) {
 			EventType:    eventType,
 			Status:       statusStr,
 			StatusCode:   resp.StatusCode,
-			RequestBody:  string(rawBody[:min(len(rawBody), 2000)]),
-			ResponseBody: string(respBody[:min(len(respBody), 2000)]),
+			RequestBody:  truncateUTF8(string(rawBody), 2000),
+			ResponseBody: truncateUTF8(string(respBody), 2000),
 		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(respBody)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
