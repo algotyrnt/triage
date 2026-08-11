@@ -1,9 +1,4 @@
-/**
- * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { ScreenId } from "../../types";
 import {
   GitBranch,
@@ -31,6 +26,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRepo, setSelectedRepo] = useState("algotyrnt/beacon-app");
   const [copiedKey, setCopiedKey] = useState(false);
+  const repoRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const repos = [
     {
@@ -182,26 +178,31 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
             >
               {filteredRepos.map((repo, index) => {
                 const isSelected = selectedRepo === repo.name;
+                const isSelectedInFiltered = filteredRepos.some((r) => r.name === selectedRepo);
+                const hasFocusEntry = isSelected || (index === 0 && (!selectedRepo || !isSelectedInFiltered));
                 return (
                   <div
                     key={repo.name}
+                    ref={(el) => {
+                      repoRefs.current[index] = el;
+                    }}
                     role="radio"
                     aria-checked={isSelected}
-                    tabIndex={
-                      isSelected || (index === 0 && !selectedRepo) ? 0 : -1
-                    }
+                    tabIndex={hasFocusEntry ? 0 : -1}
                     onClick={() => setSelectedRepo(repo.name)}
                     onKeyDown={(e) => {
                       if (e.key === "ArrowDown" || e.key === "ArrowRight") {
                         e.preventDefault();
                         const nextIdx = (index + 1) % filteredRepos.length;
                         setSelectedRepo(filteredRepos[nextIdx].name);
+                        repoRefs.current[nextIdx]?.focus();
                       } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
                         e.preventDefault();
                         const prevIdx =
                           (index - 1 + filteredRepos.length) %
                           filteredRepos.length;
                         setSelectedRepo(filteredRepos[prevIdx].name);
+                        repoRefs.current[prevIdx]?.focus();
                       } else if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         setSelectedRepo(repo.name);
