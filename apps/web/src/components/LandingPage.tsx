@@ -163,7 +163,7 @@ func main() {
               {activeTab === "llm" && (
                 <div>
                   <div className="text-emerald-400 font-bold mb-2">
-                    Gemini 3.5 Flash Structured Diagnosis:
+                    gemini-3.5-flash Structured Diagnosis:
                   </div>
                   <pre className="bg-slate-900 p-4 rounded-md border border-slate-800 leading-relaxed text-emerald-300 overflow-x-auto">
 {`{
