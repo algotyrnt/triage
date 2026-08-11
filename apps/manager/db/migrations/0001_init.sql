@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS repositories (
   owner VARCHAR(255) NOT NULL,
   repo VARCHAR(255) NOT NULL,
   installation_id BIGINT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_owner_repo UNIQUE (owner, repo)
 );
 
 -- 3a. AST Function Symbol Storage
@@ -69,9 +70,13 @@ CREATE TABLE IF NOT EXISTS incidents (
 -- 5. API Keys
 CREATE TABLE IF NOT EXISTS api_keys (
   id VARCHAR(64) PRIMARY KEY,
+  user_id VARCHAR(64) REFERENCES users(id),
+  repository_id VARCHAR(64) REFERENCES repositories(id),
   name VARCHAR(255) NOT NULL,
-  key_hash VARCHAR(255) NOT NULL,
+  key_hash VARCHAR(255) UNIQUE NOT NULL,
   key_masked VARCHAR(64) NOT NULL,
+  revoked_at TIMESTAMP WITH TIME ZONE,
+  expires_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -86,3 +91,4 @@ CREATE TABLE IF NOT EXISTS webhook_logs (
   response_body TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_created_at ON webhook_logs (created_at);
