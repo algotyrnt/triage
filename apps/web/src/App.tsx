@@ -18,13 +18,15 @@ import { SystemStatusPage } from './components/screens/SystemStatusPage';
 import { SettingsPage } from './components/screens/SettingsPage';
 
 import { engineClient } from './services/engineClient';
-import { CheckCircle2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
+
+type ToastVariant = 'success' | 'error';
 
 export default function App({ initialScreen = 'dashboard' }: { initialScreen?: ScreenId }) {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(initialScreen);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null);
 
   // Selected incident object
   const selectedIncident = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
@@ -32,9 +34,9 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
   const criticalCount = incidents.filter((i) => i.status === 'CRITICAL').length;
 
   // Show Toast
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const showToast = (message: string, variant: ToastVariant = 'success') => {
+    setToast({ message, variant });
+    setTimeout(() => setToast(null), 3500);
   };
 
   // Simulate dynamic Go runtime panic via engineClient
@@ -84,21 +86,25 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
 
       setIncidents((prev) => [newIncident, ...prev]);
       setSelectedIncidentId(newId);
-      showToast(`Live Panic Telemetry Ingested: ${newId}`);
+      showToast(`Live Panic Telemetry Ingested: ${newId}`, 'success');
     } catch (err) {
       console.error(err);
-      showToast('Engine Ingestion Error: Ensure apps/engine is running');
+      showToast('Engine Ingestion Error: Ensure apps/engine is running', 'error');
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Global Toast Notification */}
-      {toastMessage && (
+      {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-3 bg-slate-900 border border-slate-800 text-slate-100 px-4 py-3 rounded-lg shadow-xl animate-in fade-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span className="text-sm font-medium">{toastMessage}</span>
-          <button onClick={() => setToastMessage(null)} className="text-slate-400 hover:text-white transition-colors">
+          {toast.variant === 'error' ? (
+            <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          )}
+          <span className="text-sm font-medium">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="text-slate-400 hover:text-white transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -127,14 +133,20 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           />
         )}
 
-        {currentScreen === 'incident_detail' && selectedIncident && (
-          <IncidentDetailPage
-            incident={selectedIncident}
-            allIncidents={incidents}
-            onSelectIncident={(id) => setSelectedIncidentId(id)}
-            onNavigate={(screen) => setCurrentScreen(screen)}
-          />
-        )}
+        {currentScreen === 'incident_detail' &&
+          (selectedIncident ? (
+            <IncidentDetailPage
+              incident={selectedIncident}
+              allIncidents={incidents}
+              onSelectIncident={(id) => setSelectedIncidentId(id)}
+              onNavigate={(screen) => setCurrentScreen(screen)}
+            />
+          ) : (
+            <div className="text-center py-16 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-800">No incident selected</h3>
+              <p className="text-sm text-slate-500 mt-1">Select an incident from the dashboard or simulate a panic to view details.</p>
+            </div>
+          ))}
 
         {currentScreen === 'ast' && <AstExplorerPage onNavigate={(screen) => setCurrentScreen(screen)} commitIndexes={[]} astFiles={[]} />}
         {currentScreen === 'webhooks' && <WebhooksPage onNavigate={(screen) => setCurrentScreen(screen)} logs={[]} />}
@@ -153,7 +165,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           </div>
           <div>
             Powered by{' '}
-            <span className="text-slate-900 font-medium">Google Gemini 3.5 Flash</span> &amp; AST Parser
+            <span className="text-slate-900 font-medium">gemini-3.5-flash</span> &amp; AST Parser
           </div>
         </div>
       </footer>
