@@ -56,7 +56,12 @@ func extractFunctions(fset *token.FileSet, node *ast.File) []ExtractedFunction {
 
 		name := fn.Name.Name
 		if fn.Recv != nil && len(fn.Recv.List) > 0 {
-			name = fmt.Sprintf("%v.%s", fn.Recv.List[0].Type, name)
+			var recvBuf bytes.Buffer
+			if err := printer.Fprint(&recvBuf, fset, fn.Recv.List[0].Type); err == nil {
+				name = fmt.Sprintf("%s.%s", recvBuf.String(), name)
+			} else {
+				name = fmt.Sprintf("%v.%s", fn.Recv.List[0].Type, name)
+			}
 		}
 
 		result = append(result, ExtractedFunction{

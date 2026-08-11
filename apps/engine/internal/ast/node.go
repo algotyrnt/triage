@@ -8,11 +8,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -34,7 +36,7 @@ type Manager struct {
 
 func NewManager(ctx context.Context, databaseURL string) (*Manager, error) {
 	if databaseURL == "" {
-		databaseURL = "postgresql://postgres:postgres@localhost:5432/triage_db"
+		return nil, fmt.Errorf("DATABASE_URL environment variable is missing or empty")
 	}
 
 	config, err := pgxpool.ParseConfig(databaseURL)
@@ -60,13 +62,13 @@ func (m *Manager) Close() {
 	}
 }
 
-func generateNodeID(file string, line int) string {
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", file, line)))
+func generateNodeID(owner, repo, commit, file string, line int) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s:%s:%d", owner, repo, commit, file, line)))
 	return "ast-" + hex.EncodeToString(hash[:12])
 }
 
 // GetASTNode queries pre-parsed AST node snippet directly from PostgreSQL.
-func (m *Manager) GetASTNode(ctx context.Context, file string, line int) (*ASTNode, error) {
+func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file string, line int) (*ASTNode, error) {
 	if m.pool == nil {
 		return nil, fmt.Errorf("PostgreSQL database is uninitialized")
 	}
@@ -74,12 +76,12 @@ func (m *Manager) GetASTNode(ctx context.Context, file string, line int) (*ASTNo
 	query := `
 		SELECT id, owner, repo, commit_sha, file_path, line_number, snippet, created_at
 		FROM ast_nodes
-		WHERE file_path = $1 AND line_number = $2
+		WHERE owner = $1 AND repo = $2 AND commit_sha = $3 AND file_path = $4 AND line_number = $5
 		LIMIT 1;
 	`
 
 	var node ASTNode
-	err := m.pool.QueryRow(ctx, query, file, line).Scan(
+	err := m.pool.QueryRow(ctx, query, owner, repo, commit, file, line).Scan(
 		&node.ID,
 		&node.Owner,
 		&node.Repo,
@@ -111,6 +113,7 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 	count := 0
 	err := filepath.Walk(workspacePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			log.Printf("[AST INDEX] Walk error for path %s: %v", path, err)
 			return nil
 		}
 		if info.IsDir() {
@@ -123,7 +126,11 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 			return nil
 		}
 
-		relPath, _ := filepath.Rel(workspacePath, path)
+		relPath, relErr := filepath.Rel(workspacePath, path)
+		if relErr != nil {
+			log.Printf("[AST INDEX] Failed to compute relative path for %s: %v", path, relErr)
+			return nil
+		}
 
 		// Parse Go file using Go standard library parser
 		fset, node, parseErr := parseGoFile(path)
@@ -131,19 +138,43 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 			return nil
 		}
 
-		for _, fn := range extractFunctions(fset, node) {
-			nodeID := generateNodeID(relPath, fn.StartLine)
-			query := `
-				INSERT INTO ast_nodes (id, owner, repo, commit_sha, file_path, line_number, function_name, snippet)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-				ON CONFLICT (id) DO UPDATE SET
-					snippet = EXCLUDED.snippet,
-					commit_sha = EXCLUDED.commit_sha;
-			`
-			_, execErr := m.pool.Exec(ctx, query, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, fn.Snippet)
-			if execErr == nil {
+		funcs := extractFunctions(fset, node)
+		if len(funcs) == 0 {
+			return nil
+		}
+
+		batch := &pgx.Batch{}
+		query := `
+			INSERT INTO ast_nodes (id, owner, repo, commit_sha, file_path, line_number, function_name, snippet)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (id) DO UPDATE SET
+				snippet = EXCLUDED.snippet,
+				commit_sha = EXCLUDED.commit_sha;
+		`
+		for _, fn := range funcs {
+			nodeID := generateNodeID(owner, repo, commit, relPath, fn.StartLine)
+			batch.Queue(query, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, fn.Snippet)
+		}
+
+		br := m.pool.SendBatch(ctx, batch)
+		defer br.Close()
+
+		var firstErr error
+		for i := 0; i < len(funcs); i++ {
+			_, execErr := br.Exec()
+			if execErr != nil {
+				if firstErr == nil {
+					firstErr = execErr
+				}
+			} else {
 				count++
 			}
+		}
+		if closeErr := br.Close(); closeErr != nil && firstErr == nil {
+			firstErr = closeErr
+		}
+		if firstErr != nil {
+			return firstErr
 		}
 
 		return nil
