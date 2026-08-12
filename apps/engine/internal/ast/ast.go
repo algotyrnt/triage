@@ -90,3 +90,25 @@ func ExtractFuncAST(filePath string, targetLine int) (string, error) {
 
 	return "", fmt.Errorf("no function declaration found surrounding line %d in %s", targetLine, filePath)
 }
+
+// ExtractFuncASTFromBytes parses raw .go source bytes in memory and extracts
+// the string representation of the *ast.FuncDecl enclosing the specified targetLine.
+func ExtractFuncASTFromBytes(content []byte, targetLine int) (string, error) {
+	if len(content) == 0 {
+		return "", fmt.Errorf("file content is empty")
+	}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "src.go", content, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Go AST from bytes: %w", err)
+	}
+
+	for _, fn := range extractFunctions(fset, node) {
+		if targetLine >= fn.StartLine && targetLine <= fn.EndLine {
+			return fn.Snippet, nil
+		}
+	}
+
+	return "", fmt.Errorf("no function declaration found surrounding line %d", targetLine)
+}
