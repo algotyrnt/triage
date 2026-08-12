@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: triage-db
+    restart: always
+    environment:
+      POSTGRES_USER: triage
+      POSTGRES_PASSWORD: triage_secret_password
+      POSTGRES_DB: triage_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/engine/migrations/0001_init.sql:/docker-entrypoint-initdb.d/0001_init.sql
+      - ./apps/engine/migrations/0002_instance_config.sql:/docker-entrypoint-initdb.d/0002_instance_config.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triage -d triage_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  engine:
+    build:
+      context: ./apps/engine
+      dockerfile: Dockerfile
+    container_name: triage-engine
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: "postgres://triage:triage_secret_password@postgres:5432/triage_db?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ./apps/dashboard
+      dockerfile: Dockerfile
+    container_name: triage-dashboard
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      NEXT_PUBLIC_ENGINE_URL: "http://localhost:8080/api/v1/telemetry"
+    depends_on:
+      - engine
+
+volumes:
+  postgres_data:
