@@ -12,14 +12,29 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	gh "triage/engine/internal/github"
 )
 
+// FileFetcher defines the interface for fetching source file content.
 type FileFetcher interface {
 	FetchFile(ctx context.Context, owner, repo, commit, filePath string) ([]byte, error)
 }
 
+// OnDemandFetcher fetches source files on-demand from GitHub (via installation tokens)
+// or from the local workspace filesystem.
 type OnDemandFetcher struct {
 	HTTPClient *http.Client
+	GitHubApp  *gh.AppConfig
+	// GetInstallationID looks up the installation_id for a given owner/repo.
+	// Injected by the caller (typically from db.GetInstallationForRepo).
+	GetInstallationID func(ctx context.Context, owner, repo string) (int64, error)
+}
+
+// FetchResult contains the fetched file content and optional blob SHA for caching.
+type FetchResult struct {
+	Content []byte
+	BlobSHA string // Git blob SHA for content-addressable caching
 }
 
 func NewOnDemandFetcher() *OnDemandFetcher {
@@ -30,22 +45,69 @@ func NewOnDemandFetcher() *OnDemandFetcher {
 	}
 }
 
+// FetchFile retrieves file content for AST parsing. Implements FileFetcher interface.
 func (f *OnDemandFetcher) FetchFile(ctx context.Context, owner, repo, commit, filePath string) ([]byte, error) {
+	result, err := f.FetchFileWithMeta(ctx, owner, repo, commit, filePath)
+	if err != nil {
+		return nil, err
+	}
+	return result.Content, nil
+}
+
+// FetchFileWithMeta retrieves file content along with the blob SHA for caching.
+func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, commit, filePath string) (*FetchResult, error) {
 	cleanPath := strings.TrimPrefix(filepath.ToSlash(filePath), "/")
 
-	// 1. If owner, repo, and commit are provided, attempt GitHub API / Raw URL fetch
-	if owner != "" && repo != "" && commit != "" {
-		content, err := f.fetchFromGitHub(ctx, owner, repo, commit, cleanPath)
-		if err == nil && len(content) > 0 {
-			return content, nil
+	// 1. If GitHub App is configured, try installation token-based fetch (Contents API)
+	if f.GitHubApp != nil && f.GetInstallationID != nil && owner != "" && repo != "" && commit != "" {
+		result, err := f.fetchFromGitHubApp(ctx, owner, repo, commit, cleanPath)
+		if err == nil && len(result.Content) > 0 {
+			return result, nil
+		}
+		// Log but don't fail — fall through to other methods
+		if err != nil {
+			fmt.Printf("[AST FETCH] GitHub App fetch failed for %s/%s@%s %s: %v\n", owner, repo, commit, cleanPath, err)
 		}
 	}
 
-	// 2. Fall back to reading from local workspace root context
-	return f.fetchFromLocalWorkspace(cleanPath)
+	// 2. Fallback: raw.githubusercontent.com with GITHUB_TOKEN (legacy)
+	if owner != "" && repo != "" && commit != "" {
+		content, err := f.fetchFromGitHubRaw(ctx, owner, repo, commit, cleanPath)
+		if err == nil && len(content) > 0 {
+			return &FetchResult{Content: content}, nil
+		}
+	}
+
+	// 3. Final fallback: local workspace filesystem
+	content, err := f.fetchFromLocalWorkspace(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	return &FetchResult{Content: content}, nil
 }
 
-func (f *OnDemandFetcher) fetchFromGitHub(ctx context.Context, owner, repo, commit, cleanPath string) ([]byte, error) {
+// fetchFromGitHubApp uses the GitHub App installation token to fetch file content
+// via the Contents API. Returns both content and blob SHA for cache keying.
+func (f *OnDemandFetcher) fetchFromGitHubApp(ctx context.Context, owner, repo, commit, cleanPath string) (*FetchResult, error) {
+	installID, err := f.GetInstallationID(ctx, owner, repo)
+	if err != nil {
+		return nil, fmt.Errorf("no installation found for %s/%s: %w", owner, repo, err)
+	}
+
+	content, blobSHA, err := f.GitHubApp.FetchFileContent(ctx, installID, owner, repo, commit, cleanPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FetchResult{
+		Content: content,
+		BlobSHA: blobSHA,
+	}, nil
+}
+
+// fetchFromGitHubRaw uses raw.githubusercontent.com with a personal GITHUB_TOKEN.
+// This is the legacy approach — no blob SHA is available.
+func (f *OnDemandFetcher) fetchFromGitHubRaw(ctx context.Context, owner, repo, commit, cleanPath string) ([]byte, error) {
 	rawURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, commit, cleanPath)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)

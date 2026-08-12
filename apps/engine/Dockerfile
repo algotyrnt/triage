@@ -6,11 +6,11 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-# Copy root monorepo files
 COPY go.mod go.sum ./
-COPY apps/engine ./apps/engine
+RUN go mod download
 
-WORKDIR /app/apps/engine
+COPY . .
+
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o engine-server main.go
 
 # Stage 2: Minimal Production Image
@@ -23,7 +23,7 @@ RUN addgroup -g 10001 -S appgroup && \
 
 WORKDIR /app
 
-COPY --from=builder /app/apps/engine/engine-server /app/engine-server
+COPY --from=builder /app/engine-server /app/engine-server
 
 USER appuser:appgroup
 

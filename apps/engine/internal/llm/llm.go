@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"google.golang.org/genai"
@@ -20,16 +19,13 @@ type AnalysisResult struct {
 }
 
 // AnalyzeCrash sends the crash stack trace and isolated AST snippet to the Gemini model
-// selected from configuration via GEMINI_MODEL_NAME and returns a structured root cause analysis and suggested fix.
-func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet string) (*AnalysisResult, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+// and returns a structured root cause analysis and suggested fix.
+func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName string) (*AnalysisResult, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY environment variable is missing or empty")
+		return nil, fmt.Errorf("GEMINI_API_KEY is missing or empty")
 	}
-
-	modelName := os.Getenv("GEMINI_MODEL_NAME")
 	if modelName == "" {
-		return nil, fmt.Errorf("GEMINI_MODEL_NAME environment variable is missing or empty")
+		return nil, fmt.Errorf("GEMINI_MODEL_NAME is missing or empty")
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
