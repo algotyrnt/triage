@@ -39,21 +39,23 @@ algotyrnt/triage
 ```text
 [ Target Go Application (test-service) ] 
        │ 1. Intercept Panic (sdk/go)
-       │    Dispatches HTTP POST to Triage Manager
+       │    Extracts commit SHA & stack trace, dispatches HTTP POST to Triage Manager
        ▼
 [ Go Triage Manager Cloud Function (apps/manager :8000) ]
        │ 2. Validates API Key in PostgreSQL DB (api_keys table)
-       │ 3. Fetches pre-parsed AST snippet from PostgreSQL DB (ast_nodes table)
-       │ 4. Proxies payload to Core AI Engine (:8080/api/v1/telemetry)
+       │ 3. Proxies payload (owner, repo, commit, file, line) to Core AI Engine (:8080/api/v1/telemetry)
        ▼
 [ GCP Cloud Run Engine (apps/engine :8080) ]
-       │ 5. Queries Gemini 3.5 Flash (Root cause + Suggested Fix)
-       │ 6. Returns JSON diagnostics to Triage Manager
+       │ 4. Checks In-Memory AST Cache (sync.Map key = owner/repo@commit:file:line)
+       │ 5. On Cache Miss: On-demand fetches source code via GitHub API / Raw URL / Workspace fallback
+       │ 6. Parses Go AST in memory to isolate panicking function node (*ast.FuncDecl)
+       │ 7. Queries Gemini 3.5 Flash with stack trace + isolated function snippet
+       │ 8. Returns JSON diagnostics to Triage Manager
        ▼
 [ Studio Dashboard & GitHub ]
-       │ 7. Persists Incident to PostgreSQL DB (incidents table)
-       │ 8. Updates Real-Time Studio Dashboard (/dashboard)
-       │ 9. POST GitHub Issue via GitHub App API
+       │ 9. Persists Incident to PostgreSQL DB (incidents table)
+       │ 10. Updates Real-Time Studio Dashboard (/dashboard)
+       │ 11. POST GitHub Issue via GitHub App API
        ▼
 [ GitHub Repository ] <--- Issue Created (#104)
 ```
