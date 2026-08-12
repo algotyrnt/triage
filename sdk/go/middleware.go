@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const DefaultEngineURL = "https://triage.algotyrnt.com/api/telemetry"
+const DefaultEngineURL = "https://triage.algotyrnt.com/api/v1/telemetry"
 
 type middlewareConfig struct {
 	gatewayURL string
