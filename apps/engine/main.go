@@ -51,7 +51,11 @@ type IndexRequest struct {
 	WorkspacePath string `json:"workspace_path"`
 }
 
-var astManager *ast.Manager
+var (
+	astManager *ast.Manager
+	astCache   = ast.NewASTCache()
+	astFetcher = ast.NewOnDemandFetcher()
+)
 
 func loadEnvLocal() {
 	_ = godotenv.Load(".env.local", ".env")
@@ -268,21 +272,48 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 }
 
 func ExtractASTContext(ctx context.Context, owner, repo, commit, reqFile string, line int) (string, error) {
+	// 1. In-memory KV Cache check (< 2ms)
+	if snippet, found := astCache.Get(owner, repo, commit, reqFile, line); found {
+		log.Printf("[AST CACHE HIT] %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
+		return snippet, nil
+	}
+
+	// 2. Pre-indexed PostgreSQL check fallback
 	if astManager != nil {
 		node, err := astManager.GetASTNode(ctx, owner, repo, commit, reqFile, line)
 		if err == nil && node != nil && node.Snippet != "" {
 			log.Printf("[AST DB HIT] %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
+			astCache.Set(owner, repo, commit, reqFile, line, node.Snippet)
 			return node.Snippet, nil
 		}
 		log.Printf("[AST DB MISS] %s/%s@%s %s:%d - %v", owner, repo, commit, reqFile, line, err)
 	}
 
+	// 3. On-demand fetch file source from GitHub or Local Workspace
+	content, fetchErr := astFetcher.FetchFile(ctx, owner, repo, commit, reqFile)
+	if fetchErr == nil && len(content) > 0 {
+		snippet, parseErr := ast.ExtractFuncASTFromBytes(content, line)
+		if parseErr == nil && snippet != "" {
+			log.Printf("[AST ON-DEMAND FETCHED] Extracted AST snippet for %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
+			astCache.Set(owner, repo, commit, reqFile, line, snippet)
+			return snippet, nil
+		}
+		log.Printf("[WARNING] On-demand AST byte parsing failed: %v", parseErr)
+	} else {
+		log.Printf("[WARNING] On-demand file fetch failed: %v", fetchErr)
+	}
+
+	// 4. Local workspace fallback
 	resolvedPath, valErr := validateAndResolveFilePath(reqFile)
 	if valErr != nil {
 		return "", valErr
 	}
 
-	return ast.ExtractFuncAST(resolvedPath, line)
+	snippet, err := ast.ExtractFuncAST(resolvedPath, line)
+	if err == nil && snippet != "" {
+		astCache.Set(owner, repo, commit, reqFile, line, snippet)
+	}
+	return snippet, err
 }
 
 func handleTelemetry(w http.ResponseWriter, r *http.Request) {
