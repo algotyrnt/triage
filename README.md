@@ -10,37 +10,22 @@
 ## Architecture & System Data Flow
 
 ```text
-1. Asynchronous Repository AST Indexing (git push webhook)
-   │
-   ▼
-[ Go Triage Manager (apps/manager :8000) ]
-   │ Marks DB status = 'PENDING' in PostgreSQL (ast_indexes)
-   │ Triggers Engine AST Indexer
-   ▼
-[ Go Triage Engine (apps/engine :8080) ]
-   │ Parses .go files ONCE using Go's native go/ast parser
-   │ Writes AST function nodes to PostgreSQL ast_nodes table
-   │ Updates DB status = 'INDEXED'
-   ▼
-[ PostgreSQL DB ] (ast_nodes table: indexed & ready)
-
-
-2. Panic Crash Telemetry Ingestion (0ms Disk I/O)
+Panic Crash Telemetry & On-Demand Synchronous AST Isolation Flow
    │
    ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │                           Go Triage Manager (:8000) Ingestion                              │
 │                                                                                            │
 │  1. Receive SDK Telemetry  ──►  2. Verify API Key  ──►  3. Proxy Payload to Triage Engine  │
-│     (/api/telemetry)               (PostgreSQL DB)            (:8080)                      │
+│     (Commit + Stack Trace)         (PostgreSQL DB)            (:8080)                      │
 └───────────────────────────────────────────┬────────────────────────────────────────────────┘
                                             │
                                             ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────────┐
 │                                 Triage Engine (:8080)                                      │
 │                                                                                            │
-│  1. Parse Stack Trace  ──►  2. Query Pre-Parsed AST  ──►  3. Gemini Model  ──►  4. Return  │
-│     (Top App Frame)            From PostgreSQL DB           (genai SDK)            JSON    │
+│  1. Check In-Memory  ──►  2. Fetch Source Code  ──►  3. Parse AST Node  ──► 4. Gemini AI  │
+│     AST KV Cache             (GitHub API / Local)       (*ast.FuncDecl)         Diagnostics│
 └───────────────────────────────────────────┬────────────────────────────────────────────────┘
                                             │
                                   Engine JSON Response
@@ -63,14 +48,15 @@ The Triage SDK provides a lightweight HTTP middleware (`triage.Middleware`) wrap
 
 - Intercepts crash using `defer + recover()`.
 - Captures stack trace using `debug.Stack()`.
-- Slices top application stack frame line and file path (ignoring standard library & middleware frames).
+- Automatically extracts Git commit SHA via `debug.ReadBuildInfo()` (Go 1.18+ embedded VCS info), with options `WithCommit("...")` and `WithRepo("owner/repo")`.
+- Slices top application stack frame line and file path.
 - Generates OpenTelemetry Trace ID (`X-Triage-Trace-ID` and `traceparent` headers).
 - Dispatches an **asynchronous, non-blocking** HTTP POST request to the Triage Manager.
 
 ### 2. Core Go Engine (`apps/engine`)
 
-- **PostgreSQL Pre-Parsed AST Querying ([`internal/ast`](apps/engine/internal/ast))**: Connects directly to PostgreSQL database via `pgxpool`. Queries pre-parsed `*ast.FuncDecl` snippets directly from the database (**0 disk I/O, zero on-demand file parsing, minimal RAM usage**).
-- **Background AST Indexer**: `POST /api/v1/ast/index` endpoint parses repository `.go` files once, extracts function nodes, and populates PostgreSQL `ast_nodes`.
+- **On-Demand Source Fetcher & AST Parser ([`internal/ast`](apps/engine/internal/ast))**: On telemetry panic ingestion, fetches the exact source code for the reported `commit_sha` on-demand (via GitHub API / Raw URL or local workspace context), parses the Go AST in memory, and isolates the panicking `*ast.FuncDecl` snippet.
+- **In-Memory AST KV Cache**: Caches extracted function AST snippets in a thread-safe `sync.Map` store keyed by `owner/repo@commit:file:line` for **< 2ms** instant lookups on repeat panics.
 - **AI Diagnostics (`internal/llm`)**: Uses official Google Gemini SDK (`google.golang.org/genai`) to send stack trace + AST snippet to Gemini 3.5 Flash (`GEMINI_MODEL_NAME`), generating structured JSON with `root_cause` and `suggested_fix`.
 
 ### 3. Go Triage Manager (`apps/manager`)
