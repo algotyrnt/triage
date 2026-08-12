@@ -176,6 +176,9 @@ CREATE TABLE webhook_logs (
 .
 ├── PROJECT_CONTEXT.md    # Master architecture & security reference specification
 ├── apps/
+│   ├── dashboard/        # Next.js 16 Studio Dashboard App (Port :3000, Dockerfile)
+│   │   ├── src/          # React Studio Dashboard UI, components & engine client
+│   │   └── Dockerfile    # Multi-stage production container image
 │   ├── engine/           # Go 1.26+ Core Engine (On-demand AST extractor, DB manager & Gemini SDK)
 │   │   ├── internal/ast/ # On-demand AST fetcher & in-memory cache
 │   │   ├── internal/db/  # PostgreSQL database pool & incident store
@@ -184,10 +187,8 @@ CREATE TABLE webhook_logs (
 │   │   ├── Dockerfile    # Multi-stage production container image
 │   │   ├── .env.example  # Engine environment template
 │   │   └── main.go       # HTTP Telemetry server listening on :8080
-│   └── web/              # Web Platform, Docs & Studio Dashboard (:3000)
-│       ├── src/app/      # Landing page, docs & /dashboard UI
-│       ├── Dockerfile    # Multi-stage production container image
-│       └── .env.example  # Web environment template
+│   └── web/              # Public Marketing Landing Page & Starlight Docs (Astro static site, NO Dockerfile)
+│       └── src/content/  # Starlight documentation markdown files
 ├── sdk/
 │   └── go/               # Go Client SDK (panic middleware & telemetry dispatcher)
 └── test-service/         # Local test harness triggering panic simulations (:8081)
@@ -199,45 +200,36 @@ CREATE TABLE webhook_logs (
 
 ### Prerequisites
 
-- **Go**: 1.26 or higher
-- **Bun**: 1.0 or higher
-- **PostgreSQL**: 14 or higher (or Cloud SQL / Neon Serverless Postgres)
-- **Gemini API Key**: Set `GEMINI_API_KEY` in environment
+- **Docker** and **Docker Compose**
+- **Go**: 1.26+ (If running the SDK simulator natively)
 
-### 1. Start the Triage Engine
+### 1. Boot the Triage Stack
 
-Configure `apps/engine/.env.local` (see [`apps/engine/.env.example`](file:///Users/punjitha/projects/triage/apps/engine/.env.example)):
-
-```env
-PORT=8080
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/triage_db
-TRIAGE_API_KEY=tr_test_key_9042
-GEMINI_API_KEY=your_google_ai_studio_key_here
-GEMINI_MODEL_NAME=gemini-3.5-flash
-AST_WORKSPACE_ROOT=../../
-```
-
-Run the engine server:
+Triage runs locally via Docker Compose. The only required environment configuration is the `DATABASE_URL`, all other settings are handled securely in the UI.
 
 ```bash
-cd apps/engine
-go run main.go
-# Listening on http://localhost:8080
+# Set up environment variables
+cp .env.example .env
+
+# Start the stack (Postgres, Go Engine, Next.js Dashboard)
+docker-compose up --build -d
 ```
 
-### 2. Start the Manager & Web Platform
+### 2. Complete the Setup Wizard
 
-Configure `apps/manager/.env.local` and `apps/web/.env.local`:
+Once the containers are running, navigate to the Dashboard to securely configure your instance:
 
-```bash
-# Start Go Manager Function (:8000)
-cd apps/manager && go run main.go
+1. Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+2. The 5-step **Setup Wizard** will automatically guide you through:
+   - Generating and installing a **GitHub App** (for repository AST access and bug reporting).
+   - Linking **GitHub OAuth** (for secure dashboard logins).
+   - Setting up your **Gemini AI Configuration** (API Key and Model Name).
+   - Note: The Engine will automatically generate and persist a secure cryptographic session secret on its first boot—no manual configuration required.
+3. Once the final verification step succeeds, log in with your GitHub account!
 
-# Start Web Platform & Studio Dashboard (:3000)
-cd apps/web && bun dev
-```
+### 3. Run a Crash Simulation
 
-### 3. Run Test Crash Simulation
+You can test the crash analysis pipeline using the local SDK test harness:
 
 ```bash
 cd test-service
