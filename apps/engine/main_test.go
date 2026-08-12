@@ -4,15 +4,18 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestIsValidAPIKey(t *testing.T) {
+	ctx := context.Background()
+
 	// 1. Unset TRIAGE_API_KEY should fail closed
 	_ = os.Unsetenv("TRIAGE_API_KEY")
-	if isValidAPIKey("any_key") {
+	if isValidAPIKey(ctx, "any_key") {
 		t.Errorf("expected isValidAPIKey to fail closed when TRIAGE_API_KEY is unset")
 	}
 
@@ -20,17 +23,17 @@ func TestIsValidAPIKey(t *testing.T) {
 	_ = os.Setenv("TRIAGE_API_KEY", "tr_valid_key")
 	defer os.Unsetenv("TRIAGE_API_KEY")
 
-	if isValidAPIKey("") {
+	if isValidAPIKey(ctx, "") {
 		t.Errorf("expected isValidAPIKey to return false for empty key")
 	}
 
 	// 3. Valid matching key should return true
-	if !isValidAPIKey("tr_valid_key") {
+	if !isValidAPIKey(ctx, "tr_valid_key") {
 		t.Errorf("expected isValidAPIKey to return true for matching key")
 	}
 
 	// 4. Mismatched key should return false
-	if isValidAPIKey("tr_wrong_key") {
+	if isValidAPIKey(ctx, "tr_wrong_key") {
 		t.Errorf("expected isValidAPIKey to return false for wrong key")
 	}
 }

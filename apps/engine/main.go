@@ -5,7 +5,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"triage/engine/internal/ast"
+	"triage/engine/internal/db"
 	"triage/engine/internal/llm"
 
 	"github.com/joho/godotenv"
@@ -52,6 +55,7 @@ type IndexRequest struct {
 }
 
 var (
+	database   *db.DB
 	astManager *ast.Manager
 	astCache   = ast.NewASTCache()
 	astFetcher = ast.NewOnDemandFetcher()
@@ -67,6 +71,14 @@ func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL != "" {
 		var err error
+		database, err = db.NewDB(context.Background(), dbURL)
+		if err != nil {
+			log.Printf("[WARNING] Failed to connect Database Pool: %v", err)
+		} else {
+			defer database.Close()
+			log.Println("[DATABASE] Connected Engine directly to PostgreSQL Database Pool")
+		}
+
 		astManager, err = ast.NewManager(context.Background(), dbURL)
 		if err != nil {
 			log.Printf("[WARNING] Failed to connect AST Manager to PostgreSQL: %v", err)
@@ -145,7 +157,7 @@ func handleASTIndexRoute(w http.ResponseWriter, r *http.Request) {
 	if apiKey == "" {
 		apiKey = r.Header.Get("X-Triage-API-Key")
 	}
-	if !isValidAPIKey(apiKey) {
+	if !isValidAPIKey(r.Context(), apiKey) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "error": "unauthorized: missing or invalid API key"})
@@ -186,9 +198,20 @@ func handleASTIndexRoute(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "indexed_count": count})
 }
 
-func isValidAPIKey(key string) bool {
+func generateIncidentID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func isValidAPIKey(ctx context.Context, key string) bool {
 	if key == "" {
 		return false
+	}
+	if database != nil && database.VerifyAPIKey(ctx, key) {
+		return true
 	}
 	expected := os.Getenv("TRIAGE_API_KEY")
 	if expected == "" {
@@ -345,7 +368,7 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate API Key before file reads or Gemini calls
-	if !isValidAPIKey(req.APIKey) {
+	if !isValidAPIKey(r.Context(), req.APIKey) {
 		log.Printf("[WARNING] [TRACE %s] Unauthorized telemetry request attempt", traceID)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
@@ -404,6 +427,37 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	log.Printf("  Root Cause: %s", analysis.RootCause)
 	log.Printf("  Suggested Fix: %s", analysis.SuggestedFix)
 	log.Printf("==================================================")
+
+	// Save Incident to PostgreSQL database if connected
+	if database != nil && analysis != nil {
+		randID, idErr := generateIncidentID()
+		if idErr != nil {
+			log.Printf("[ERROR] Failed to generate incident ID: %v", idErr)
+		} else {
+			incidentID := fmt.Sprintf("INC-%s", randID)
+			panicMsg := "Runtime panic"
+			if req.StackTrace != "" {
+				lines := strings.Split(req.StackTrace, "\n")
+				if len(lines) > 0 {
+					panicMsg = lines[0]
+				}
+			}
+
+			_ = database.SaveIncident(r.Context(), &db.Incident{
+				ID:           incidentID,
+				Title:        fmt.Sprintf("Panic in %s:%d", req.File, req.Line),
+				Status:       "CRITICAL",
+				File:         req.File,
+				Line:         req.Line,
+				PanicMessage: panicMsg,
+				StackTrace:   req.StackTrace,
+				ASTSnippet:   astSnippet,
+				RootCause:    analysis.RootCause,
+				SuggestedFix: analysis.SuggestedFix,
+			})
+			log.Printf("[ENGINE DB SAVE] Persisted Incident %s in PostgreSQL", incidentID)
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
