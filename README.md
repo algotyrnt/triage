@@ -72,7 +72,7 @@ The Triage SDK provides a lightweight HTTP middleware (`triage.Middleware`) wrap
 
 ---
 
-## PostgreSQL Database Schema (`apps/manager/migrations/0001_init.sql`)
+## PostgreSQL Database Schema (`apps/engine/migrations/0001_init.sql`)
 
 The database DDL migration script provides full PostgreSQL schema definitions:
 
@@ -145,9 +145,13 @@ CREATE TABLE incidents (
 -- 5. API Keys
 CREATE TABLE api_keys (
   id VARCHAR(64) PRIMARY KEY,
+  user_id VARCHAR(64) REFERENCES users(id),
+  repository_id VARCHAR(64) REFERENCES repositories(id),
   name VARCHAR(255) NOT NULL,
-  key_hash VARCHAR(255) NOT NULL,
+  key_hash VARCHAR(255) UNIQUE NOT NULL,
   key_masked VARCHAR(64) NOT NULL,
+  revoked_at TIMESTAMP WITH TIME ZONE,
+  expires_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -172,19 +176,14 @@ CREATE TABLE webhook_logs (
 .
 ├── PROJECT_CONTEXT.md    # Master architecture & security reference specification
 ├── apps/
-│   ├── engine/           # Go 1.26+ Core Engine (PostgreSQL AST querier & Gemini 3.5 Flash SDK)
-│   │   ├── internal/ast/ # go/ast function node extractor & PostgreSQL AST manager
+│   ├── engine/           # Go 1.26+ Core Engine (On-demand AST extractor, DB manager & Gemini SDK)
+│   │   ├── internal/ast/ # On-demand AST fetcher & in-memory cache
+│   │   ├── internal/db/  # PostgreSQL database pool & incident store
 │   │   ├── internal/llm/ # Gemini 3.5 Flash SDK integration
+│   │   ├── migrations/   # PostgreSQL SQL DDL migration scripts
 │   │   ├── Dockerfile    # Multi-stage production container image
 │   │   ├── .env.example  # Engine environment template
 │   │   └── main.go       # HTTP Telemetry server listening on :8080
-│   ├── manager/          # Go 1.26+ Control Plane & Manager Cloud Function (:8000)
-│   │   ├── db/           # Database Models & Query Methods (package db)
-│   │   │   ├── db.go
-│   │   │   └── migrations/ 0001_init.sql
-│   │   ├── main.go       # Ingestion & webhook proxy handler
-│   │   ├── Dockerfile    # Multi-stage production container image
-│   │   └── .env.example  # Manager environment template
 │   └── web/              # Web Platform, Docs & Studio Dashboard (:3000)
 │       ├── src/app/      # Landing page, docs & /dashboard UI
 │       ├── Dockerfile    # Multi-stage production container image
