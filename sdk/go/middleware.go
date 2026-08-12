@@ -21,6 +21,9 @@ const DefaultEngineURL = "https://triage.algotyrnt.com/api/telemetry"
 
 type middlewareConfig struct {
 	gatewayURL string
+	commit     string
+	owner      string
+	repo       string
 }
 
 type Option func(*middlewareConfig)
@@ -34,8 +37,44 @@ func WithGatewayURL(url string) Option {
 	}
 }
 
+// WithCommit sets the Git commit SHA for on-demand source code resolution.
+func WithCommit(commit string) Option {
+	return func(c *middlewareConfig) {
+		if commit != "" {
+			c.commit = commit
+		}
+	}
+}
+
+// WithRepo sets the repository owner and name (e.g. "owner/repo" or ("owner", "repo")).
+func WithRepo(ownerRepo string) Option {
+	return func(c *middlewareConfig) {
+		if ownerRepo != "" {
+			parts := strings.Split(ownerRepo, "/")
+			if len(parts) == 2 {
+				c.owner = parts[0]
+				c.repo = parts[1]
+			}
+		}
+	}
+}
+
+func getVCSCommit() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				return setting.Value
+			}
+		}
+	}
+	return ""
+}
+
 type TelemetryPayload struct {
 	APIKey     string `json:"api_key"`
+	Owner      string `json:"owner,omitempty"`
+	Repo       string `json:"repo,omitempty"`
+	Commit     string `json:"commit,omitempty"`
 	File       string `json:"file"`
 	Line       int    `json:"line"`
 	StackTrace string `json:"stack_trace"`
@@ -45,6 +84,9 @@ type TelemetryPayload struct {
 type TelemetryJob struct {
 	EngineURL  string
 	APIKey     string
+	Owner      string
+	Repo       string
+	Commit     string
 	File       string
 	Line       int
 	StackTrace string
@@ -64,7 +106,7 @@ func init() {
 		go func() {
 			for job := range telemetryQueue {
 				atomic.AddUint64(&processedCount, 1)
-				sendTelemetry(job.EngineURL, job.APIKey, job.File, job.Line, job.StackTrace, job.TraceID)
+				sendTelemetry(job.EngineURL, job.APIKey, job.Owner, job.Repo, job.Commit, job.File, job.Line, job.StackTrace, job.TraceID)
 			}
 		}()
 	}
@@ -123,11 +165,12 @@ func enqueueTelemetry(job TelemetryJob) {
 }
 
 // Middleware returns an HTTP middleware wrapping standard net/http routers.
-// Managed Usage: triage.Middleware(apiKey)
+// Managed Usage: triage.Middleware(apiKey, triage.WithRepo("algotyrnt/triage"))
 // Self-Hosted Usage: triage.Middleware(apiKey, triage.WithGatewayURL("https://triage.internal.com/api/telemetry"))
 func Middleware(apiKey string, opts ...Option) func(http.Handler) http.Handler {
 	cfg := &middlewareConfig{
 		gatewayURL: DefaultEngineURL,
+		commit:     getVCSCommit(),
 	}
 
 	for _, opt := range opts {
@@ -148,6 +191,9 @@ func Middleware(apiKey string, opts ...Option) func(http.Handler) http.Handler {
 					enqueueTelemetry(TelemetryJob{
 						EngineURL:  cfg.gatewayURL,
 						APIKey:     apiKey,
+						Owner:      cfg.owner,
+						Repo:       cfg.repo,
+						Commit:     cfg.commit,
 						File:       file,
 						Line:       line,
 						StackTrace: stackStr,
@@ -194,9 +240,12 @@ func parseTopApplicationFrame(stackTrace string) (string, int) {
 	return "", 0
 }
 
-func sendTelemetry(engineURL string, apiKey string, file string, line int, stackTrace string, traceID string) {
+func sendTelemetry(engineURL string, apiKey string, owner string, repo string, commit string, file string, line int, stackTrace string, traceID string) {
 	payload := TelemetryPayload{
 		APIKey:     apiKey,
+		Owner:      owner,
+		Repo:       repo,
+		Commit:     commit,
 		File:       file,
 		Line:       line,
 		StackTrace: stackTrace,
