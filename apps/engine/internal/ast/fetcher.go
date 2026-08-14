@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,7 +67,7 @@ func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, co
 		}
 		// Log but don't fail — fall through to other methods
 		if err != nil {
-			fmt.Printf("[AST FETCH] GitHub App fetch failed for %s/%s@%s %s: %v\n", owner, repo, commit, cleanPath, err)
+			log.Printf("[AST FETCH] GitHub App fetch failed for %s/%s@%s %s: %v", owner, repo, commit, cleanPath, err)
 		}
 	}
 
