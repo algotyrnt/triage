@@ -10,15 +10,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
-	"io"
-	"strconv"
 	"time"
 
 	"triage/engine/internal/ast"
@@ -64,11 +64,10 @@ var (
 	astCache   = ast.NewASTCache()
 	astFetcher = ast.NewOnDemandFetcher()
 
-	githubApp    *github.AppConfig
+	githubApp     *github.AppConfig
 	sessionSecret string
-	appURL       string
+	appURL        string
 )
-
 
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +91,7 @@ func loadGitHubAppConfig(ctx context.Context) {
 	webhookSecret, _ := database.GetInstanceConfig(ctx, "github_app_webhook_secret")
 	clientID, _ := database.GetInstanceConfig(ctx, "github_app_client_id")
 	clientSecret, _ := database.GetInstanceConfig(ctx, "github_app_client_secret")
-	
+
 	if appIDStr == "" || pemKey == "" {
 		return
 	}
@@ -172,13 +171,15 @@ func main() {
 		loadGitHubAppConfig(context.Background())
 	}
 
+	// Core routes
 	http.HandleFunc("/health", corsMiddleware(handleHealthRoute))
 	http.HandleFunc("/api/v1/telemetry", corsMiddleware(handleTelemetryRoute))
 	http.HandleFunc("/api/v1/ast/index", corsMiddleware(handleASTIndexRoute))
 	http.HandleFunc("/api/v1/incidents", corsMiddleware(handleIncidentsRoute))
 	http.HandleFunc("/api/v1/projects", corsMiddleware(handleProjectsRoute))
 	http.HandleFunc("/api/v1/stats", corsMiddleware(handleStatsRoute))
-	
+
+	// Setup wizard routes (first-run configuration)
 	http.HandleFunc("/api/v1/setup/status", corsMiddleware(handleSetupStatus))
 	http.HandleFunc("/api/v1/setup/manifest", corsMiddleware(handleSetupManifest))
 	http.HandleFunc("/api/v1/setup/callback", corsMiddleware(handleSetupCallback))
@@ -188,8 +189,11 @@ func main() {
 	http.HandleFunc("/api/v1/setup/llm", corsMiddleware(handleSetupLLMRoute))
 	http.HandleFunc("/api/v1/setup/test", corsMiddleware(handleSetupTest))
 	http.HandleFunc("/api/v1/setup/repos", corsMiddleware(handleSetupRepos))
+
+	// Post-setup settings routes
 	http.HandleFunc("/api/v1/settings/llm", corsMiddleware(handleSettingsLLMRoute))
 
+	// GitHub OAuth authentication routes
 	http.HandleFunc("/api/v1/auth/github", corsMiddleware(handleGitHubAuthRoute))
 	http.HandleFunc("/api/v1/auth/github/callback", corsMiddleware(handleGitHubCallbackRoute))
 	http.HandleFunc("/api/v1/auth/me", corsMiddleware(handleAuthMe))
@@ -506,7 +510,7 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	defer cancelAnalysis()
 
 	delimitedSnippet := fmt.Sprintf("```go\n%s\n```", astSnippet)
-	
+
 	llmAPIKey := ""
 	llmModelName := ""
 	if database != nil {
@@ -676,34 +680,34 @@ func handleStatsRoute(w http.ResponseWriter, r *http.Request) {
 
 func handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	result := map[string]interface{}{
-		"configured": false,
-		"github_app": false,
+		"configured":   false,
+		"github_app":   false,
 		"installation": false,
-		"oauth": false,
-		"llm": false,
+		"oauth":        false,
+		"llm":          false,
 	}
-	
+
 	if database != nil {
 		appID, _ := database.GetInstanceConfig(r.Context(), "github_app_id")
 		result["github_app"] = appID != ""
-		
+
 		inst, _ := database.GetInstallation(r.Context())
 		result["installation"] = inst != nil
-		
+
 		oauthID, _ := database.GetInstanceConfig(r.Context(), "github_oauth_client_id")
 		result["oauth"] = oauthID != ""
 
 		apiKey, _ := database.GetInstanceConfig(r.Context(), "gemini_api_key")
 		modelName, _ := database.GetInstanceConfig(r.Context(), "gemini_model")
 		result["llm"] = apiKey != "" && modelName != ""
-		
+
 		if appID != "" && inst != nil && oauthID != "" && apiKey != "" && modelName != "" {
 			result["configured"] = true
 		}
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func handleSetupManifest(w http.ResponseWriter, r *http.Request) {
@@ -718,39 +722,39 @@ func handleSetupManifest(w http.ResponseWriter, r *http.Request) {
 	if req.InstanceURL == "" {
 		req.InstanceURL = appURL
 	}
-	
+
 	engineURL := fmt.Sprintf("http://localhost:%s", os.Getenv("PORT"))
 	if engineURL == "http://localhost:" {
 		engineURL = "http://localhost:8080"
 	}
-	
+
 	manifest := map[string]interface{}{
-		"name": "Triage",
-		"url": req.InstanceURL,
+		"name":         "Triage",
+		"url":          req.InstanceURL,
 		"redirect_url": engineURL + "/api/v1/setup/callback",
-		"setup_url": engineURL + "/api/v1/setup/install/callback",
+		"setup_url":    engineURL + "/api/v1/setup/install/callback",
 		"callback_urls": []string{
 			engineURL + "/api/v1/auth/github/callback",
 		},
 		"public": false,
 		"default_permissions": map[string]string{
 			"contents": "read",
-			"issues": "write",
+			"issues":   "write",
 			"metadata": "read",
 		},
 	}
-	
+
 	if !strings.Contains(engineURL, "localhost") {
 		manifest["hook_attributes"] = map[string]string{
 			"url": engineURL + "/api/v1/webhooks/github",
 		}
 		manifest["default_events"] = []string{"push", "installation", "installation_repositories"}
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"manifest": manifest,
-		"url": "https://github.com/settings/apps/new",
+		"url":      "https://github.com/settings/apps/new",
 	})
 }
 
@@ -760,11 +764,11 @@ func handleSetupCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
 		return
 	}
-	
+
 	convURL := fmt.Sprintf("https://api.github.com/app-manifests/%s/conversions", code)
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, convURL, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	
+
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -773,14 +777,14 @@ func handleSetupCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		log.Printf("[ERROR] Manifest conversion returned %d: %s", resp.StatusCode, string(body))
 		http.Redirect(w, r, appURL+"?setup_error=conversion_failed", http.StatusFound)
 		return
 	}
-	
+
 	var result struct {
 		ID            int64  `json:"id"`
 		Slug          string `json:"slug"`
@@ -794,7 +798,7 @@ func handleSetupCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, appURL+"?setup_error=decode_failed", http.StatusFound)
 		return
 	}
-	
+
 	if database != nil {
 		database.SaveInstanceConfig(r.Context(), "github_app_id", strconv.FormatInt(result.ID, 10))
 		database.SaveInstanceConfig(r.Context(), "github_app_slug", result.Slug)
@@ -805,9 +809,9 @@ func handleSetupCallback(w http.ResponseWriter, r *http.Request) {
 		database.SaveInstanceConfig(r.Context(), "github_oauth_client_id", result.ClientID)
 		database.SaveInstanceConfig(r.Context(), "github_oauth_client_secret", result.ClientSecret)
 	}
-	
+
 	loadGitHubAppConfig(r.Context())
-	
+
 	log.Printf("[SETUP] GitHub App created: ID=%d, Slug=%s", result.ID, result.Slug)
 	http.Redirect(w, r, appURL+"?setup_step=2&app_created=true", http.StatusFound)
 }
@@ -822,7 +826,7 @@ func handleSetupInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"url": fmt.Sprintf("https://github.com/apps/%s/installations/new", slug),
 	})
 }
@@ -833,13 +837,13 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, appURL+"?setup_error=missing_installation_id", http.StatusFound)
 		return
 	}
-	
+
 	installID, err := strconv.ParseInt(installIDStr, 10, 64)
 	if err != nil {
 		http.Redirect(w, r, appURL+"?setup_error=invalid_installation_id", http.StatusFound)
 		return
 	}
-	
+
 	if githubApp != nil && database != nil {
 		jwt, err := githubApp.SignAppJWT()
 		if err == nil {
@@ -848,7 +852,7 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 			req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, reqURL, nil)
 			req.Header.Set("Authorization", "Bearer "+jwt)
 			req.Header.Set("Accept", "application/vnd.github+json")
-			
+
 			resp, err := client.Do(req)
 			if err == nil && resp.StatusCode == http.StatusOK {
 				var instData struct {
@@ -858,18 +862,18 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 						Type  string `json:"type"`
 					} `json:"account"`
 				}
-				json.NewDecoder(resp.Body).Decode(&instData)
+				_ = json.NewDecoder(resp.Body).Decode(&instData)
 				resp.Body.Close()
-				
+
 				database.SaveInstallation(r.Context(), installID, instData.Account.Login, instData.Account.ID, instData.Account.Type)
-				
+
 				token, tokenErr := githubApp.GetInstallationToken(r.Context(), installID)
 				if tokenErr == nil {
 					reposURL := "https://api.github.com/installation/repositories?per_page=100"
 					repoReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, reposURL, nil)
 					repoReq.Header.Set("Authorization", "Bearer "+token)
 					repoReq.Header.Set("Accept", "application/vnd.github+json")
-					
+
 					repoResp, repoErr := client.Do(repoReq)
 					if repoErr == nil && repoResp.StatusCode == http.StatusOK {
 						var repoData struct {
@@ -881,9 +885,9 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 								Name string `json:"name"`
 							} `json:"repositories"`
 						}
-						json.NewDecoder(repoResp.Body).Decode(&repoData)
+						_ = json.NewDecoder(repoResp.Body).Decode(&repoData)
 						repoResp.Body.Close()
-						
+
 						var repos []db.InstallationRepo
 						for _, repo := range repoData.Repositories {
 							repos = append(repos, db.InstallationRepo{Owner: repo.Owner.Login, Repo: repo.Name})
@@ -892,12 +896,12 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 						log.Printf("[SETUP] Stored %d repos for installation %d", len(repos), installID)
 					}
 				}
-				
+
 				log.Printf("[SETUP] Installation saved: ID=%d, Account=%s", installID, instData.Account.Login)
 			}
 		}
 	}
-	
+
 	http.Redirect(w, r, appURL+"?setup_step=3&installed=true", http.StatusFound)
 }
 
@@ -920,7 +924,7 @@ func handleSetupOAuth(w http.ResponseWriter, r *http.Request) {
 		database.SaveInstanceConfig(r.Context(), "github_oauth_client_secret", req.ClientSecret)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
 func handleSetupTest(w http.ResponseWriter, r *http.Request) {
@@ -930,42 +934,42 @@ func handleSetupTest(w http.ResponseWriter, r *http.Request) {
 	if githubApp == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "GitHub App not configured"})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "GitHub App not configured"})
 		return
 	}
-	
+
 	err := githubApp.VerifyApp(r.Context())
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": err.Error()})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": err.Error()})
 		return
 	}
-	
+
 	appName := ""
 	if database != nil {
 		appName, _ = database.GetInstanceConfig(r.Context(), "github_app_slug")
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "app_name": appName})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "app_name": appName})
 }
 
 func handleSetupRepos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if database == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{"repos": []db.InstallationRepo{}})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": []db.InstallationRepo{}})
 		return
 	}
 	inst, err := database.GetInstallation(r.Context())
 	if err != nil || inst == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{"repos": []db.InstallationRepo{}})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": []db.InstallationRepo{}})
 		return
 	}
 	repos, err := database.GetInstallationRepos(r.Context(), inst.InstallationID)
 	if err != nil {
 		repos = []db.InstallationRepo{}
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"repos": repos})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": repos})
 }
 
 func handleGitHubAuthRoute(w http.ResponseWriter, r *http.Request) {
@@ -979,16 +983,18 @@ func handleGitHubAuthRoute(w http.ResponseWriter, r *http.Request) {
 	if clientID == "" {
 		clientID = os.Getenv("GITHUB_CLIENT_ID")
 	}
-	
+
 	if clientID == "" {
 		http.Redirect(w, r, appURL+"?user=algotyrnt&auth=dev", http.StatusFound)
 		return
 	}
-	
+
 	port := os.Getenv("PORT")
-	if port == "" { port = "8080" }
+	if port == "" {
+		port = "8080"
+	}
 	callbackURL := fmt.Sprintf("http://localhost:%s/api/v1/auth/github/callback", port)
-	
+
 	redirectURI := fmt.Sprintf("https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email,read:user,read:org", clientID, callbackURL)
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
@@ -999,28 +1005,36 @@ func handleGitHubCallbackRoute(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, appURL+"?auth=error&reason=missing_code", http.StatusFound)
 		return
 	}
-	
+
 	clientID, clientSecret := "", ""
 	if database != nil {
 		clientID, _ = database.GetInstanceConfig(r.Context(), "github_oauth_client_id")
 		clientSecret, _ = database.GetInstanceConfig(r.Context(), "github_oauth_client_secret")
 	}
-	if v := os.Getenv("GITHUB_OAUTH_CLIENT_ID"); v != "" { clientID = v }
-	if v := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"); v != "" { clientSecret = v }
-	if clientID == "" { clientID = os.Getenv("GITHUB_CLIENT_ID") }
-	if clientSecret == "" { clientSecret = os.Getenv("GITHUB_CLIENT_SECRET") }
-	
+	if v := os.Getenv("GITHUB_OAUTH_CLIENT_ID"); v != "" {
+		clientID = v
+	}
+	if v := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"); v != "" {
+		clientSecret = v
+	}
+	if clientID == "" {
+		clientID = os.Getenv("GITHUB_CLIENT_ID")
+	}
+	if clientSecret == "" {
+		clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+	}
+
 	if clientID == "" || clientSecret == "" {
 		http.Redirect(w, r, appURL+"?auth=error&reason=oauth_not_configured", http.StatusFound)
 		return
 	}
-	
+
 	tokenURL := "https://github.com/login/oauth/access_token"
 	tokenBody := fmt.Sprintf(`{"client_id":"%s","client_secret":"%s","code":"%s"}`, clientID, clientSecret, code)
 	tokenReq, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, tokenURL, strings.NewReader(tokenBody))
 	tokenReq.Header.Set("Accept", "application/json")
 	tokenReq.Header.Set("Content-Type", "application/json")
-	
+
 	client := &http.Client{Timeout: 15 * time.Second}
 	tokenResp, err := client.Do(tokenReq)
 	if err != nil {
@@ -1029,22 +1043,22 @@ func handleGitHubCallbackRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tokenResp.Body.Close()
-	
+
 	var tokenData struct {
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
 	}
-	json.NewDecoder(tokenResp.Body).Decode(&tokenData)
+	_ = json.NewDecoder(tokenResp.Body).Decode(&tokenData)
 	if tokenData.AccessToken == "" {
 		log.Printf("[AUTH ERROR] No access token returned: %s", tokenData.Error)
 		http.Redirect(w, r, appURL+"?auth=error&reason=no_access_token", http.StatusFound)
 		return
 	}
-	
+
 	userReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://api.github.com/user", nil)
 	userReq.Header.Set("Authorization", "Bearer "+tokenData.AccessToken)
 	userReq.Header.Set("Accept", "application/vnd.github+json")
-	
+
 	userResp, err := client.Do(userReq)
 	if err != nil {
 		log.Printf("[AUTH ERROR] User fetch failed: %v", err)
@@ -1052,23 +1066,23 @@ func handleGitHubCallbackRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer userResp.Body.Close()
-	
+
 	var userData struct {
 		ID        int64  `json:"id"`
 		Login     string `json:"login"`
 		AvatarURL string `json:"avatar_url"`
 	}
-	json.NewDecoder(userResp.Body).Decode(&userData)
+	_ = json.NewDecoder(userResp.Body).Decode(&userData)
 	if userData.Login == "" {
 		http.Redirect(w, r, appURL+"?auth=error&reason=invalid_user", http.StatusFound)
 		return
 	}
-	
+
 	githubIDStr := strconv.FormatInt(userData.ID, 10)
 	if database != nil {
 		database.UpsertUser(r.Context(), githubIDStr, userData.Login, userData.AvatarURL)
 	}
-	
+
 	userID := fmt.Sprintf("usr_%s", githubIDStr)
 	token, err := session.MintSessionJWT(userID, userData.Login, userData.AvatarURL, githubIDStr, sessionSecret)
 	if err != nil {
@@ -1076,7 +1090,7 @@ func handleGitHubCallbackRoute(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, appURL+"?auth=error&reason=jwt_error", http.StatusFound)
 		return
 	}
-	
+
 	log.Printf("[AUTH] User authenticated: @%s (ID: %d)", userData.Login, userData.ID)
 	http.Redirect(w, r, fmt.Sprintf("%s?token=%s&auth=success", appURL, token), http.StatusFound)
 }
@@ -1089,7 +1103,7 @@ func handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "missing or invalid authorization header"})
 		return
 	}
-	
+
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 	claims, err := session.ValidateSessionJWT(tokenStr, sessionSecret)
 	if err != nil {
@@ -1098,7 +1112,7 @@ func handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired session"})
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":         claims.UserID,
@@ -1151,7 +1165,7 @@ func handleSettingsLLMRoute(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 		return
 	}
 
@@ -1181,6 +1195,5 @@ func handleSetupLLMRoute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
-
