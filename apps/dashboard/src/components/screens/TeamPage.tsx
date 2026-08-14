@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import { TeamMember, ScreenId } from "@/types";
-import { GithubIcon as Github } from "@/components/GithubIcon";
-import { Users, Shield, Lock, UserPlus, X, Mail } from "lucide-react";
+import React, { useState, useEffect, useRef } from 'react';
+import { TeamMember, ScreenId } from '@/types';
+import { GithubIcon as Github } from '@/components/GithubIcon';
+import { Users, Shield, Lock, UserPlus, X, Mail } from 'lucide-react';
 
 interface TeamPageProps {
   teamMembers: TeamMember[];
@@ -16,20 +16,17 @@ interface TeamPageProps {
 interface PendingInvite {
   id: string;
   githubUsername: string;
-  role: "Admin" | "Member";
+  role: 'Admin' | 'Member';
   sentAt: string;
 }
 
-export const TeamPage: React.FC<TeamPageProps> = ({
-  teamMembers,
-  onNavigate,
-}) => {
+export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) => {
   const [members, setMembers] = useState<TeamMember[]>(teamMembers);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteUsername, setInviteUsername] = useState("");
-  const [inviteRole, setInviteRole] = useState<"Admin" | "Member">("Member");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [inviteRole, setInviteRole] = useState<'Admin' | 'Member'>('Member');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const inviteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const usernameInputRef = useRef<HTMLInputElement | null>(null);
@@ -39,11 +36,11 @@ export const TeamPage: React.FC<TeamPageProps> = ({
     if (showInviteModal) {
       usernameInputRef.current?.focus();
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
+        if (e.key === 'Escape') {
           setShowInviteModal(false);
           return;
         }
-        if (e.key === "Tab" && modalRef.current) {
+        if (e.key === 'Tab' && modalRef.current) {
           const focusables = modalRef.current.querySelectorAll<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           );
@@ -59,8 +56,8 @@ export const TeamPage: React.FC<TeamPageProps> = ({
           }
         }
       };
-      window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
     } else {
       inviteTriggerRef.current?.focus();
     }
@@ -81,11 +78,11 @@ export const TeamPage: React.FC<TeamPageProps> = ({
       id: `inv-${Date.now()}`,
       githubUsername: inviteUsername,
       role: inviteRole,
-      sentAt: "Just now",
+      sentAt: 'Just now',
     };
 
     setPendingInvites((prev) => [...prev, newInvite]);
-    setInviteUsername("");
+    setInviteUsername('');
     setShowInviteModal(false);
   };
 
@@ -101,7 +98,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
     <div className="relative">
       <div
         aria-hidden={showInviteModal}
-        className={`max-w-7xl mx-auto px-4 py-6 space-y-6 ${showInviteModal ? "pointer-events-none select-none" : ""}`}
+        className={`max-w-7xl mx-auto px-4 py-6 space-y-6 ${showInviteModal ? 'pointer-events-none select-none' : ''}`}
       >
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
@@ -110,8 +107,8 @@ export const TeamPage: React.FC<TeamPageProps> = ({
               Team Access Control & RBAC Permissions
             </h1>
             <p className="text-xs text-slate-600 font-sans mt-0.5">
-              Manage organization team members, AST symbolication scopes, and
-              2FA enforcement policy.
+              Manage organization team members, AST symbolication scopes, and 2FA enforcement
+              policy.
             </p>
           </div>
 
@@ -132,12 +129,8 @@ export const TeamPage: React.FC<TeamPageProps> = ({
               <Shield className="w-4 h-4 text-slate-800" />
             </div>
             <div className="font-mono text-xs">
-              <div className="font-bold text-slate-900">
-                Enforced 2FA Policy
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Require GitHub 2FA for all members
-              </div>
+              <div className="font-bold text-slate-900">Enforced 2FA Policy</div>
+              <div className="text-[11px] text-slate-500">Require GitHub 2FA for all members</div>
             </div>
           </div>
 
@@ -146,9 +139,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
               <Lock className="w-4 h-4 text-slate-800" />
             </div>
             <div className="font-mono text-xs">
-              <div className="font-bold text-slate-900">
-                Zero Trust Token Scoping
-              </div>
+              <div className="font-bold text-slate-900">Zero Trust Token Scoping</div>
               <div className="text-[11px] text-slate-500">
                 Least privilege AST & incident access
               </div>
@@ -160,12 +151,8 @@ export const TeamPage: React.FC<TeamPageProps> = ({
               <Users className="w-4 h-4 text-slate-800" />
             </div>
             <div className="font-mono text-xs">
-              <div className="font-bold text-slate-900">
-                {members.length} Active Members
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Organization: algotyrnt
-              </div>
+              <div className="font-bold text-slate-900">{members.length} Active Members</div>
+              <div className="text-[11px] text-slate-500">Organization: algotyrnt</div>
             </div>
           </div>
         </div>
@@ -184,9 +171,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
                   className="bg-white border border-amber-200 p-2.5 rounded-sm flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900">
-                      @{inv.githubUsername}
-                    </span>
+                    <span className="font-bold text-slate-900">@{inv.githubUsername}</span>
                     <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[10px]">
                       {inv.role}
                     </span>
@@ -234,9 +219,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
                   <th className="py-2.5 px-4 font-semibold">Role</th>
                   <th className="py-2.5 px-4 font-semibold">Scopes</th>
                   <th className="py-2.5 px-4 font-semibold">2FA</th>
-                  <th className="py-2.5 px-4 font-semibold text-right">
-                    Actions
-                  </th>
+                  <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -267,20 +250,18 @@ export const TeamPage: React.FC<TeamPageProps> = ({
                               <Github className="w-3 h-3" />
                             </a>
                           </div>
-                          <div className="text-[11px] text-slate-500">
-                            @{m.githubUsername}
-                          </div>
+                          <div className="text-[11px] text-slate-500">@{m.githubUsername}</div>
                         </div>
                       </div>
                     </td>
                     <td className="py-3 px-4">
                       <span
                         className={`px-2 py-0.5 rounded-sm font-bold text-[10px] border ${
-                          m.role === "Owner"
-                            ? "bg-purple-50 text-purple-700 border-purple-200"
-                            : m.role === "Admin"
-                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                              : "bg-slate-100 text-slate-700 border-slate-200"
+                          m.role === 'Owner'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : m.role === 'Admin'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}
                       >
                         {m.role}
@@ -310,7 +291,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {m.role !== "Owner" && (
+                      {m.role !== 'Owner' && (
                         <button
                           onClick={() => handleRemoveMember(m.id)}
                           className="text-red-600 hover:underline text-xs"
@@ -338,9 +319,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
         >
           <div className="bg-white border border-slate-200 rounded-sm p-6 w-full max-w-md space-y-4 shadow-none font-mono">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="font-bold text-sm text-slate-900">
-                Invite GitHub User
-              </div>
+              <div className="font-bold text-sm text-slate-900">Invite GitHub User</div>
               <button
                 onClick={() => setShowInviteModal(false)}
                 className="text-slate-400 hover:text-black"
@@ -351,9 +330,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({
 
             <form onSubmit={handleAddMember} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">
-                  GitHub Username:
-                </label>
+                <label className="font-bold text-slate-700 block">GitHub Username:</label>
                 <input
                   ref={usernameInputRef}
                   type="text"
@@ -366,18 +343,14 @@ export const TeamPage: React.FC<TeamPageProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">
-                  Assigned Role:
-                </label>
+                <label className="font-bold text-slate-700 block">Assigned Role:</label>
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as any)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
                 >
                   <option value="Member">Member (Read-only Incidents)</option>
-                  <option value="Admin">
-                    Admin (AST Write & Key Management)
-                  </option>
+                  <option value="Admin">Admin (AST Write & Key Management)</option>
                 </select>
               </div>
 

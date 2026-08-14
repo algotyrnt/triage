@@ -66,7 +66,8 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
             Webhooks & Ingress Delivery Logs
           </h1>
           <p className="text-xs text-slate-600 font-sans mt-0.5">
-            Audit trail of HTTP webhook dispatches, signature verification status, and JSON payload inspection.
+            Audit trail of HTTP webhook dispatches, signature verification status, and JSON payload
+            inspection.
           </p>
         </div>
 
@@ -141,8 +142,8 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
                             isSuccess
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : log.status === 'UNAUTHORIZED'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-red-50 text-red-700 border-red-200'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-red-50 text-red-700 border-red-200'
                           }`}
                         >
                           {log.statusCode} {log.status}
@@ -202,7 +203,10 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
                   </div>
                   <div className="bg-slate-50 p-2.5 border border-slate-200 rounded-sm space-y-1 text-[11px] text-slate-700">
                     {Object.entries(visibleLog.headers).map(([k, v]) => (
-                      <div key={k} className="flex justify-between border-b border-slate-100 pb-0.5 last:border-0">
+                      <div
+                        key={k}
+                        className="flex justify-between border-b border-slate-100 pb-0.5 last:border-0"
+                      >
                         <span className="font-bold text-slate-900">{k}:</span>
                         <span className="text-slate-600 truncate ml-2">{v}</span>
                       </div>
@@ -220,7 +224,11 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
                       onClick={handleCopyPayload}
                       className="text-slate-600 hover:text-black text-[11px] flex items-center gap-1 font-mono"
                     >
-                      {copiedPayload ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      {copiedPayload ? (
+                        <Check className="w-3 h-3 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
                       <span>{copiedPayload ? 'Copied' : 'Copy Body'}</span>
                     </button>
                   </div>
@@ -241,7 +249,8 @@ export const WebhooksPage: React.FC<WebhooksPageProps> = ({ logs, onNavigate }) 
               </div>
             ) : (
               <div className="p-8 text-center font-mono text-xs text-slate-500">
-                Select a webhook log from the left table to inspect request headers and JSON payloads.
+                Select a webhook log from the left table to inspect request headers and JSON
+                payloads.
               </div>
             )}
           </div>

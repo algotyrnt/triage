@@ -29,8 +29,14 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
   const [activeRepo, setActiveRepo] = useState<string>('');
   const [activeApiKey, setActiveApiKey] = useState<string>('');
-  const [currentUser, setCurrentUser] = useState<{ username: string; avatarUrl?: string } | null>(null);
-  const [toast, setToast] = useState<{ message: string; variant: ToastVariant } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{
+    username: string;
+    avatarUrl?: string;
+  } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    variant: ToastVariant;
+  } | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   // Bootstrap: check setup status, restore session, load data
@@ -105,7 +111,11 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
               latencyMs: 14,
               commitHash: '8f3a1b4',
               branch: 'main',
-              timestamp: new Date(item.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 19) + ' UTC',
+              timestamp:
+                new Date(item.created_at || Date.now())
+                  .toISOString()
+                  .replace('T', ' ')
+                  .substring(0, 19) + ' UTC',
               goroutineId: 'goroutine [running]',
               panicMessage: item.panic_message,
               rawStackTrace: item.stack_trace,
@@ -114,7 +124,11 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
                 file: item.file,
                 startLine: item.line,
                 lines: [
-                  { lineNum: item.line, content: item.ast_snippet || item.panic_message, isTriggerLine: true },
+                  {
+                    lineNum: item.line,
+                    content: item.ast_snippet || item.panic_message,
+                    isTriggerLine: true,
+                  },
                 ],
               },
               geminiAnalysis: item.root_cause
@@ -183,7 +197,10 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
       // Fallback to local generated key
     }
     setActiveApiKey(finalKey);
-    showToast(`Project ${repo} setup complete with API Key ${finalKey.substring(0, 12)}...`, 'success');
+    showToast(
+      `Project ${repo} setup complete with API Key ${finalKey.substring(0, 12)}...`,
+      'success',
+    );
   };
 
   return (
@@ -197,7 +214,10 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           )}
           <span className="text-sm font-medium">{toast.message}</span>
-          <button onClick={() => setToast(null)} className="text-slate-400 hover:text-white transition-colors">
+          <button
+            onClick={() => setToast(null)}
+            className="text-slate-400 hover:text-white transition-colors"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -272,15 +292,35 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           ) : (
             <div className="text-center py-16 bg-white rounded-xl border border-slate-200 shadow-sm">
               <h3 className="text-lg font-semibold text-slate-800">No incident selected</h3>
-              <p className="text-sm text-slate-500 mt-1">Select an incident from the dashboard or simulate a panic to view details.</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Select an incident from the dashboard or simulate a panic to view details.
+              </p>
             </div>
           ))}
 
-        {currentScreen === 'ast' && <AstExplorerPage onNavigate={(screen) => setCurrentScreen(screen)} commitIndexes={[]} astFiles={[]} />}
-        {currentScreen === 'webhooks' && <WebhooksPage onNavigate={(screen) => setCurrentScreen(screen)} logs={[]} />}
-        {currentScreen === 'team' && <TeamPage teamMembers={[]} onNavigate={(screen) => setCurrentScreen(screen)} />}
-        {currentScreen === 'status' && <SystemStatusPage onNavigate={(screen) => setCurrentScreen(screen)} health={[]} metrics={[]} />}
-        {currentScreen === 'settings' && <SettingsPage apiKeys={[]} onNavigate={(screen) => setCurrentScreen(screen)} />}
+        {currentScreen === 'ast' && (
+          <AstExplorerPage
+            onNavigate={(screen) => setCurrentScreen(screen)}
+            commitIndexes={[]}
+            astFiles={[]}
+          />
+        )}
+        {currentScreen === 'webhooks' && (
+          <WebhooksPage onNavigate={(screen) => setCurrentScreen(screen)} logs={[]} />
+        )}
+        {currentScreen === 'team' && (
+          <TeamPage teamMembers={[]} onNavigate={(screen) => setCurrentScreen(screen)} />
+        )}
+        {currentScreen === 'status' && (
+          <SystemStatusPage
+            onNavigate={(screen) => setCurrentScreen(screen)}
+            health={[]}
+            metrics={[]}
+          />
+        )}
+        {currentScreen === 'settings' && (
+          <SettingsPage apiKeys={[]} onNavigate={(screen) => setCurrentScreen(screen)} />
+        )}
       </main>
 
       {!isBootstrapping && currentScreen !== 'setup' && currentScreen !== 'login' && (
@@ -293,8 +333,8 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
               <span>Zero-Overhead Go Crash Isolation</span>
             </div>
             <div>
-              Powered by{' '}
-              <span className="text-slate-900 font-medium">gemini-3.5-flash</span> &amp; AST Parser
+              Powered by <span className="text-slate-900 font-medium">gemini-3.5-flash</span> &amp;
+              AST Parser
             </div>
           </div>
         </footer>

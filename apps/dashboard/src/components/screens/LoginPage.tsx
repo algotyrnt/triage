@@ -18,11 +18,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
   const handleGitHubOAuthRedirect = () => {
     setLoading(true);
     // Redirect to backend OAuth route
-    const engineBase = (process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry').replace(/\/telemetry$/, '');
+    const engineBase = (
+      process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry'
+    ).replace(/\/telemetry$/, '');
     window.location.href = `${engineBase}/auth/github`;
   };
-
-
 
   return (
     <div className="min-h-[calc(100vh-100px)] bg-slate-50 flex flex-col items-center justify-center p-4">
@@ -52,7 +52,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
             <span>{loading ? 'Redirecting to GitHub OAuth...' : 'Sign in via GitHub OAuth'}</span>
             {!loading && <ArrowRight className="w-3.5 h-3.5 ml-1 opacity-70" />}
           </button>
-
         </div>
 
         {/* Security Disclaimer Box (#F1F5F9) */}
@@ -66,19 +65,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
             <li className="flex items-start gap-1.5">
               <Check className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
               <span>
-                <strong className="text-slate-800">Read-Only AST Scope:</strong> Parses exported package ASTs, function signatures & byte offsets. Zero write permissions to source.
+                <strong className="text-slate-800">Read-Only AST Scope:</strong> Parses exported
+                package ASTs, function signatures & byte offsets. Zero write permissions to source.
               </span>
             </li>
             <li className="flex items-start gap-1.5">
               <Check className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
               <span>
-                <strong className="text-slate-800">Zero-Log Policy:</strong> Runtime stack traces are symbolicated on-the-fly and never stored in unencrypted persistent logs.
+                <strong className="text-slate-800">Zero-Log Policy:</strong> Runtime stack traces
+                are symbolicated on-the-fly and never stored in unencrypted persistent logs.
               </span>
             </li>
             <li className="flex items-start gap-1.5">
               <Lock className="w-3 h-3 text-slate-700 mt-0.5 shrink-0" />
               <span>
-                <strong className="text-slate-800">TLS 1.3 Encryption:</strong> Webhooks and telemetry ingress protected in transit.
+                <strong className="text-slate-800">TLS 1.3 Encryption:</strong> Webhooks and
+                telemetry ingress protected in transit.
               </span>
             </li>
           </ul>

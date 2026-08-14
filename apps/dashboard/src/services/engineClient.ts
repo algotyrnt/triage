@@ -39,7 +39,8 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
-const DEFAULT_ENGINE_URL = process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry';
+const DEFAULT_ENGINE_URL =
+  process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry';
 const TEST_HARNESS_URL = 'http://localhost:8081/crash';
 
 export class EngineClient {
@@ -55,7 +56,9 @@ export class EngineClient {
   }
 
   private getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
     if (this.authToken) {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
@@ -112,7 +115,10 @@ export class EngineClient {
     }
   }
 
-  async getLlmConfig(): Promise<{ gemini_api_key?: string; gemini_model?: string }> {
+  async getLlmConfig(): Promise<{
+    gemini_api_key?: string;
+    gemini_model?: string;
+  }> {
     try {
       const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
       const res = await fetch(`${baseUrl}/settings/llm`, {
@@ -151,7 +157,10 @@ export class EngineClient {
     }
   }
 
-  async createProject(repo: string, ownerUsername?: string): Promise<{ success: boolean; repo: string; api_key: string }> {
+  async createProject(
+    repo: string,
+    ownerUsername?: string,
+  ): Promise<{ success: boolean; repo: string; api_key: string }> {
     const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
     const res = await fetch(`${baseUrl}/projects`, {
       method: 'POST',
@@ -175,14 +184,33 @@ export class EngineClient {
     }
   }
 
-  async getSetupStatus(): Promise<{ configured: boolean; github_app: boolean; installation: boolean; oauth: boolean; llm: boolean }> {
+  async getSetupStatus(): Promise<{
+    configured: boolean;
+    github_app: boolean;
+    installation: boolean;
+    oauth: boolean;
+    llm: boolean;
+  }> {
     try {
       const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
       const res = await fetch(`${baseUrl}/setup/status`);
-      if (!res.ok) return { configured: false, github_app: false, installation: false, oauth: false, llm: false };
+      if (!res.ok)
+        return {
+          configured: false,
+          github_app: false,
+          installation: false,
+          oauth: false,
+          llm: false,
+        };
       return await res.json();
     } catch {
-      return { configured: false, github_app: false, installation: false, oauth: false, llm: false };
+      return {
+        configured: false,
+        github_app: false,
+        installation: false,
+        oauth: false,
+        llm: false,
+      };
     }
   }
 
@@ -192,7 +220,10 @@ export class EngineClient {
       const res = await fetch(`${baseUrl}/setup/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gemini_api_key: apiKey, gemini_model: modelName }),
+        body: JSON.stringify({
+          gemini_api_key: apiKey,
+          gemini_model: modelName,
+        }),
       });
       return res.ok;
     } catch {
@@ -223,13 +254,16 @@ export class EngineClient {
     const res = await fetch(`${baseUrl}/setup/oauth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
     });
     if (!res.ok) throw new Error(`Failed to save OAuth config: ${await res.text()}`);
     return await res.json();
   }
 
-  async getSetupRepos(): Promise<{owner: string, repo: string}[]> {
+  async getSetupRepos(): Promise<{ owner: string; repo: string }[]> {
     try {
       const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
       const res = await fetch(`${baseUrl}/setup/repos`);
@@ -241,7 +275,11 @@ export class EngineClient {
     }
   }
 
-  async testSetupConnection(): Promise<{ success: boolean; app_name?: string; error?: string }> {
+  async testSetupConnection(): Promise<{
+    success: boolean;
+    app_name?: string;
+    error?: string;
+  }> {
     const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
     const res = await fetch(`${baseUrl}/setup/test`, { method: 'POST' });
     if (!res.ok) {
@@ -251,11 +289,19 @@ export class EngineClient {
     return await res.json();
   }
 
-  async verifySession(token: string): Promise<{ valid: boolean; user?: { id: string; username: string; avatar_url: string; github_id: string } }> {
+  async verifySession(token: string): Promise<{
+    valid: boolean;
+    user?: {
+      id: string;
+      username: string;
+      avatar_url: string;
+      github_id: string;
+    };
+  }> {
     try {
       const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
       const res = await fetch(`${baseUrl}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return { valid: false };
       const data = await res.json();

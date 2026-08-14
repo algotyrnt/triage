@@ -42,7 +42,8 @@ export const SystemStatusPage: React.FC<SystemStatusPageProps> = ({
             System Status & Engine Metrics
           </h1>
           <p className="text-xs text-slate-600 font-sans mt-0.5">
-            Real-time telemetry and service health monitoring across Cloud Run workers, GCS AST Storage, and Gemini.
+            Real-time telemetry and service health monitoring across Cloud Run workers, GCS AST
+            Storage, and Gemini.
           </p>
         </div>
 
@@ -113,7 +114,9 @@ export const SystemStatusPage: React.FC<SystemStatusPageProps> = ({
             <button
               onClick={() => setMetricType('panics')}
               className={`px-2.5 py-1 rounded-sm transition-colors ${
-                metricType === 'panics' ? 'bg-black text-white font-bold' : 'text-slate-600 hover:text-black'
+                metricType === 'panics'
+                  ? 'bg-black text-white font-bold'
+                  : 'text-slate-600 hover:text-black'
               }`}
             >
               Panic Ingestion Volume
@@ -121,7 +124,9 @@ export const SystemStatusPage: React.FC<SystemStatusPageProps> = ({
             <button
               onClick={() => setMetricType('latency')}
               className={`px-2.5 py-1 rounded-sm transition-colors ${
-                metricType === 'latency' ? 'bg-black text-white font-bold' : 'text-slate-600 hover:text-black'
+                metricType === 'latency'
+                  ? 'bg-black text-white font-bold'
+                  : 'text-slate-600 hover:text-black'
               }`}
             >
               Symbolication Latency

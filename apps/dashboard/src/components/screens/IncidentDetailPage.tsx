@@ -150,8 +150,8 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                 incident.status === 'CRITICAL'
                   ? 'bg-red-50 text-red-700 border-red-200'
                   : incident.status === 'INVESTIGATING'
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
               }`}
             >
               {incident.status}
@@ -179,7 +179,9 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
             className="bg-black hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Sparkles className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : 'text-amber-400'}`} />
-            <span>{analyzing ? 'Running Analysis...' : `Re-analyze with ${GEMINI_MODEL_NAME}`}</span>
+            <span>
+              {analyzing ? 'Running Analysis...' : `Re-analyze with ${GEMINI_MODEL_NAME}`}
+            </span>
           </button>
         </div>
       </div>
@@ -211,19 +213,25 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
 
               <div className="space-y-2">
                 <div>
-                  <span className="text-slate-500 font-semibold block text-[11px]">Primary Root Cause:</span>
+                  <span className="text-slate-500 font-semibold block text-[11px]">
+                    Primary Root Cause:
+                  </span>
                   <p className="font-bold text-slate-900 text-xs mt-0.5">{aiAnalysis.rootCause}</p>
                 </div>
 
                 <div>
-                  <span className="text-slate-500 font-semibold block text-[11px]">Detailed Diagnostic Explanation:</span>
+                  <span className="text-slate-500 font-semibold block text-[11px]">
+                    Detailed Diagnostic Explanation:
+                  </span>
                   <p className="text-slate-700 leading-relaxed mt-0.5 text-[11.5px] bg-slate-50 p-2.5 rounded-sm border border-slate-200">
                     {aiAnalysis.explanation}
                   </p>
                 </div>
 
                 <div>
-                  <span className="text-slate-500 font-semibold block text-[11px]">Recommended Engineering Fix:</span>
+                  <span className="text-slate-500 font-semibold block text-[11px]">
+                    Recommended Engineering Fix:
+                  </span>
                   <p className="text-emerald-900 font-medium mt-0.5 text-[11.5px] bg-emerald-50/60 p-2.5 rounded-sm border border-emerald-200">
                     {aiAnalysis.recommendedFix}
                   </p>
@@ -237,7 +245,9 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                   className="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{generatingPatch ? 'Generating Fix Patch...' : 'Generate Code Fix Patch Diff'}</span>
+                  <span>
+                    {generatingPatch ? 'Generating Fix Patch...' : 'Generate Code Fix Patch Diff'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -249,14 +259,20 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
               <div className="bg-slate-900 border-b border-slate-800 p-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Code2 className="w-4 h-4 text-emerald-400" />
-                  <span className="font-bold text-white">Suggested Code Fix Diff (Git Unified Format)</span>
+                  <span className="font-bold text-white">
+                    Suggested Code Fix Diff (Git Unified Format)
+                  </span>
                 </div>
 
                 <button
                   onClick={handleCopyPatch}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-sm text-[11px] border border-slate-700 flex items-center gap-1 font-mono transition-colors"
                 >
-                  {copiedPatch ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedPatch ? (
+                    <Check className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
                   <span>{copiedPatch ? 'Copied Patch!' : 'Copy Patch'}</span>
                 </button>
               </div>
@@ -273,11 +289,13 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
               <div className="flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-slate-800" />
                 <span className="font-bold text-slate-900 text-sm">
-                  Isolated Function AST Node (<code className="text-black">{incident.astSnippet.functionName}</code>)
+                  Isolated Function AST Node (
+                  <code className="text-black">{incident.astSnippet.functionName}</code>)
                 </span>
               </div>
               <span className="text-[11px] text-slate-500 font-mono">
-                Line {incident.astSnippet.startLine} • {incident.astSnippet.lines.length} Lines Isolated
+                Line {incident.astSnippet.startLine} • {incident.astSnippet.lines.length} Lines
+                Isolated
               </span>
             </div>
 
@@ -287,10 +305,14 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                   <div
                     key={l.lineNum}
                     className={`flex items-center gap-3 px-2 py-0.5 rounded-sm ${
-                      l.isTriggerLine ? 'bg-red-950/80 text-red-200 border-l-2 border-red-500 font-bold' : ''
+                      l.isTriggerLine
+                        ? 'bg-red-950/80 text-red-200 border-l-2 border-red-500 font-bold'
+                        : ''
                     }`}
                   >
-                    <span className="text-slate-500 w-8 select-none text-right shrink-0">{l.lineNum}</span>
+                    <span className="text-slate-500 w-8 select-none text-right shrink-0">
+                      {l.lineNum}
+                    </span>
                     <span className="whitespace-pre">{l.content}</span>
                   </div>
                 ))}
@@ -310,7 +332,11 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                 onClick={handleCopyStack}
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-sm text-[11px] border border-slate-200 flex items-center gap-1 font-mono transition-colors"
               >
-                {copiedStack ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                {copiedStack ? (
+                  <Check className="w-3 h-3 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
                 <span>{copiedStack ? 'Copied Trace!' : 'Copy Raw Trace'}</span>
               </button>
             </div>
@@ -337,7 +363,9 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Triggering File:</span>
-                <span className="text-slate-900 font-semibold truncate max-w-[180px]">{incident.triggeringFile}</span>
+                <span className="text-slate-900 font-semibold truncate max-w-[180px]">
+                  {incident.triggeringFile}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Commit Hash:</span>
@@ -387,8 +415,8 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                           inc.status === 'CRITICAL'
                             ? 'bg-red-50 text-red-700 border-red-200'
                             : inc.status === 'INVESTIGATING'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}
                       >
                         {inc.status}

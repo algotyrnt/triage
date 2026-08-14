@@ -121,7 +121,9 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
           style={{ paddingLeft: `${depth * 12 + 20}px` }}
         >
           <div className="flex items-center gap-1.5 truncate">
-            <FileCode className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-400' : 'text-slate-500'}`} />
+            <FileCode
+              className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-400' : 'text-slate-500'}`}
+            />
             <span className="truncate">{file.name}</span>
           </div>
           {file.totalFuncs !== undefined && file.totalFuncs > 0 && (
@@ -216,9 +218,7 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
           </div>
 
           {/* Directory Tree */}
-          <div className="space-y-0.5 max-h-[500px] overflow-y-auto">
-            {renderTree(astFiles)}
-          </div>
+          <div className="space-y-0.5 max-h-[500px] overflow-y-auto">{renderTree(astFiles)}</div>
         </div>
 
         {/* Right Column AST Node Breakdown */}
@@ -229,7 +229,10 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
               <div className="font-mono text-xs font-bold text-slate-900 flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-slate-800" />
                 <span>
-                  File: <span className="text-black font-mono font-bold underline">{selectedFilePath}</span>
+                  File:{' '}
+                  <span className="text-black font-mono font-bold underline">
+                    {selectedFilePath}
+                  </span>
                 </span>
               </div>
 
@@ -237,7 +240,9 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
                 <button
                   onClick={() => setViewMode('nodes')}
                   className={`px-2 py-0.5 rounded-sm transition-colors ${
-                    viewMode === 'nodes' ? 'bg-black text-white font-bold' : 'text-slate-600 hover:text-black'
+                    viewMode === 'nodes'
+                      ? 'bg-black text-white font-bold'
+                      : 'text-slate-600 hover:text-black'
                   }`}
                 >
                   AST Nodes
@@ -245,7 +250,9 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
                 <button
                   onClick={() => setViewMode('raw_json')}
                   className={`px-2 py-0.5 rounded-sm transition-colors ${
-                    viewMode === 'raw_json' ? 'bg-black text-white font-bold' : 'text-slate-600 hover:text-black'
+                    viewMode === 'raw_json'
+                      ? 'bg-black text-white font-bold'
+                      : 'text-slate-600 hover:text-black'
                   }`}
                 >
                   Raw AST JSON
@@ -257,16 +264,28 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
             {selectedFile && (
               <div className="bg-slate-50 border-b border-slate-200 p-2.5 px-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-600">
                 <div>
-                  Lines: <strong className="text-slate-900">{selectedFile.totalLines !== undefined ? selectedFile.totalLines : '—'}</strong>
+                  Lines:{' '}
+                  <strong className="text-slate-900">
+                    {selectedFile.totalLines !== undefined ? selectedFile.totalLines : '—'}
+                  </strong>
                 </div>
                 <div>
-                  Functions: <strong className="text-slate-900">{selectedFile.totalFuncs !== undefined ? selectedFile.totalFuncs : '—'}</strong>
+                  Functions:{' '}
+                  <strong className="text-slate-900">
+                    {selectedFile.totalFuncs !== undefined ? selectedFile.totalFuncs : '—'}
+                  </strong>
                 </div>
                 <div>
-                  Size: <strong className="text-slate-900">{selectedFile.sizeBytes !== undefined ? `${selectedFile.sizeBytes} bytes` : '—'}</strong>
+                  Size:{' '}
+                  <strong className="text-slate-900">
+                    {selectedFile.sizeBytes !== undefined ? `${selectedFile.sizeBytes} bytes` : '—'}
+                  </strong>
                 </div>
                 <div>
-                  Package: <strong className="text-slate-900">{getPackageFromPath(selectedFile.path)}</strong>
+                  Package:{' '}
+                  <strong className="text-slate-900">
+                    {getPackageFromPath(selectedFile.path)}
+                  </strong>
                 </div>
               </div>
             )}
@@ -293,7 +312,9 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
                             </span>
                             <span className="font-bold text-slate-900 text-xs">{node.name}</span>
                             {node.receiver && (
-                              <span className="text-slate-500 text-[11px] font-mono">{node.receiver}</span>
+                              <span className="text-slate-500 text-[11px] font-mono">
+                                {node.receiver}
+                              </span>
                             )}
                           </div>
 
@@ -313,7 +334,10 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
                               Child Expression Statements:
                             </div>
                             {node.children.map((child) => (
-                              <div key={child.id} className="flex items-center justify-between text-slate-700">
+                              <div
+                                key={child.id}
+                                className="flex items-center justify-between text-slate-700"
+                              >
                                 <span className="font-bold text-slate-900">{child.kind}:</span>
                                 <code className="bg-slate-100 px-1.5 py-0.5 rounded-sm text-slate-800">
                                   {child.name}
@@ -335,7 +359,14 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
             ) : (
               <div className="p-4 bg-slate-900 text-emerald-400 font-mono text-xs overflow-x-auto min-h-[350px]">
                 <pre className="text-[11px] leading-relaxed">
-                  {JSON.stringify(selectedFile || { path: selectedFilePath, status: 'indexed' }, null, 2)}
+                  {JSON.stringify(
+                    selectedFile || {
+                      path: selectedFilePath,
+                      status: 'indexed',
+                    },
+                    null,
+                    2,
+                  )}
                 </pre>
               </div>
             )}

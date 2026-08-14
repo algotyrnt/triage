@@ -28,7 +28,9 @@ interface SettingsPageProps {
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'webhooks' | 'ai' | 'danger'>('ai');
+  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'webhooks' | 'ai' | 'danger'>(
+    'ai',
+  );
   const [keysList, setKeysList] = useState<ApiKey[]>(apiKeys);
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
 
@@ -50,7 +52,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
   const [loadingAi, setLoadingAi] = useState(true);
 
   useEffect(() => {
-    engineClient.getLlmConfig().then(cfg => {
+    engineClient.getLlmConfig().then((cfg) => {
       if (cfg.gemini_api_key) setGeminiApiKey(cfg.gemini_api_key);
       if (cfg.gemini_model) setGeminiModel(cfg.gemini_model);
       setLoadingAi(false);
@@ -91,7 +93,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
 
   const handleRevokeKey = (id: string) => {
     setKeysList((prev) =>
-      prev.map((k) => (k.id === id ? { ...k, status: 'REVOKED' as const } : k))
+      prev.map((k) => (k.id === id ? { ...k, status: 'REVOKED' as const } : k)),
     );
   };
 
@@ -140,11 +142,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
         {/* Left Sub-Nav Sidebar */}
         <div className="lg:col-span-3 space-y-1 font-mono text-xs">
           {[
-            { id: 'ai', label: 'AI Configuration', icon: <Brain className="w-3.5 h-3.5" /> },
-            { id: 'keys', label: 'API Ingestion Keys', icon: <Key className="w-3.5 h-3.5" /> },
-            { id: 'webhooks', label: 'Webhook Endpoint', icon: <Webhook className="w-3.5 h-3.5" /> },
-            { id: 'general', label: 'General Project Info', icon: <Sliders className="w-3.5 h-3.5" /> },
-            { id: 'danger', label: 'Danger Zone', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+            {
+              id: 'ai',
+              label: 'AI Configuration',
+              icon: <Brain className="w-3.5 h-3.5" />,
+            },
+            {
+              id: 'keys',
+              label: 'API Ingestion Keys',
+              icon: <Key className="w-3.5 h-3.5" />,
+            },
+            {
+              id: 'webhooks',
+              label: 'Webhook Endpoint',
+              icon: <Webhook className="w-3.5 h-3.5" />,
+            },
+            {
+              id: 'general',
+              label: 'General Project Info',
+              icon: <Sliders className="w-3.5 h-3.5" />,
+            },
+            {
+              id: 'danger',
+              label: 'Danger Zone',
+              icon: <AlertTriangle className="w-3.5 h-3.5" />,
+            },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             const isDanger = tab.id === 'danger';
@@ -158,8 +180,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
                       ? 'bg-red-600 text-white font-bold border-red-700'
                       : 'bg-black text-white font-bold border-black'
                     : isDanger
-                    ? 'bg-red-50/50 text-red-700 border-red-200 hover:bg-red-100'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      ? 'bg-red-50/50 text-red-700 border-red-200 hover:bg-red-100'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
               >
                 {tab.icon}
@@ -186,7 +208,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
               </div>
               <div className="p-5 space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-800 font-mono">Gemini API Key</label>
+                  <label className="text-xs font-bold text-slate-800 font-mono">
+                    Gemini API Key
+                  </label>
                   <input
                     type={showSecret ? 'text' : 'password'}
                     value={geminiApiKey}
@@ -194,9 +218,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
                     placeholder="AIzaSy..."
                     className="w-full text-sm font-mono border border-slate-200 rounded-sm px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
-                  <p className="text-[10px] text-slate-500 font-mono">Leave blank to fallback to the GEMINI_API_KEY environment variable.</p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Leave blank to fallback to the GEMINI_API_KEY environment variable.
+                  </p>
                 </div>
-                
+
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-800 font-mono">Model Name</label>
                   <input
@@ -206,7 +232,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
                     placeholder="e.g. gemini-1.5-flash or gemini-2.5-pro"
                     className="w-full text-sm font-mono border border-slate-200 rounded-sm px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
-                  <p className="text-[10px] text-slate-500 font-mono">Leave blank to fallback to the GEMINI_MODEL_NAME environment variable.</p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Leave blank to fallback to the GEMINI_MODEL_NAME environment variable.
+                  </p>
                 </div>
 
                 <div className="pt-2 flex justify-end">
@@ -215,7 +243,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
                     disabled={loadingAi}
                     className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-mono font-medium px-4 py-1.5 rounded-sm transition-colors"
                   >
-                    {aiSaved ? <Check className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
+                    {aiSaved ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Shield className="w-3.5 h-3.5" />
+                    )}
                     <span>{aiSaved ? 'Saved' : 'Save Configuration'}</span>
                   </button>
                 </div>
@@ -309,7 +341,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
                   Outbound Webhook Dispatch Settings
                 </h2>
                 <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                  Triage posts JSON HTTP payloads when crashes are symbolicated or Gemini patches generated.
+                  Triage posts JSON HTTP payloads when crashes are symbolicated or Gemini patches
+                  generated.
                 </p>
               </div>
 
@@ -322,7 +355,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
 
               <form onSubmit={handleSaveWebhook} className="space-y-4 text-xs">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block">Target Webhook Listener URL:</label>
+                  <label className="font-bold text-slate-800 block">
+                    Target Webhook Listener URL:
+                  </label>
                   <input
                     type="url"
                     value={webhookUrl}
@@ -409,7 +444,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
               </div>
 
               <p className="text-red-800 text-[11.5px] leading-relaxed">
-                Deleting this project will permanently remove all AST symbolication caches, webhook audit logs, and API ingestion keys for <strong className="text-red-950 font-bold">{targetRepoName}</strong>. This action cannot be undone.
+                Deleting this project will permanently remove all AST symbolication caches, webhook
+                audit logs, and API ingestion keys for{' '}
+                <strong className="text-red-950 font-bold">{targetRepoName}</strong>. This action
+                cannot be undone.
               </p>
 
               <div className="pt-1">
@@ -437,7 +475,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
         >
           <div className="bg-white border border-red-300 rounded-sm p-6 w-full max-w-md space-y-4 shadow-none text-xs">
             <div className="flex items-center justify-between border-b border-red-100 pb-3">
-              <div id="delete-modal-title" className="font-bold text-red-900 text-sm flex items-center gap-1.5">
+              <div
+                id="delete-modal-title"
+                className="font-bold text-red-900 text-sm flex items-center gap-1.5"
+              >
                 <AlertTriangle className="w-4 h-4 text-red-600" />
                 <span>Confirm Project Deletion</span>
               </div>
@@ -450,7 +491,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
             </div>
 
             <p className="text-slate-700 leading-relaxed">
-              Please type <strong className="text-slate-900 font-bold">{targetRepoName}</strong> below to confirm deletion:
+              Please type <strong className="text-slate-900 font-bold">{targetRepoName}</strong>{' '}
+              below to confirm deletion:
             </p>
 
             <input
