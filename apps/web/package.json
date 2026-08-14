@@ -1,29 +1,26 @@
 {
   "name": "@triage/web",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint ."
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
   },
   "dependencies": {
-    "lucide-react": "^1.28.0",
-    "next": "^16.3.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "@astrojs/react": "^4.2.0",
+    "@astrojs/starlight": "^0.32.0",
+    "@astrojs/tailwind": "^6.0.0",
+    "astro": "^5.4.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^3.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.1.2",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "autoprefixer": "^10.5.4",
-    "eslint": "^10.8.0",
-    "eslint-config-next": "^16.3.0",
-    "postcss": "^8.5.25",
-    "tailwindcss": "^4.3.3",
-    "typescript": "^7.0.2"
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.4.5"
   }
 }

@@ -13,24 +13,33 @@ import (
 	"os"
 )
 
-// ExtractFuncAST parses a local .go file and extracts the string representation
-// of the *ast.FuncDecl enclosing the specified targetLine.
-func ExtractFuncAST(filePath string, targetLine int) (string, error) {
+type ExtractedFunction struct {
+	Name      string
+	StartLine int
+	EndLine   int
+	Snippet   string
+}
+
+func parseGoFile(filePath string) (*token.FileSet, *ast.File, error) {
 	if filePath == "" {
-		return "", fmt.Errorf("file path cannot be empty")
+		return nil, nil, fmt.Errorf("file path cannot be empty")
 	}
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return "", fmt.Errorf("file does not exist: %s", filePath)
+		return nil, nil, fmt.Errorf("file does not exist: %s", filePath)
 	}
 
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse file %s: %w", filePath, err)
+		return nil, nil, fmt.Errorf("failed to parse file %s: %w", filePath, err)
 	}
 
-	var targetFunc *ast.FuncDecl
+	return fset, node, nil
+}
+
+func extractFunctions(fset *token.FileSet, node *ast.File) []ExtractedFunction {
+	var result []ExtractedFunction
 	for _, decl := range node.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -40,20 +49,66 @@ func ExtractFuncAST(filePath string, targetLine int) (string, error) {
 		startLine := fset.Position(fn.Pos()).Line
 		endLine := fset.Position(fn.End()).Line
 
-		if targetLine >= startLine && targetLine <= endLine {
-			targetFunc = fn
-			break
+		var buf bytes.Buffer
+		if err := printer.Fprint(&buf, fset, fn); err != nil {
+			continue
+		}
+
+		name := fn.Name.Name
+		if fn.Recv != nil && len(fn.Recv.List) > 0 {
+			var recvBuf bytes.Buffer
+			if err := printer.Fprint(&recvBuf, fset, fn.Recv.List[0].Type); err == nil {
+				name = fmt.Sprintf("%s.%s", recvBuf.String(), name)
+			} else {
+				name = fmt.Sprintf("%v.%s", fn.Recv.List[0].Type, name)
+			}
+		}
+
+		result = append(result, ExtractedFunction{
+			Name:      name,
+			StartLine: startLine,
+			EndLine:   endLine,
+			Snippet:   buf.String(),
+		})
+	}
+	return result
+}
+
+// ExtractFuncAST parses a local .go file and extracts the string representation
+// of the *ast.FuncDecl enclosing the specified targetLine.
+func ExtractFuncAST(filePath string, targetLine int) (string, error) {
+	fset, node, err := parseGoFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	for _, fn := range extractFunctions(fset, node) {
+		if targetLine >= fn.StartLine && targetLine <= fn.EndLine {
+			return fn.Snippet, nil
 		}
 	}
 
-	if targetFunc == nil {
-		return "", fmt.Errorf("no function declaration found surrounding line %d in %s", targetLine, filePath)
+	return "", fmt.Errorf("no function declaration found surrounding line %d in %s", targetLine, filePath)
+}
+
+// ExtractFuncASTFromBytes parses raw .go source bytes in memory and extracts
+// the string representation of the *ast.FuncDecl enclosing the specified targetLine.
+func ExtractFuncASTFromBytes(content []byte, targetLine int) (string, error) {
+	if len(content) == 0 {
+		return "", fmt.Errorf("file content is empty")
 	}
 
-	var buf bytes.Buffer
-	if err := printer.Fprint(&buf, fset, targetFunc); err != nil {
-		return "", fmt.Errorf("failed to print AST node: %w", err)
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "src.go", content, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Go AST from bytes: %w", err)
 	}
 
-	return buf.String(), nil
+	for _, fn := range extractFunctions(fset, node) {
+		if targetLine >= fn.StartLine && targetLine <= fn.EndLine {
+			return fn.Snippet, nil
+		}
+	}
+
+	return "", fmt.Errorf("no function declaration found surrounding line %d", targetLine)
 }

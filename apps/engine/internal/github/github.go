@@ -6,10 +6,7 @@ package github
 import (
 	"bytes"
 	"context"
-	"crypto"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -17,215 +14,250 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"strconv"
+	"sync"
 	"time"
 
-	"triage/engine/internal/llm"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-type Client struct {
-	AppID      string
-	PrivateKey []byte
-	HTTPClient *http.Client
+type AppConfig struct {
+	AppID              int64
+	PrivateKey         *rsa.PrivateKey
+	WebhookSecret      string
+	ClientID           string
+	ClientSecret       string
+	installationTokens sync.Map
 }
 
-type IssueRequest struct {
-	File       string
-	Line       int
-	StackTrace string
-	ASTSnippet string
-	Analysis   *llm.AnalysisResult
+type InstallationToken struct {
+	Token     string
+	ExpiresAt time.Time
 }
 
-type IssueResponse struct {
-	Number  int    `json:"number"`
-	HTMLURL string `json:"html_url"`
-	State   string `json:"state"`
-	Title   string `json:"title"`
-}
-
-type installationTokenResp struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
-
-func NewClient(appID string, privateKeyPEM []byte) *Client {
-	return &Client{
-		AppID:      appID,
-		PrivateKey: privateKeyPEM,
-		HTTPClient: &http.Client{Timeout: 15 * time.Second},
-	}
-}
-
-func (c *Client) CreateIssue(ctx context.Context, owner string, repo string, installationID int64, req *IssueRequest) (*IssueResponse, error) {
-	if c.AppID == "" || len(c.PrivateKey) == 0 {
-		return nil, fmt.Errorf("github app ID or private key is missing")
-	}
-
-	jwtToken, err := c.GenerateJWT()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate GitHub App JWT: %w", err)
-	}
-
-	instToken, err := c.getInstallationAccessToken(ctx, jwtToken, installationID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get installation token: %w", err)
-	}
-
-	fileName := req.File
-	if idx := strings.LastIndex(fileName, "/"); idx != -1 {
-		fileName = fileName[idx+1:]
-	}
-
-	title := fmt.Sprintf("[Triage] Panic in %s:%d", fileName, req.Line)
-	body := formatIssueBody(req)
-
-	payload := map[string]interface{}{
-		"title":  title,
-		"body":   body,
-		"labels": []string{"triage-crash", "bug", "automated-triage"},
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal issue payload: %w", err)
-	}
-
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues", owner, repo)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(data))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create issue HTTP request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+instToken)
-	httpReq.Header.Set("Accept", "application/vnd.github+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-
-	resp, err := c.HTTPClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("github API POST issue failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBytes, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github API error (status %d): %s", resp.StatusCode, string(respBytes))
-	}
-
-	var issueResp IssueResponse
-	if err := json.Unmarshal(respBytes, &issueResp); err != nil {
-		return nil, fmt.Errorf("failed to decode GitHub issue response: %w", err)
-	}
-
-	return &issueResp, nil
-}
-
-func (c *Client) getInstallationAccessToken(ctx context.Context, jwtToken string, installationID int64) (string, error) {
-	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", installationID)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+jwtToken)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to obtain installation access token (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	var tokenResp installationTokenResp
-	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return "", err
-	}
-
-	return tokenResp.Token, nil
-}
-
-func (c *Client) GenerateJWT() (string, error) {
-	block, _ := pem.Decode(c.PrivateKey)
+func LoadAppConfig(appID int64, pemKeyData []byte, webhookSecret, clientID, clientSecret string) (*AppConfig, error) {
+	block, _ := pem.Decode(pemKeyData)
 	if block == nil {
-		return "", fmt.Errorf("failed to parse PEM block containing private key")
+		return nil, fmt.Errorf("failed to parse PEM block")
 	}
 
 	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
-		parsedKey, err8 := x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err8 != nil {
-			return "", fmt.Errorf("failed to parse private key: %w", err)
+		// Try parsing as PKCS8
+		key, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to parse private key: pkcs1 err: %v, pkcs8 err: %v", err, err2)
 		}
 		var ok bool
-		privKey, ok = parsedKey.(*rsa.PrivateKey)
+		privKey, ok = key.(*rsa.PrivateKey)
 		if !ok {
-			return "", fmt.Errorf("private key is not RSA")
+			return nil, fmt.Errorf("not an RSA private key")
 		}
 	}
 
-	now := time.Now().Unix()
-	header := map[string]string{"alg": "RS256", "typ": "JWT"}
-	payload := map[string]interface{}{
-		"iat": now - 60,
-		"exp": now + 600,
-		"iss": c.AppID,
-	}
-
-	headerJSON, _ := json.Marshal(header)
-	payloadJSON, _ := json.Marshal(payload)
-
-	b64Header := base64.RawURLEncoding.EncodeToString(headerJSON)
-	b64Payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
-
-	unsignedToken := b64Header + "." + b64Payload
-
-	h := sha256.New()
-	h.Write([]byte(unsignedToken))
-	hashed := h.Sum(nil)
-
-	sig, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, hashed)
-	if err != nil {
-		return "", fmt.Errorf("failed to sign JWT: %w", err)
-	}
-
-	b64Sig := base64.RawURLEncoding.EncodeToString(sig)
-	return unsignedToken + "." + b64Sig, nil
+	return &AppConfig{
+		AppID:         appID,
+		PrivateKey:    privKey,
+		WebhookSecret: webhookSecret,
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+	}, nil
 }
 
-func formatIssueBody(req *IssueRequest) string {
-	var sb strings.Builder
-
-	sb.WriteString("## Triage Automated Crash Report\n\n")
-	sb.WriteString(fmt.Sprintf("**Location:** `%s:%d`  \n", req.File, req.Line))
-	sb.WriteString(fmt.Sprintf("**Timestamp:** `%s`  \n\n", time.Now().Format(time.RFC3339)))
-
-	if req.Analysis != nil {
-		sb.WriteString("### Root Cause Analysis (Gemini 2.5)\n\n")
-		sb.WriteString(req.Analysis.RootCause)
-		sb.WriteString("\n\n")
-
-		sb.WriteString("### Suggested Fix\n\n```go\n")
-		sb.WriteString(req.Analysis.SuggestedFix)
-		sb.WriteString("\n```\n\n")
+func (c *AppConfig) SignAppJWT() (string, error) {
+	now := time.Now()
+	claims := jwt.RegisteredClaims{
+		Issuer:    strconv.FormatInt(c.AppID, 10),
+		IssuedAt:  jwt.NewNumericDate(now.Add(-60 * time.Second)),
+		ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
 	}
 
-	if req.ASTSnippet != "" {
-		sb.WriteString("### Isolated Function AST Node\n\n```go\n")
-		sb.WriteString(req.ASTSnippet)
-		sb.WriteString("\n```\n\n")
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	return token.SignedString(c.PrivateKey)
+}
+
+func (c *AppConfig) GetInstallationToken(ctx context.Context, installationID int64) (string, error) {
+	if val, ok := c.installationTokens.Load(installationID); ok {
+		tok := val.(InstallationToken)
+		if time.Until(tok.ExpiresAt) > 5*time.Minute {
+			return tok.Token, nil
+		}
 	}
 
-	sb.WriteString("<details>\n<summary>Raw Stack Trace</summary>\n\n```text\n")
-	sb.WriteString(req.StackTrace)
-	sb.WriteString("\n```\n\n</details>\n\n")
-	sb.WriteString("---\n*Reported automatically by Triage Go Telemetry Engine*")
+	appJWT, err := c.SignAppJWT()
+	if err != nil {
+		return "", fmt.Errorf("failed to sign app jwt: %w", err)
+	}
 
-	return sb.String()
+	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", installationID)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to create token, status: %d, body: %s", resp.StatusCode, body)
+	}
+
+	var payload struct {
+		Token     string    `json:"token"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	c.installationTokens.Store(installationID, InstallationToken{
+		Token:     payload.Token,
+		ExpiresAt: payload.ExpiresAt,
+	})
+
+	return payload.Token, nil
+}
+
+func (c *AppConfig) FetchFileContent(ctx context.Context, installationID int64, owner, repo, commitSHA, filePath string) ([]byte, string, error) {
+	token, err := c.GetInstallationToken(ctx, installationID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get token: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s", owner, repo, filePath, commitSHA)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, "", fmt.Errorf("failed to fetch file content, status: %d, body: %s", resp.StatusCode, body)
+	}
+
+	var payload struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+		SHA      string `json:"sha"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if payload.Encoding != "base64" && payload.Content != "" {
+		return nil, "", fmt.Errorf("unsupported encoding: %s", payload.Encoding)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(payload.Content)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to decode base64 content: %w", err)
+	}
+
+	return decoded, payload.SHA, nil
+}
+
+func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner, repo, title, body string, labels []string) (int, string, error) {
+	token, err := c.GetInstallationToken(ctx, installationID)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to get token: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues", owner, repo)
+	
+	payloadReq := struct {
+		Title  string   `json:"title"`
+		Body   string   `json:"body"`
+		Labels []string `json:"labels"`
+	}{
+		Title:  title,
+		Body:   body,
+		Labels: labels,
+	}
+
+	payloadBytes, err := json.Marshal(payloadReq)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		respBody, _ := io.ReadAll(resp.Body)
+		return 0, "", fmt.Errorf("failed to create issue, status: %d, body: %s", resp.StatusCode, respBody)
+	}
+
+	var payload struct {
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return 0, "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return payload.Number, payload.HTMLURL, nil
+}
+
+func (c *AppConfig) VerifyApp(ctx context.Context) error {
+	appJWT, err := c.SignAppJWT()
+	if err != nil {
+		return fmt.Errorf("failed to sign app jwt: %w", err)
+	}
+
+	url := "https://api.github.com/app"
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to verify app, status: %d, body: %s", resp.StatusCode, body)
+	}
+
+	return nil
 }

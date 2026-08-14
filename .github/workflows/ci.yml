@@ -6,7 +6,7 @@ on:
 
 jobs:
     test-go:
-        name: Go Engine & SDK Tests
+        name: Go Engine, SDK & Services
         runs-on: ubuntu-latest
         steps:
             - name: Checkout Repository
@@ -16,19 +16,30 @@ jobs:
               uses: actions/setup-go@v5
               with:
                   go-version: "1.26"
+                  check-latest: true
 
-            - name: Run Engine Tests
+            - name: Verify Engine
+              working-directory: apps/engine
               run: |
-                  cd apps/engine
+                  go vet ./...
+                  go build ./...
                   go test -v ./...
 
-            - name: Run SDK Tests
+            - name: Verify SDK
+              working-directory: sdk/go
               run: |
-                  cd sdk/go
+                  go vet ./...
+                  go build ./...
                   go test -v ./...
 
-    build-web:
-        name: Next.js Web App Build & Lint
+            - name: Verify Test Service
+              working-directory: test-service
+              run: |
+                  go vet ./...
+                  go build ./...
+
+    build-apps:
+        name: Frontend Applications Build
         runs-on: ubuntu-latest
         steps:
             - name: Checkout Repository
@@ -39,14 +50,14 @@ jobs:
               with:
                   bun-version: latest
 
-            - name: Install Dependencies
+            - name: Build Web (Astro)
               working-directory: apps/web
-              run: bun install --frozen-lockfile
+              run: |
+                  bun install --frozen-lockfile
+                  bun run build
 
-            - name: Run ESLint
-              working-directory: apps/web
-              run: bun run lint
-
-            - name: Build Next.js Web App
-              working-directory: apps/web
-              run: bun run build
+            - name: Build Dashboard (Next.js)
+              working-directory: apps/dashboard
+              run: |
+                  bun install --frozen-lockfile
+                  bun run build

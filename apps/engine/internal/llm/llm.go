@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
+	"log"
 	"strings"
 
 	"google.golang.org/genai"
@@ -18,25 +18,30 @@ type AnalysisResult struct {
 	SuggestedFix string `json:"suggested_fix"`
 }
 
-// AnalyzeCrash queries Gemini 3.6 Flash using google.golang.org/genai to diagnose the stack trace and AST node.
-func AnalyzeCrash(ctx context.Context, stackTrace string, astSnippet string) (*AnalysisResult, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
-	clientConfig := &genai.ClientConfig{
+// AnalyzeCrash sends the crash stack trace and isolated AST snippet to the Gemini model
+// and returns a structured root cause analysis and suggested fix.
+func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName string) (*AnalysisResult, error) {
+	if apiKey == "" {
+		return nil, fmt.Errorf("GEMINI_API_KEY is missing or empty")
+	}
+	if modelName == "" {
+		return nil, fmt.Errorf("GEMINI_MODEL_NAME is missing or empty")
+	}
+
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
-	}
-
-	client, err := genai.NewClient(ctx, clientConfig)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create genai client: %w", err)
+		return nil, fmt.Errorf("failed to initialize Gemini client: %w", err)
 	}
 
-	prompt := fmt.Sprintf(`You are an expert Go crash triage system.
-Analyze the following panic stack trace and surrounding function source code AST node:
+	prompt := fmt.Sprintf(`You are an expert Go backend engineer and automated incident diagnostician.
+Analyze the following Go panic crash telemetry and isolated function AST node.
 
-### STACK TRACE:
+### Stack Trace:
 %s
 
-### SURROUNDING AST NODE:
+### Surrounding Function AST Node:
 %s
 
 Respond ONLY with a valid JSON object with the following schema:
@@ -45,7 +50,7 @@ Respond ONLY with a valid JSON object with the following schema:
   "suggested_fix": "Detailed solution or code modification to fix the issue"
 }`, stackTrace, astSnippet)
 
-	resp, err := client.Models.GenerateContent(ctx, "gemini-3.5-flash", genai.Text(prompt), &genai.GenerateContentConfig{
+	resp, err := client.Models.GenerateContent(ctx, modelName, genai.Text(prompt), &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
 	})
 	if err != nil {
@@ -63,10 +68,11 @@ Respond ONLY with a valid JSON object with the following schema:
 	}
 	rawText = strings.TrimSpace(rawText)
 
-	var result AnalysisResult
-	if err := json.Unmarshal([]byte(rawText), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse Gemini JSON output: %w (raw response: %s)", err, rawText)
+	var analysis AnalysisResult
+	if err := json.Unmarshal([]byte(rawText), &analysis); err != nil {
+		log.Printf("[GEMINI UNMARSHAL ERROR] Raw response: %s", rawText)
+		return nil, fmt.Errorf("failed to parse Gemini JSON response: %w", err)
 	}
 
-	return &result, nil
+	return &analysis, nil
 }
