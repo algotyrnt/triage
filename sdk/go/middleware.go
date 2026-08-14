@@ -17,27 +17,16 @@ import (
 	"time"
 )
 
-const DefaultEngineURL = "https://triage.algotyrnt.com/api/v1/telemetry"
-
 type middlewareConfig struct {
-	gatewayURL string
-	commit     string
-	owner      string
-	repo       string
+	commit string
+	owner  string
+	repo   string
 }
 
 type Option func(*middlewareConfig)
 
-// WithGatewayURL allows self-hosted deployments to specify a custom Manager Gateway URL.
-func WithGatewayURL(url string) Option {
-	return func(c *middlewareConfig) {
-		if url != "" {
-			c.gatewayURL = url
-		}
-	}
-}
-
 // WithCommit sets the Git commit SHA for on-demand source code resolution.
+// If not provided, the commit is auto-detected via debug.ReadBuildInfo() (Go 1.18+ embedded VCS info).
 func WithCommit(commit string) Option {
 	return func(c *middlewareConfig) {
 		if commit != "" {
@@ -46,7 +35,8 @@ func WithCommit(commit string) Option {
 	}
 }
 
-// WithRepo sets the repository owner and name (e.g. "owner/repo" or ("owner", "repo")).
+// WithRepo sets the repository owner and name (e.g. "owner/repo").
+// Used for on-demand AST resolution via the GitHub Contents API.
 func WithRepo(ownerRepo string) Option {
 	return func(c *middlewareConfig) {
 		if ownerRepo != "" {
@@ -112,7 +102,7 @@ func init() {
 	}
 }
 
-// GetTelemetryMetrics returns current telemetry queue statistics
+// GetTelemetryMetrics returns current telemetry queue statistics.
 func GetTelemetryMetrics() (queued uint64, processed uint64, dropped uint64) {
 	return atomic.LoadUint64(&queuedCount), atomic.LoadUint64(&processedCount), atomic.LoadUint64(&droppedCount)
 }
@@ -164,13 +154,21 @@ func enqueueTelemetry(job TelemetryJob) {
 	}
 }
 
-// Middleware returns an HTTP middleware wrapping standard net/http routers.
-// Managed Usage: triage.Middleware(apiKey, triage.WithRepo("algotyrnt/triage"))
-// Self-Hosted Usage: triage.Middleware(apiKey, triage.WithGatewayURL("https://triage.internal.com/api/telemetry"))
-func Middleware(apiKey string, opts ...Option) func(http.Handler) http.Handler {
+// Middleware returns an HTTP middleware that intercepts panics, isolates the crash site,
+// and dispatches telemetry asynchronously to your self-hosted Triage engine.
+//
+// engineURL is the full telemetry endpoint of your Triage engine, e.g.:
+//
+//	"https://triage.yourcompany.com/api/v1/telemetry"
+//	"http://localhost:8080/api/v1/telemetry"
+//
+// Usage:
+//
+//	handler := triage.Middleware(apiKey, engineURL)(mux)
+//	handler := triage.Middleware(apiKey, engineURL, triage.WithRepo("owner/repo"))(mux)
+func Middleware(apiKey, engineURL string, opts ...Option) func(http.Handler) http.Handler {
 	cfg := &middlewareConfig{
-		gatewayURL: DefaultEngineURL,
-		commit:     getVCSCommit(),
+		commit: getVCSCommit(),
 	}
 
 	for _, opt := range opts {
@@ -189,7 +187,7 @@ func Middleware(apiKey string, opts ...Option) func(http.Handler) http.Handler {
 
 					// Non-blocking enqueue to bounded telemetry worker pool
 					enqueueTelemetry(TelemetryJob{
-						EngineURL:  cfg.gatewayURL,
+						EngineURL:  engineURL,
 						APIKey:     apiKey,
 						Owner:      cfg.owner,
 						Repo:       cfg.repo,

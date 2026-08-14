@@ -28,7 +28,7 @@ func TestMiddlewarePanicRecovery(t *testing.T) {
 		panic("simulated test crash")
 	})
 
-	mw := Middleware("test_key", WithGatewayURL(ts.URL))
+	mw := Middleware("test_key", ts.URL)
 	handler := mw(panicHandler)
 
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -58,7 +58,7 @@ func TestMiddlewarePanicRecovery(t *testing.T) {
 	}
 }
 
-func TestMiddlewareWithGatewayURLOption(t *testing.T) {
+func TestMiddlewareSelfHosted(t *testing.T) {
 	telemetryChan := make(chan []byte, 1)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func TestMiddlewareWithGatewayURLOption(t *testing.T) {
 		panic("simulated self-hosted crash")
 	})
 
-	mw := Middleware("test_selfhosted_key", WithGatewayURL(ts.URL))
+	mw := Middleware("test_selfhosted_key", ts.URL)
 	handler := mw(panicHandler)
 
 	req := httptest.NewRequest("GET", "/self-hosted", nil)
@@ -108,7 +108,7 @@ func TestMiddlewarePreservesInboundTraceparent(t *testing.T) {
 		panic("traceparent panic test")
 	})
 
-	mw := Middleware("test_key", WithGatewayURL(ts.URL))
+	mw := Middleware("test_key", ts.URL)
 	handler := mw(panicHandler)
 
 	req := httptest.NewRequest("GET", "/traceparent-test", nil)
@@ -152,7 +152,7 @@ func TestMiddlewareWithOptions(t *testing.T) {
 
 	mw := Middleware(
 		"test_key",
-		WithGatewayURL(ts.URL),
+		ts.URL,
 		WithCommit("a1b2c3d4e5f6"),
 		WithRepo("algotyrnt/triage"),
 	)
