@@ -2,7 +2,6 @@
 .gitignore
 .env
 .env.*
-!.env.example
 *.md
 engine
 .DS_Store
