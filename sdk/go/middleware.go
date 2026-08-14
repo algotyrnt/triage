@@ -261,7 +261,7 @@ func sendTelemetry(engineURL string, apiKey string, owner string, repo string, c
 		Timeout: 10 * time.Second,
 	}
 
-	req, err := http.NewRequest("POST", engineURL, bytes.NewBuffer(data))
+	req, err := http.NewRequest(http.MethodPost, engineURL, bytes.NewBuffer(data))
 	if err != nil {
 		return
 	}
