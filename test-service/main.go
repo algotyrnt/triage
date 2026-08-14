@@ -22,6 +22,9 @@ func main() {
 	}
 
 	engineURL := os.Getenv("TRIAGE_ENGINE_URL")
+	if engineURL == "" {
+		engineURL = "http://localhost:8080/api/v1/telemetry"
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -40,13 +43,7 @@ func main() {
 		*ptr = 42 // Nil pointer dereference panic
 	})
 
-	// Wrap server multiplexer in triage middleware with WithGatewayURL option for local testing
-	var wrappedHandler http.Handler
-	if engineURL != "" {
-		wrappedHandler = triage.Middleware(apiKey, triage.WithGatewayURL(engineURL))(mux)
-	} else {
-		wrappedHandler = triage.Middleware(apiKey)(mux)
-	}
+	wrappedHandler := triage.Middleware(apiKey, engineURL)(mux)
 
 	log.Printf("Starting test-service on :%s ...", port)
 	if err := http.ListenAndServe(":"+port, wrappedHandler); err != nil {
