@@ -3,24 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-"use client";
+'use client';
 
-import React, { useState } from "react";
-import Link from "next/link";
-import {
-  Terminal,
-  Cpu,
-  Zap,
-  Code2,
-  ArrowRight,
-  Copy,
-  Check,
-  Sparkles,
-} from "lucide-react";
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { Terminal, Cpu, Zap, Code2, ArrowRight, Copy, Check, Sparkles } from 'lucide-react';
 
 export function LandingPage() {
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"ast" | "llm" | "raw">("ast");
+  const [activeTab, setActiveTab] = useState<'ast' | 'llm' | 'raw'>('ast');
 
   const sdkCode = `import (
     "net/http"
@@ -91,7 +82,15 @@ func main() {
         </h1>
 
         <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-          Intercepts Go panics non-blockingly using <code className="text-indigo-700 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">defer + recover</code>. Slices the exact surrounding <code className="text-indigo-700 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">*ast.FuncDecl</code> code node and streams instant root-cause analysis directly to your dashboard.
+          Intercepts Go panics non-blockingly using{' '}
+          <code className="text-indigo-700 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+            defer + recover
+          </code>
+          . Slices the exact surrounding{' '}
+          <code className="text-indigo-700 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+            *ast.FuncDecl
+          </code>{' '}
+          code node and streams instant root-cause analysis directly to your dashboard.
         </p>
 
         <div className="flex items-center justify-center gap-4 pt-4">
@@ -119,36 +118,38 @@ func main() {
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>
                 <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 inline-block"></span>
                 <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span>
-                <span className="ml-2 text-slate-300 font-medium">test-service/main.go:21 [PANIC INTERCEPTED]</span>
+                <span className="ml-2 text-slate-300 font-medium">
+                  test-service/main.go:21 [PANIC INTERCEPTED]
+                </span>
               </div>
 
               <div className="flex gap-1">
-                {(["ast", "llm", "raw"] as const).map((tab) => (
+                {(['ast', 'llm', 'raw'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`px-3 py-1 font-mono text-xs rounded transition-colors ${
                       activeTab === tab
-                        ? "bg-slate-800 text-white font-bold border border-slate-700"
-                        : "text-slate-400 hover:text-white"
+                        ? 'bg-slate-800 text-white font-bold border border-slate-700'
+                        : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {tab === "ast" && "1. Func AST"}
-                    {tab === "llm" && "2. Gemini AI"}
-                    {tab === "raw" && "3. Raw Stack"}
+                    {tab === 'ast' && '1. Func AST'}
+                    {tab === 'llm' && '2. Gemini AI'}
+                    {tab === 'raw' && '3. Raw Stack'}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="p-5 font-mono text-xs text-slate-200">
-              {activeTab === "ast" && (
+              {activeTab === 'ast' && (
                 <div>
                   <div className="text-cyan-400 font-bold mb-2">
                     Extracted *ast.FuncDecl surrounding line 21:
                   </div>
                   <pre className="bg-slate-900 p-4 rounded-md border border-slate-800 leading-relaxed text-slate-300 overflow-x-auto">
-{`func main() {
+                    {`func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/crash", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Triggering nil pointer dereference panic...")
@@ -160,13 +161,13 @@ func main() {
                 </div>
               )}
 
-              {activeTab === "llm" && (
+              {activeTab === 'llm' && (
                 <div>
                   <div className="text-emerald-400 font-bold mb-2">
                     gemini-3.5-flash Structured Diagnosis:
                   </div>
                   <pre className="bg-slate-900 p-4 rounded-md border border-slate-800 leading-relaxed text-emerald-300 overflow-x-auto">
-{`{
+                    {`{
   "root_cause": "Uninitialized pointer dereference (*ptr = 42) on line 21.",
   "suggested_fix": "Allocate memory before assignment: val := 42; ptr = &val"
 }`}
@@ -174,13 +175,11 @@ func main() {
                 </div>
               )}
 
-              {activeTab === "raw" && (
+              {activeTab === 'raw' && (
                 <div>
-                  <div className="text-slate-400 font-bold mb-2">
-                    Raw debug.Stack():
-                  </div>
+                  <div className="text-slate-400 font-bold mb-2">Raw debug.Stack():</div>
                   <pre className="bg-slate-900 p-4 rounded-md border border-slate-800 leading-relaxed text-slate-400 text-[11px] overflow-x-auto">
-{`goroutine 21 [running]:
+                    {`goroutine 21 [running]:
 runtime/debug.Stack()
 	/workspace/sdk/go/middleware.go:28 +0x68
 main.main.func2({0x12995dae8, 0x102893268}, 0x0)
@@ -200,7 +199,13 @@ main.main.func2({0x12995dae8, 0x102893268}, 0x0)
             <Code2 className="w-8 h-8 text-indigo-600" />
             <h3 className="text-lg font-bold text-slate-900">AST Node Isolation</h3>
             <p className="text-slate-600 text-sm leading-relaxed">
-              Uses Go standard <code className="text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded">go/parser</code> to extract only the enclosing <code className="text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded">*ast.FuncDecl</code> around the crash line.
+              Uses Go standard{' '}
+              <code className="text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded">go/parser</code> to
+              extract only the enclosing{' '}
+              <code className="text-indigo-700 bg-indigo-50 px-1 py-0.5 rounded">
+                *ast.FuncDecl
+              </code>{' '}
+              around the crash line.
             </p>
           </div>
 
@@ -208,7 +213,8 @@ main.main.func2({0x12995dae8, 0x102893268}, 0x0)
             <Zap className="w-8 h-8 text-emerald-600" />
             <h3 className="text-lg font-bold text-slate-900">Non-Blocking SDK</h3>
             <p className="text-slate-600 text-sm leading-relaxed">
-              Panic recovery launches an asynchronous, non-blocking goroutine payload so your HTTP handlers remain responsive.
+              Panic recovery launches an asynchronous, non-blocking goroutine payload so your HTTP
+              handlers remain responsive.
             </p>
           </div>
 
@@ -216,7 +222,11 @@ main.main.func2({0x12995dae8, 0x102893268}, 0x0)
             <Cpu className="w-8 h-8 text-purple-600" />
             <h3 className="text-lg font-bold text-slate-900">Gemini 3.5 Flash AI</h3>
             <p className="text-slate-600 text-sm leading-relaxed">
-              Official <code className="text-purple-700 bg-purple-50 px-1 py-0.5 rounded">google.golang.org/genai</code> SDK produces guaranteed JSON schema output with root cause and drop-in fixes.
+              Official{' '}
+              <code className="text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
+                google.golang.org/genai
+              </code>{' '}
+              SDK produces guaranteed JSON schema output with root cause and drop-in fixes.
             </p>
           </div>
         </div>
@@ -228,14 +238,21 @@ main.main.func2({0x12995dae8, 0x102893268}, 0x0)
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-900">Integrate in 3 Lines of Go</h2>
-              <p className="text-slate-600 text-sm">Add triage middleware to any standard Go <code className="text-indigo-700 font-mono">http.Handler</code> multiplexer.</p>
+              <p className="text-slate-600 text-sm">
+                Add triage middleware to any standard Go{' '}
+                <code className="text-indigo-700 font-mono">http.Handler</code> multiplexer.
+              </p>
             </div>
             <button
               onClick={copyCode}
               className="bg-white hover:bg-slate-100 text-slate-900 font-mono text-xs px-4 py-2 rounded border border-slate-300 flex items-center gap-1.5 transition-colors shadow-sm"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? "Copied!" : "Copy Code"}</span>
+              {copied ? (
+                <Check className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+              <span>{copied ? 'Copied!' : 'Copy Code'}</span>
             </button>
           </div>
 
@@ -248,7 +265,7 @@ main.main.func2({0x12995dae8, 0x102893268}, 0x0)
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-slate-50 py-10 px-4 text-center text-xs font-mono text-slate-500">
         <p>
-          Created by{" "}
+          Created by{' '}
           <a
             href="https://algotyrnt.com"
             target="_blank"

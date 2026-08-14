@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ScreenId } from '../types';
+import { ScreenId } from '@/types';
 import {
   Terminal,
   Activity,
@@ -37,17 +37,33 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
 }) => {
   const navItems: { id: ScreenId; label: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <Terminal className="w-3.5 h-3.5" /> },
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: <Terminal className="w-3.5 h-3.5" />,
+    },
     {
       id: 'incident_detail',
       label: 'Panic Inspector',
       icon: <AlertTriangle className="w-3.5 h-3.5" />,
     },
     { id: 'ast', label: 'AST Index', icon: <Code2 className="w-3.5 h-3.5" /> },
-    { id: 'webhooks', label: 'Webhooks', icon: <Webhook className="w-3.5 h-3.5" /> },
+    {
+      id: 'webhooks',
+      label: 'Webhooks',
+      icon: <Webhook className="w-3.5 h-3.5" />,
+    },
     { id: 'team', label: 'Team', icon: <Users className="w-3.5 h-3.5" /> },
-    { id: 'status', label: 'Engine Status', icon: <Activity className="w-3.5 h-3.5" /> },
-    { id: 'settings', label: 'Settings', icon: <Settings className="w-3.5 h-3.5" /> },
+    {
+      id: 'status',
+      label: 'Engine Status',
+      icon: <Activity className="w-3.5 h-3.5" />,
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: <Settings className="w-3.5 h-3.5" />,
+    },
   ];
 
   return (

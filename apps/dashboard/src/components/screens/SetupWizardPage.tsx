@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ScreenId } from '../../types';
-import { GithubIcon as Github } from '../GithubIcon';
-import { engineClient } from '../../services/engineClient';
+import { ScreenId } from '@/types';
+import { GithubIcon as Github } from '@/components/GithubIcon';
+import { engineClient } from '@/services/engineClient';
 import {
   Settings,
   CheckCircle2,
@@ -24,14 +24,14 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Step 1: Create App
   const [appCreated, setAppCreated] = useState(false);
-  
+
   // Step 2: Install App
   const [appInstalled, setAppInstalled] = useState(false);
   const [repos, setRepos] = useState<{ owner: string; repo: string }[]>([]);
-  
+
   // Step 3: OAuth
   const [oauthConfigured, setOauthConfigured] = useState(false);
   const [clientId, setClientId] = useState('');
@@ -41,7 +41,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   const [llmConfigured, setLlmConfigured] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
-  
+
   // Step 5: Test
   const [connectionSuccess, setConnectionSuccess] = useState(false);
   const [appName, setAppName] = useState('');
@@ -51,16 +51,16 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     const step = params.get('setup_step');
     const isAppCreated = params.get('app_created');
     const isAppInstalled = params.get('app_installed');
-    
+
     if (step) {
       setCurrentStep(parseInt(step, 10));
     }
-    
+
     if (isAppCreated === 'true') {
       setAppCreated(true);
       if (!step) setCurrentStep(2);
     }
-    
+
     if (isAppInstalled === 'true') {
       setAppInstalled(true);
       fetchRepos();
@@ -80,7 +80,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       }
       if (status.oauth) setOauthConfigured(true);
       if (status.llm) setLlmConfigured(true);
-      
+
       if (status.github_app && status.installation && status.oauth && status.llm) {
         setCurrentStep(5);
       } else if (status.github_app && status.installation && status.oauth) {
@@ -91,7 +91,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
         setCurrentStep(2);
       }
     } catch (err) {
-      console.error("Failed to check status", err);
+      console.error('Failed to check status', err);
     }
   };
 
@@ -100,7 +100,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       const installedRepos = await engineClient.getInstalledRepos();
       setRepos(installedRepos);
     } catch (err) {
-      console.error("Failed to fetch repos", err);
+      console.error('Failed to fetch repos', err);
     }
   };
 
@@ -109,17 +109,17 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     setError(null);
     try {
       const { manifest } = await engineClient.getSetupManifest(window.location.origin);
-      
+
       // Create hidden form to POST manifest to GitHub
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = 'https://github.com/settings/apps/new';
-      
+
       const input = document.createElement('input');
       input.type = 'hidden';
       input.name = 'manifest';
       input.value = JSON.stringify(manifest);
-      
+
       form.appendChild(input);
       document.body.appendChild(form);
       form.submit();
@@ -146,7 +146,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       setError('Client ID and Secret are required');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -165,7 +165,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       setError('API Key and Model Name are required');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -210,12 +210,13 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-between mb-8 w-full max-w-2xl">
       {[1, 2, 3, 4, 5].map((step) => {
-        const isCompleted = currentStep > step || 
-          (step === 1 && appCreated) || 
-          (step === 2 && appInstalled) || 
+        const isCompleted =
+          currentStep > step ||
+          (step === 1 && appCreated) ||
+          (step === 2 && appInstalled) ||
           (step === 3 && oauthConfigured) ||
           (step === 4 && llmConfigured);
-          
+
         return (
           <React.Fragment key={step}>
             <div className="flex flex-col items-center">
@@ -224,25 +225,27 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   currentStep === step
                     ? 'bg-black text-white'
                     : isCompleted
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-200 text-slate-500'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-200 text-slate-500'
                 }`}
               >
-                {isCompleted ? (
-                  <CheckCircle2 className="w-4 h-4" />
-                ) : (
-                  step
-                )}
+                {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : step}
               </div>
               <span className="text-[10px] uppercase tracking-wider font-mono text-slate-500 mt-2">
-                {step === 1 ? 'Create App' : step === 2 ? 'Install' : step === 3 ? 'OAuth' : step === 4 ? 'AI Config' : 'Verify'}
+                {step === 1
+                  ? 'Create App'
+                  : step === 2
+                    ? 'Install'
+                    : step === 3
+                      ? 'OAuth'
+                      : step === 4
+                        ? 'AI Config'
+                        : 'Verify'}
               </span>
             </div>
             {step < 5 && (
               <div
-                className={`flex-1 h-px mx-4 ${
-                  isCompleted ? 'bg-emerald-600' : 'bg-slate-200'
-                }`}
+                className={`flex-1 h-px mx-4 ${isCompleted ? 'bg-emerald-600' : 'bg-slate-200'}`}
               />
             )}
           </React.Fragment>
@@ -254,7 +257,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   return (
     <div className="min-h-[calc(100vh-100px)] bg-slate-50 flex flex-col items-center justify-center p-4">
       {renderStepIndicator()}
-      
+
       <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-sm p-8 shadow-none space-y-8">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-sm flex items-start gap-3">
@@ -271,7 +274,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 <Github className="w-6 h-6" /> Create GitHub App
               </h2>
               <p className="text-sm text-slate-600 font-sans">
-                Triage requires a GitHub App to access repositories, read ASTs, and create issues for detected crashes. We'll automatically generate the configuration manifest for you.
+                Triage requires a GitHub App to access repositories, read ASTs, and create issues
+                for detected crashes. We'll automatically generate the configuration manifest for
+                you.
               </p>
             </div>
 
@@ -305,7 +310,11 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 disabled={loading}
                 className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-4 h-4" />
+                )}
                 {loading ? 'Generating Manifest...' : 'Create GitHub App on GitHub'}
               </button>
             )}
@@ -320,7 +329,8 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 <Server className="w-6 h-6" /> Install App into Organization
               </h2>
               <p className="text-sm text-slate-600 font-sans">
-                Now that the App is created, it needs to be installed into your GitHub organization or personal account to grant access to specific repositories.
+                Now that the App is created, it needs to be installed into your GitHub organization
+                or personal account to grant access to specific repositories.
               </p>
             </div>
 
@@ -330,13 +340,18 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   <CheckCircle2 className="w-5 h-5" />
                   App installed successfully
                 </div>
-                
+
                 {repos.length > 0 && (
                   <div className="bg-slate-50 border border-slate-200 rounded-sm p-4">
-                    <h3 className="text-xs font-mono font-semibold text-slate-900 mb-2 uppercase tracking-wider">Granted Repositories</h3>
+                    <h3 className="text-xs font-mono font-semibold text-slate-900 mb-2 uppercase tracking-wider">
+                      Granted Repositories
+                    </h3>
                     <ul className="space-y-1">
                       {repos.map((repo, idx) => (
-                        <li key={idx} className="text-sm font-mono text-slate-700 flex items-center gap-2">
+                        <li
+                          key={idx}
+                          className="text-sm font-mono text-slate-700 flex items-center gap-2"
+                        >
                           <Github className="w-3.5 h-3.5" />
                           {repo.owner}/{repo.repo}
                         </li>
@@ -344,7 +359,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                     </ul>
                   </div>
                 )}
-                
+
                 <button
                   onClick={() => setCurrentStep(3)}
                   className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
@@ -358,7 +373,11 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 disabled={loading}
                 className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-4 h-4" />
+                )}
                 {loading ? 'Preparing Install...' : 'Install GitHub App'}
               </button>
             )}
@@ -373,7 +392,8 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 <Key className="w-6 h-6" /> Dashboard Login Configuration
               </h2>
               <p className="text-sm text-slate-600 font-sans">
-                To allow users to log in to the Triage dashboard using GitHub, we need the OAuth credentials from your GitHub App.
+                To allow users to log in to the Triage dashboard using GitHub, we need the OAuth
+                credentials from your GitHub App.
               </p>
             </div>
 
@@ -393,7 +413,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
             ) : (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">Client ID</label>
+                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                    Client ID
+                  </label>
                   <input
                     type="text"
                     value={clientId}
@@ -403,7 +425,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">Client Secret</label>
+                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                    Client Secret
+                  </label>
                   <input
                     type="password"
                     value={clientSecret}
@@ -417,7 +441,11 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   disabled={loading}
                   className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
                   Save OAuth Configuration
                 </button>
               </div>
@@ -433,7 +461,8 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 <Brain className="w-6 h-6" /> AI Configuration
               </h2>
               <p className="text-sm text-slate-600 font-sans">
-                Triage uses Gemini to automatically analyze crashes. Please provide your API credentials to continue.
+                Triage uses Gemini to automatically analyze crashes. Please provide your API
+                credentials to continue.
               </p>
             </div>
 
@@ -453,7 +482,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
             ) : (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">Gemini API Key</label>
+                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                    Gemini API Key
+                  </label>
                   <input
                     type="password"
                     value={geminiApiKey}
@@ -463,7 +494,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">Model Name</label>
+                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                    Model Name
+                  </label>
                   <input
                     type="text"
                     value={geminiModel}
@@ -477,7 +510,11 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   disabled={loading}
                   className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
                   Save AI Configuration
                 </button>
               </div>
@@ -493,7 +530,8 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 <Settings className="w-6 h-6" /> Verify Setup
               </h2>
               <p className="text-sm text-slate-600 font-sans">
-                Run a final test to ensure the dashboard can communicate with the Triage engine and the GitHub API successfully.
+                Run a final test to ensure the dashboard can communicate with the Triage engine and
+                the GitHub API successfully.
               </p>
             </div>
 
@@ -504,8 +542,12 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                     <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="font-bold font-sans text-lg text-emerald-900">Setup Complete!</h3>
-                    <p className="font-mono text-sm mt-1">GitHub App verified{appName ? `: ${appName}` : ''}</p>
+                    <h3 className="font-bold font-sans text-lg text-emerald-900">
+                      Setup Complete!
+                    </h3>
+                    <p className="font-mono text-sm mt-1">
+                      GitHub App verified{appName ? `: ${appName}` : ''}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -521,7 +563,11 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 disabled={loading}
                 className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
                 {loading ? 'Testing...' : 'Test Connection'}
               </button>
             )}

@@ -1,63 +1,102 @@
 name: Triage CI Pipeline
 
 on:
-    pull_request:
-        branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-    test-go:
-        name: Go Engine, SDK & Services
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+  format-check:
+    name: Code Formatting & Lint Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: "1.26"
-                  check-latest: true
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: true
 
-            - name: Verify Engine
-              working-directory: apps/engine
-              run: |
-                  go vet ./...
-                  go build ./...
-                  go test -v ./...
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-            - name: Verify SDK
-              working-directory: sdk/go
-              run: |
-                  go vet ./...
-                  go build ./...
-                  go test -v ./...
+      - name: Check Go Formatting
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Unformatted Go files detected:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
 
-            - name: Verify Test Service
-              working-directory: test-service
-              run: |
-                  go vet ./...
-                  go build ./...
+      - name: Check Web Formatting
+        working-directory: apps/web
+        run: |
+          bun install --frozen-lockfile
+          bun run format:check
 
-    build-apps:
-        name: Frontend Applications Build
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+      - name: Check Dashboard Formatting
+        working-directory: apps/dashboard
+        run: |
+          bun install --frozen-lockfile
+          bun run format:check
 
-            - name: Set up Bun
-              uses: oven-sh/setup-bun@v2
-              with:
-                  bun-version: latest
+  test-go:
+    name: Go Engine, SDK & Services
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-            - name: Build Web (Astro)
-              working-directory: apps/web
-              run: |
-                  bun install --frozen-lockfile
-                  bun run build
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: true
 
-            - name: Build Dashboard (Next.js)
-              working-directory: apps/dashboard
-              run: |
-                  bun install --frozen-lockfile
-                  bun run build
+      - name: Verify Engine
+        working-directory: apps/engine
+        run: |
+          go vet ./...
+          go build ./...
+          go test -v ./...
+
+      - name: Verify SDK
+        working-directory: sdk/go
+        run: |
+          go vet ./...
+          go build ./...
+          go test -v ./...
+
+      - name: Verify Test Service
+        working-directory: test-service
+        run: |
+          go vet ./...
+          go build ./...
+
+  build-apps:
+    name: Frontend Applications Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build Web (Astro)
+        working-directory: apps/web
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Build Dashboard (Next.js)
+        working-directory: apps/dashboard
+        run: |
+          bun install --frozen-lockfile
+          bun run build

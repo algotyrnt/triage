@@ -279,13 +279,13 @@ func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL stri
 func (db *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	if db.Pool == nil {
 		return map[string]interface{}{
-			"status":            "healthy",
-			"database":          "unconnected (in-memory mode)",
-			"total_incidents":   0,
-			"total_projects":    1,
-			"funcs_indexed":     1420,
-			"engine_version":    "v1.4.2",
-			"uptime_seconds":    120,
+			"status":          "healthy",
+			"database":        "unconnected (in-memory mode)",
+			"total_incidents": 0,
+			"total_projects":  1,
+			"funcs_indexed":   1420,
+			"engine_version":  "v1.4.2",
+			"uptime_seconds":  120,
 		}, nil
 	}
 

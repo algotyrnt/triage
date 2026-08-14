@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { Incident, ScreenId } from "../../types";
-import { engineClient } from "../../services/engineClient";
+import React, { useState, useEffect } from 'react';
+import { Incident, ScreenId } from '@/types';
+import { engineClient } from '@/services/engineClient';
 import {
   Key,
   GitBranch,
@@ -19,7 +19,7 @@ import {
   Zap,
   Terminal,
   RefreshCw,
-} from "lucide-react";
+} from 'lucide-react';
 
 interface DashboardPageProps {
   incidents: Incident[];
@@ -33,15 +33,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   incidents,
   onSelectIncident,
   onNavigate,
-  activeRepo = "algotyrnt/triage",
-  apiKey = "tr_live_demo_key_9042",
+  activeRepo = 'algotyrnt/triage',
+  apiKey = 'tr_live_demo_key_9042',
 }) => {
-  const [activeCodeTab, setActiveCodeTab] = useState<
-    "main.go" | "middleware.go" | "go.mod"
-  >("main.go");
+  const [activeCodeTab, setActiveCodeTab] = useState<'main.go' | 'middleware.go' | 'go.mod'>(
+    'main.go',
+  );
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
-  const [stats, setStats] = useState<{ total_incidents: number; funcs_indexed: number; total_projects: number } | null>(null);
+  const [stats, setStats] = useState<{
+    total_incidents: number;
+    funcs_indexed: number;
+    total_projects: number;
+  } | null>(null);
 
   useEffect(() => {
     engineClient.getStats().then((data) => {
@@ -50,7 +54,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   }, []);
 
   const codeSnippets = {
-    "main.go": `package main
+    'main.go': `package main
 
 import (
 	"log"
@@ -71,7 +75,7 @@ func main() {
 	log.Println("[INFO] Server listening on :8081...")
 	http.ListenAndServe(":8081", handler)
 }`,
-    "middleware.go": `package middleware
+    'middleware.go': `package middleware
 
 import (
 	"net/http"
@@ -82,7 +86,7 @@ import (
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	return triage.Middleware("${apiKey}", triage.WithRepo("${activeRepo}"))(next)
 }`,
-    "go.mod": `module ${activeRepo}
+    'go.mod': `module ${activeRepo}
 
 go 1.22
 
@@ -124,7 +128,7 @@ require (
             <span>Engine Operational</span>
           </div>
           <button
-            onClick={() => onNavigate("status")}
+            onClick={() => onNavigate('status')}
             className="text-xs font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-sm transition-colors"
           >
             Metrics
@@ -150,12 +154,10 @@ require (
               ) : (
                 <Copy className="w-3 h-3" />
               )}
-              <span>{copiedKey ? "Copied" : "Copy"}</span>
+              <span>{copiedKey ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
-          <div className="font-mono text-xs font-bold text-slate-900 truncate">
-            {apiKey}
-          </div>
+          <div className="font-mono text-xs font-bold text-slate-900 truncate">{apiKey}</div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
             <span>Env: Production</span>
             <span className="text-emerald-600 font-semibold">Active</span>
@@ -173,9 +175,7 @@ require (
               On-Demand AST
             </span>
           </div>
-          <div className="font-mono text-xs font-bold text-slate-900 truncate">
-            {activeRepo}
-          </div>
+          <div className="font-mono text-xs font-bold text-slate-900 truncate">{activeRepo}</div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
             <span>Branch: main</span>
             <span className="text-slate-800 font-mono">Go 1.22+</span>
@@ -190,7 +190,7 @@ require (
               <span>AST Index Status</span>
             </span>
             <button
-              onClick={() => onNavigate("ast")}
+              onClick={() => onNavigate('ast')}
               className="text-slate-600 hover:text-black text-[11px] underline"
             >
               Tree
@@ -213,15 +213,14 @@ require (
               <span>Total Dispatches</span>
             </span>
             <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.2 rounded-sm font-mono font-bold">
-              {incidents.filter((i) => i.status === "CRITICAL").length} Critical
+              {incidents.filter((i) => i.status === 'CRITICAL').length} Critical
             </span>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900">
             {stats ? `${stats.total_incidents.toLocaleString()} Telemetry Events` : '— Loading...'}
           </div>
           <div className="text-[11px] font-mono text-slate-500">
-            Avg Latency:{" "}
-            <span className="text-slate-800 font-semibold">14ms</span>
+            Avg Latency: <span className="text-slate-800 font-semibold">14ms</span>
           </div>
         </div>
       </div>
@@ -241,14 +240,14 @@ require (
 
             {/* Tab Switcher */}
             <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-sm p-0.5">
-              {(["main.go", "middleware.go", "go.mod"] as const).map((tab) => (
+              {(['main.go', 'middleware.go', 'go.mod'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveCodeTab(tab)}
                   className={`px-2 py-0.5 text-[11px] font-mono rounded-sm transition-colors ${
                     activeCodeTab === tab
-                      ? "bg-black text-white font-bold"
-                      : "text-slate-600 hover:text-black"
+                      ? 'bg-black text-white font-bold'
+                      : 'text-slate-600 hover:text-black'
                   }`}
                 >
                   {tab}
@@ -268,7 +267,7 @@ require (
               ) : (
                 <Copy className="w-3 h-3" />
               )}
-              <span>{copiedSnippet ? "Copied" : "Copy"}</span>
+              <span>{copiedSnippet ? 'Copied' : 'Copy'}</span>
             </button>
 
             <pre className="overflow-x-auto leading-relaxed text-[11.5px] text-slate-200">
@@ -283,10 +282,9 @@ require (
               <span>How `defer triage.Recovery()` works under the hood:</span>
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
-              When a Go goroutine panics, `Recovery()` inspects
-              `runtime/debug.Stack()`, extracts the exact source file and byte
-              line offset (e.g. `user.go:42`), and queries Triage AST repository
-              index to isolate the crashing `FuncDecl` block in under 15ms.
+              When a Go goroutine panics, `Recovery()` inspects `runtime/debug.Stack()`, extracts
+              the exact source file and byte line offset (e.g. `user.go:42`), and queries Triage AST
+              repository index to isolate the crashing `FuncDecl` block in under 15ms.
             </p>
           </div>
         </div>
@@ -312,7 +310,9 @@ require (
                     <Terminal className="w-5 h-5 text-slate-400" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="text-xs font-bold text-slate-800">No Crash Incidents Recorded</h3>
+                    <h3 className="text-xs font-bold text-slate-800">
+                      No Crash Incidents Recorded
+                    </h3>
                     <p className="text-[11px] text-slate-500 max-w-xs mx-auto leading-normal">
                       Integrate the Go SDK into your app to ingest live crash telemetry.
                     </p>
@@ -320,7 +320,7 @@ require (
                 </div>
               ) : (
                 incidents.map((incident) => {
-                  const isCritical = incident.status === "CRITICAL";
+                  const isCritical = incident.status === 'CRITICAL';
                   return (
                     <div
                       key={incident.id}
@@ -328,7 +328,7 @@ require (
                       tabIndex={0}
                       onClick={() => onSelectIncident(incident.id)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
+                        if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           onSelectIncident(incident.id);
                         }
@@ -343,10 +343,10 @@ require (
                           <span
                             className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm border ${
                               isCritical
-                                ? "bg-red-50 text-red-700 border-red-200"
-                                : incident.status === "INVESTIGATING"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : incident.status === 'INVESTIGATING'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             }`}
                           >
                             {incident.status}
@@ -362,10 +362,8 @@ require (
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] font-mono text-slate-500">
-                        <span className="text-slate-600">
-                          {incident.triggeringFile}
-                        </span>
-                        <span>{incident.timestamp.split(" ")[1]}</span>
+                        <span className="text-slate-600">{incident.triggeringFile}</span>
+                        <span>{incident.timestamp.split(' ')[1]}</span>
                       </div>
                     </div>
                   );
@@ -377,7 +375,7 @@ require (
           {/* Footer Action */}
           <div className="p-3 bg-slate-50 border-t border-slate-200 text-center">
             <button
-              onClick={() => onNavigate("incident_detail")}
+              onClick={() => onNavigate('incident_detail')}
               className="w-full bg-slate-900 hover:bg-black text-white font-mono text-xs py-2 px-3 rounded-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <span>Inspect All Incidents in AST Inspector</span>

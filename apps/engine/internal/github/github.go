@@ -183,7 +183,7 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 	}
 
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues", owner, repo)
-	
+
 	payloadReq := struct {
 		Title  string   `json:"title"`
 		Body   string   `json:"body"`

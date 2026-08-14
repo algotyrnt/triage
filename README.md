@@ -68,10 +68,10 @@ func main() {
 
 `engineURL` is the only required argument beyond the API key — it must be the full URL of your engine's telemetry endpoint.
 
-| Option | Description |
-|---|---|
+| Option                   | Description                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------- |
 | `WithCommit(sha string)` | Override the Git commit SHA (auto-detected via `debug.ReadBuildInfo` if omitted) |
-| `WithRepo("owner/repo")` | Set the GitHub repository for on-demand AST resolution |
+| `WithRepo("owner/repo")` | Set the GitHub repository for on-demand AST resolution                           |
 
 ```go
 // With optional metadata
@@ -111,11 +111,11 @@ docker compose up --build -d
 
 This starts three containers:
 
-| Container | Port | Description |
-|---|---|---|
-| `triage-db` | `5432` | PostgreSQL 16 — schema auto-applied from `db/schema.sql` |
-| `triage-engine` | `8080` | Go engine — all API, setup, and auth routes |
-| `triage-dashboard` | `3000` | Next.js Studio Dashboard |
+| Container          | Port   | Description                                              |
+| ------------------ | ------ | -------------------------------------------------------- |
+| `triage-db`        | `5432` | PostgreSQL 16 — schema auto-applied from `db/schema.sql` |
+| `triage-engine`    | `8080` | Go engine — all API, setup, and auth routes              |
+| `triage-dashboard` | `3000` | Next.js Studio Dashboard                                 |
 
 > **Production deployment?** The only values worth overriding are the Postgres credentials. Change `POSTGRES_PASSWORD` (and the matching `DATABASE_URL`) in `docker-compose.yml` before first boot. Everything else — GitHub App credentials, OAuth secrets, Gemini API key — is configured through the setup wizard and stored securely in the database.
 
@@ -160,26 +160,25 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet 
 
 ### Engine Configuration (Optional Overrides)
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | — | PostgreSQL connection string (**required**) |
-| `PORT` | `8080` | Engine listen port |
-| `TRIAGE_API_KEY` | — | Fallback static API key (used when DB is unreachable) |
-| `GEMINI_API_KEY` | — | Overrides the Gemini key stored in DB |
-| `GEMINI_MODEL_NAME` | — | Overrides the model name stored in DB |
-| `AST_WORKSPACE_ROOT` | `.` | Local path used as fallback for on-demand AST resolution |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Dashboard origin (used for OAuth redirect URLs) |
+| Variable              | Default                 | Description                                              |
+| --------------------- | ----------------------- | -------------------------------------------------------- |
+| `DATABASE_URL`        | —                       | PostgreSQL connection string (**required**)              |
+| `PORT`                | `8080`                  | Engine listen port                                       |
+| `TRIAGE_API_KEY`      | —                       | Fallback static API key (used when DB is unreachable)    |
+| `GEMINI_API_KEY`      | —                       | Overrides the Gemini key stored in DB                    |
+| `GEMINI_MODEL_NAME`   | —                       | Overrides the model name stored in DB                    |
+| `AST_WORKSPACE_ROOT`  | `.`                     | Local path used as fallback for on-demand AST resolution |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Dashboard origin (used for OAuth redirect URLs)          |
 
 ### Test Service (`test-service/.env.example`)
 
-| Variable | Default | Description |
-|---|---|---|
-| `TRIAGE_API_KEY` | `tr_test_key_9042` | API key sent with telemetry payloads |
-| `TRIAGE_ENGINE_URL` | SDK default | Engine URL override for local testing |
-| `PORT` | `8081` | Test service listen port |
+| Variable            | Default            | Description                           |
+| ------------------- | ------------------ | ------------------------------------- |
+| `TRIAGE_API_KEY`    | `tr_test_key_9042` | API key sent with telemetry payloads  |
+| `TRIAGE_ENGINE_URL` | SDK default        | Engine URL override for local testing |
+| `PORT`              | `8081`             | Test service listen port              |
 
 ---
-
 
 ## Repository Structure
 
