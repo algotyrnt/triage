@@ -157,7 +157,6 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 		}
 
 		br := m.pool.SendBatch(ctx, batch)
-		defer br.Close()
 
 		var firstErr error
 		for i := 0; i < len(funcs); i++ {
