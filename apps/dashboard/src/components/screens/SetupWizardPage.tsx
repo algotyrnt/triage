@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ScreenId } from '../../types';
-import { GithubIcon as Github } from '../GithubIcon';
-import { engineClient } from '../../services/engineClient';
+import { ScreenId } from '@/types';
+import { GithubIcon as Github } from '@/components/GithubIcon';
+import { engineClient } from '@/services/engineClient';
 import {
   Settings,
   CheckCircle2,

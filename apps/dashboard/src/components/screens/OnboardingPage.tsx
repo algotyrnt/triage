@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { ScreenId } from "../../types";
+import { ScreenId } from "@/types";
 import {
   GitBranch,
   CheckCircle2,
@@ -12,7 +12,7 @@ import {
   Layers,
   Sparkles,
 } from "lucide-react";
-import { engineClient } from "../../services/engineClient";
+import { engineClient } from "@/services/engineClient";
 
 interface OnboardingPageProps {
   onNavigate: (screen: ScreenId) => void;

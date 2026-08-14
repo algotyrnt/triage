@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { ScreenId } from '../../types';
-import { GithubIcon as Github } from '../GithubIcon';
+import { ScreenId } from '@/types';
+import { GithubIcon as Github } from '@/components/GithubIcon';
 import { ShieldCheck, Lock, Check, ArrowRight } from 'lucide-react';
 
 interface LoginPageProps {

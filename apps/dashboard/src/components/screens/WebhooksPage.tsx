@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { WebhookLog, ScreenId } from '../../types';
+import { WebhookLog, ScreenId } from '@/types';
 import {
   Webhook,
   CheckCircle2,

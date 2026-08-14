@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { MetricHourly, SystemHealthComponent, ScreenId } from '../../types';
+import { MetricHourly, SystemHealthComponent, ScreenId } from '@/types';
 import {
   Activity,
   CheckCircle2,

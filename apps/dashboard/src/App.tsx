@@ -4,21 +4,21 @@
  */
 
 import React, { useState } from 'react';
-import { Incident, ScreenId } from './types';
+import { Incident, ScreenId } from '@/types';
 
-import { Header } from './components/Header';
-import { LoginPage } from './components/screens/LoginPage';
-import { OnboardingPage } from './components/screens/OnboardingPage';
-import { DashboardPage } from './components/screens/DashboardPage';
-import { IncidentDetailPage } from './components/screens/IncidentDetailPage';
-import { AstExplorerPage } from './components/screens/AstExplorerPage';
-import { WebhooksPage } from './components/screens/WebhooksPage';
-import { TeamPage } from './components/screens/TeamPage';
-import { SystemStatusPage } from './components/screens/SystemStatusPage';
-import { SettingsPage } from './components/screens/SettingsPage';
-import { SetupWizardPage } from './components/screens/SetupWizardPage';
+import { Header } from '@/components/Header';
+import { LoginPage } from '@/components/screens/LoginPage';
+import { OnboardingPage } from '@/components/screens/OnboardingPage';
+import { DashboardPage } from '@/components/screens/DashboardPage';
+import { IncidentDetailPage } from '@/components/screens/IncidentDetailPage';
+import { AstExplorerPage } from '@/components/screens/AstExplorerPage';
+import { WebhooksPage } from '@/components/screens/WebhooksPage';
+import { TeamPage } from '@/components/screens/TeamPage';
+import { SystemStatusPage } from '@/components/screens/SystemStatusPage';
+import { SettingsPage } from '@/components/screens/SettingsPage';
+import { SetupWizardPage } from '@/components/screens/SetupWizardPage';
 
-import { engineClient } from './services/engineClient';
+import { engineClient } from '@/services/engineClient';
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 type ToastVariant = 'success' | 'error';

@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { ScreenId } from '../types';
+import { ScreenId } from '@/types';
 import {
   Terminal,
   Activity,

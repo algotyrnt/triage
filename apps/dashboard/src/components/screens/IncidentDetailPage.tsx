@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Incident, ScreenId } from '../../types';
-import { GithubIcon as Github } from '../GithubIcon';
+import { Incident, ScreenId, GEMINI_MODEL_NAME } from '@/types';
+import { GithubIcon as Github } from '@/components/GithubIcon';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -21,7 +21,6 @@ import {
   ChevronRight,
   ExternalLink,
 } from 'lucide-react';
-import { GEMINI_MODEL_NAME } from '../../types';
 
 interface IncidentDetailPageProps {
   incident: Incident;

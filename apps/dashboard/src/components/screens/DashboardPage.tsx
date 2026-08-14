@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Incident, ScreenId } from "../../types";
-import { engineClient } from "../../services/engineClient";
+import { Incident, ScreenId } from "@/types";
+import { engineClient } from "@/services/engineClient";
 import {
   Key,
   GitBranch,

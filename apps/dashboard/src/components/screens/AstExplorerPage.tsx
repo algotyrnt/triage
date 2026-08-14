@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { AstCommitIndex, AstFile, AstNode, ScreenId } from '../../types';
+import { AstCommitIndex, AstFile, AstNode, ScreenId } from '@/types';
 import {
   Code2,
   Folder,

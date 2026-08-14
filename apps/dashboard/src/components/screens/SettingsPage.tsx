@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ApiKey, ScreenId } from '../../types';
+import { ApiKey, ScreenId } from '@/types';
 import {
   Settings,
   Key,
@@ -20,7 +20,7 @@ import {
   Sliders,
   Brain,
 } from 'lucide-react';
-import { engineClient } from '../../services/engineClient';
+import { engineClient } from '@/services/engineClient';
 
 interface SettingsPageProps {
   apiKeys: ApiKey[];

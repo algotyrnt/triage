@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { TeamMember, ScreenId } from "../../types";
-import { GithubIcon as Github } from "../GithubIcon";
+import { TeamMember, ScreenId } from "@/types";
+import { GithubIcon as Github } from "@/components/GithubIcon";
 import { Users, Shield, Lock, UserPlus, X, Mail } from "lucide-react";
 
 interface TeamPageProps {
