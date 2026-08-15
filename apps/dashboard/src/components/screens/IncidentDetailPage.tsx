@@ -180,7 +180,11 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
           >
             <Sparkles className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : 'text-amber-400'}`} />
             <span>
-              {analyzing ? 'Running Analysis...' : `Re-analyze with ${GEMINI_MODEL_NAME}`}
+              {analyzing
+                ? 'Running Analysis...'
+                : GEMINI_MODEL_NAME
+                  ? `Re-analyze with ${GEMINI_MODEL_NAME}`
+                  : 'Re-analyze with Gemini AI'}
             </span>
           </button>
         </div>
@@ -203,7 +207,8 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-500" />
                   <span className="font-bold text-slate-900 text-sm">
-                    Gemini AI Structured Root Cause Analysis ({GEMINI_MODEL_NAME})
+                    Gemini AI Structured Root Cause Analysis
+                    {GEMINI_MODEL_NAME ? ` (${GEMINI_MODEL_NAME})` : ''}
                   </span>
                 </div>
                 <span className="text-[10px] bg-black text-white px-2 py-0.5 rounded-sm font-bold">

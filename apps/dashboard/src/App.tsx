@@ -333,7 +333,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
               <span>Zero-Overhead Go Crash Isolation</span>
             </div>
             <div>
-              Powered by <span className="text-slate-900 font-medium">gemini-3.5-flash</span> &amp;
+              Powered by <span className="text-slate-900 font-medium">Gemini AI</span> &amp;
               AST Parser
             </div>
           </div>
