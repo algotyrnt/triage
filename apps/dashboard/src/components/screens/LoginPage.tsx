@@ -25,7 +25,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
   return (
     <div className="min-h-[calc(100vh-100px)] bg-slate-50 flex flex-col items-center justify-center p-4">
       {/* 420px Centered Card */}
-      <div className="w-full max-w-[420px] bg-white border border-slate-200 rounded-sm p-6 shadow-none space-y-6">
+      <div className="w-full max-w-105 bg-white border border-slate-200 rounded-sm p-6 shadow-none space-y-6">
         {/* Header Block */}
         <div className="text-center space-y-2">
           <div className="inline-block bg-black text-white font-mono font-bold text-sm px-3 py-1 rounded-sm tracking-widest uppercase">

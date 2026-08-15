@@ -361,7 +361,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Triggering File:</span>
-                <span className="text-slate-900 font-semibold truncate max-w-[180px]">
+                <span className="text-slate-900 font-semibold truncate max-w-45">
                   {incident.triggeringFile}
                 </span>
               </div>
