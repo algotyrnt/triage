@@ -50,13 +50,13 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 
 ## Architecture at a Glance
 
-| Component | Port | Technology | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Go Client SDK** | Embedded | Go 1.22+ | Non-blocking HTTP middleware with panic recovery |
-| **Triage Engine** | `:8080` | Go 1.26+ | Telemetry ingestion, AST slicing, Gemini AI client, REST APIs |
-| **Studio Dashboard** | `:3000` | Next.js 16 | Real-time incident inspector, AST explorer, setup wizard |
-| **Documentation & Web**| `:4321` | Astro & Starlight | Public landing site and technical reference |
-| **PostgreSQL** | `:5432` | Postgres 16 | Persistent storage for incidents, API keys, and cache |
+| Component               | Port     | Technology        | Purpose                                                       |
+| :---------------------- | :------- | :---------------- | :------------------------------------------------------------ |
+| **Go Client SDK**       | Embedded | Go 1.22+          | Non-blocking HTTP middleware with panic recovery              |
+| **Triage Engine**       | `:8080`  | Go 1.26+          | Telemetry ingestion, AST slicing, Gemini AI client, REST APIs |
+| **Studio Dashboard**    | `:3000`  | Next.js 16        | Real-time incident inspector, AST explorer, setup wizard      |
+| **Documentation & Web** | `:4321`  | Astro & Starlight | Public landing site and technical reference                   |
+| **PostgreSQL**          | `:5432`  | Postgres 16       | Persistent storage for incidents, API keys, and cache         |
 
 ---
 

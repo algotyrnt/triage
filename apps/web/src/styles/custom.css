@@ -1,10 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Base Fonts */
 :root {
   --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --sl-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sl-font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* Light Theme (Dashboard Slate/White Palette with High Contrast) */
@@ -15,15 +16,15 @@
   --sl-color-accent-high: #312e81;
 
   /* Starlight Semantic Tokens for Light Mode */
-  --sl-color-white: #0f172a;       /* Primary text & headings (Deep Slate 900) */
-  --sl-color-gray-1: #0f172a;      /* Slate 900 */
-  --sl-color-gray-2: #1e293b;      /* Slate 800 - Body copy */
-  --sl-color-gray-3: #334155;      /* Slate 700 - Subtitles & labels */
-  --sl-color-gray-4: #64748b;      /* Slate 500 - Muted text */
-  --sl-color-gray-5: #cbd5e1;      /* Slate 300 - Borders & dividers */
-  --sl-color-gray-6: #f1f5f9;      /* Slate 100 - Table headers & subtle bgs */
-  --sl-color-gray-7: #f8fafc;      /* Slate 50 - Card bgs & zebra striping */
-  --sl-color-black: #ffffff;       /* Page background */
+  --sl-color-white: #0f172a; /* Primary text & headings (Deep Slate 900) */
+  --sl-color-gray-1: #0f172a; /* Slate 900 */
+  --sl-color-gray-2: #1e293b; /* Slate 800 - Body copy */
+  --sl-color-gray-3: #334155; /* Slate 700 - Subtitles & labels */
+  --sl-color-gray-4: #64748b; /* Slate 500 - Muted text */
+  --sl-color-gray-5: #cbd5e1; /* Slate 300 - Borders & dividers */
+  --sl-color-gray-6: #f1f5f9; /* Slate 100 - Table headers & subtle bgs */
+  --sl-color-gray-7: #f8fafc; /* Slate 50 - Card bgs & zebra striping */
+  --sl-color-black: #ffffff; /* Page background */
 
   --sl-color-bg: #f8fafc;
   --sl-color-bg-nav: #ffffff;
@@ -45,15 +46,15 @@
   --sl-color-accent-high: #c7d2fe;
 
   /* Starlight Semantic Tokens for Dark Mode */
-  --sl-color-white: #f8fafc;       /* Primary text & headings (Slate 50) */
-  --sl-color-gray-1: #f8fafc;      /* Slate 50 */
-  --sl-color-gray-2: #f1f5f9;      /* Slate 100 - Body copy */
-  --sl-color-gray-3: #cbd5e1;      /* Slate 300 - Subtitles & labels */
-  --sl-color-gray-4: #94a3b8;      /* Slate 400 - Muted text */
-  --sl-color-gray-5: #334155;      /* Slate 700 - Borders */
-  --sl-color-gray-6: #1e293b;      /* Slate 800 - Table headers & subtle bgs */
-  --sl-color-gray-7: #0f172a;      /* Slate 900 - Card bgs */
-  --sl-color-black: #0b0f19;       /* Page background */
+  --sl-color-white: #f8fafc; /* Primary text & headings (Slate 50) */
+  --sl-color-gray-1: #f8fafc; /* Slate 50 */
+  --sl-color-gray-2: #f1f5f9; /* Slate 100 - Body copy */
+  --sl-color-gray-3: #cbd5e1; /* Slate 300 - Subtitles & labels */
+  --sl-color-gray-4: #94a3b8; /* Slate 400 - Muted text */
+  --sl-color-gray-5: #334155; /* Slate 700 - Borders */
+  --sl-color-gray-6: #1e293b; /* Slate 800 - Table headers & subtle bgs */
+  --sl-color-gray-7: #0f172a; /* Slate 900 - Card bgs */
+  --sl-color-black: #0b0f19; /* Page background */
 
   --sl-color-bg: #0b0f19;
   --sl-color-bg-nav: #0f172a;
@@ -202,7 +203,11 @@ body {
   border: 1px solid var(--sl-color-hairline);
   background-color: var(--sl-color-bg-nav);
   text-decoration: none !important;
-  transition: border-color 0.15s ease, transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
   box-shadow: var(--sl-shadow-sm);
 }
 

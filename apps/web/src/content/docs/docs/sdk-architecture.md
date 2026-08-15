@@ -36,11 +36,13 @@ When a panic occurs in an HTTP handler wrapped by `triage.Middleware`:
 ## 1. Frame Pruning & Symbolication
 
 Standard Go `runtime/debug.Stack()` outputs internal runtime frames:
+
 - `runtime/debug.Stack()`
 - `github.com/algotyrnt/triage/sdk/go.Middleware.func1.1()`
 - `runtime.gopanic()`
 
 The Triage SDK parses the stack trace and skips runtime/stdlib/middleware frames to identify the **topmost application frame**. This extracts:
+
 - `File`: Target file path (e.g. `handlers/payment.go`)
 - `Line`: Exact triggering line number (e.g. `28`)
 - `FunctionName`: Enclosing function name (e.g. `ProcessTransaction`)
@@ -51,6 +53,7 @@ The Triage SDK parses the stack trace and skips runtime/stdlib/middleware frames
 ## 2. Bounded Worker Pool
 
 To ensure memory safety and zero throughput degradation:
+
 - The SDK initializes a buffered channel of size `1,000`.
 - A fixed pool of 4 worker goroutines processes queued jobs.
 - If the engine is temporarily unreachable or the queue is full under extreme panic storms, excess payloads are non-blockingly dropped to protect host memory.
@@ -82,6 +85,7 @@ The SDK dispatches the following JSON payload to `POST /api/v1/telemetry`:
 ## 4. Secret Sanitization
 
 The SDK automatically sanitizes sensitive headers before transmitting stack traces:
+
 - `Authorization`
 - `Cookie`
 - `Set-Cookie`

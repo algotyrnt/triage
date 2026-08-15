@@ -196,7 +196,8 @@ export const InteractiveSimulator: React.FC = () => {
           See How Triage Isolates Crashes in Real Time
         </h2>
         <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
-          Select a real Go panic scenario below and see how the engine extracts the enclosing AST node, sends it to Gemini AI, and generates actionable fixes.
+          Select a real Go panic scenario below and see how the engine extracts the enclosing AST
+          node, sends it to Gemini AI, and generates actionable fixes.
         </p>
       </div>
 
@@ -352,7 +353,12 @@ export const InteractiveSimulator: React.FC = () => {
                     <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-md text-slate-400 text-[11px] flex items-start gap-2">
                       <Zap className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                       <div>
-                        <strong className="text-slate-200">AST Node Isolation:</strong> The Go engine only sent the 8 lines enclosing <code className="text-indigo-300 font-bold">{scenario.funcName}</code> instead of all 450 lines in the source file. This saves <span className="text-emerald-400 font-bold">94% in LLM token cost</span> while preserving complete semantic context.
+                        <strong className="text-slate-200">AST Node Isolation:</strong> The Go
+                        engine only sent the 8 lines enclosing{' '}
+                        <code className="text-indigo-300 font-bold">{scenario.funcName}</code>{' '}
+                        instead of all 450 lines in the source file. This saves{' '}
+                        <span className="text-emerald-400 font-bold">94% in LLM token cost</span>{' '}
+                        while preserving complete semantic context.
                       </div>
                     </div>
                   </div>
@@ -430,7 +436,9 @@ export const InteractiveSimulator: React.FC = () => {
                     <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-md text-slate-400 text-[11px] flex items-start gap-2">
                       <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
                       <div>
-                        <strong className="text-slate-200">Frame Pruning:</strong> Triage automatically filters internal stdlib and middleware frames so your engineering team jumps directly to the failing application line.
+                        <strong className="text-slate-200">Frame Pruning:</strong> Triage
+                        automatically filters internal stdlib and middleware frames so your
+                        engineering team jumps directly to the failing application line.
                       </div>
                     </div>
                   </div>

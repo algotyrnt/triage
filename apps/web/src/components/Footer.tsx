@@ -21,7 +21,8 @@ export const Footer: React.FC = () => {
               <span className="font-bold text-slate-900 text-sm tracking-tight">triage</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Zero-overhead Go panic isolation, on-demand AST slicing, and automated Gemini AI incident triage engine.
+              Zero-overhead Go panic isolation, on-demand AST slicing, and automated Gemini AI
+              incident triage engine.
             </p>
             <div className="flex items-center gap-2 text-xs font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded w-fit">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -90,7 +91,10 @@ export const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a href="/docs/quickstart" className="hover:text-black transition-colors text-indigo-600 font-semibold">
+                <a
+                  href="/docs/quickstart"
+                  className="hover:text-black transition-colors text-indigo-600 font-semibold"
+                >
                   <span>5-Min Quickstart</span>
                 </a>
               </li>

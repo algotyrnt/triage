@@ -44,13 +44,13 @@ func main() {
 
 Pass functional options to `triage.Middleware()`:
 
-| Option | Type | Description |
-| :--- | :--- | :--- |
-| `WithRepo(repo string)` | `string` | Sets the GitHub repository (`owner/repo`) for on-demand AST fetching. |
-| `WithGatewayURL(url string)` | `string` | Custom engine telemetry URL (defaults to production managed gateway). |
-| `WithCommit(sha string)` | `string` | Explicit Git commit SHA override (auto-detected via `debug.ReadBuildInfo()` if omitted). |
-| `WithWorkerPool(workers, queue int)` | `int, int` | Configures async dispatch worker pool size (default: 4 workers, 1000 queue depth). |
-| `WithCustomLogger(logger Logger)` | `Logger` | Custom logger interface for SDK debug logs. |
+| Option                               | Type       | Description                                                                              |
+| :----------------------------------- | :--------- | :--------------------------------------------------------------------------------------- |
+| `WithRepo(repo string)`              | `string`   | Sets the GitHub repository (`owner/repo`) for on-demand AST fetching.                    |
+| `WithGatewayURL(url string)`         | `string`   | Custom engine telemetry URL (defaults to production managed gateway).                    |
+| `WithCommit(sha string)`             | `string`   | Explicit Git commit SHA override (auto-detected via `debug.ReadBuildInfo()` if omitted). |
+| `WithWorkerPool(workers, queue int)` | `int, int` | Configures async dispatch worker pool size (default: 4 workers, 1000 queue depth).       |
+| `WithCustomLogger(logger Logger)`    | `Logger`   | Custom logger interface for SDK debug logs.                                              |
 
 ### Example with Full Options:
 
@@ -124,6 +124,7 @@ app.Listen(":8080")
 ## Trace Context & OpenTelemetry
 
 Each recovered panic automatically propagates an OpenTelemetry-compatible trace ID:
+
 - Header: `X-Triage-Trace-ID`
 - Standard W3C header: `traceparent`
 

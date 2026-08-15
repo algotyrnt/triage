@@ -66,9 +66,11 @@ Given a nil pointer panic in `payment.go:28`:
 ## Configuring Your Gemini API Key & Model
 
 ### Option 1: Studio Dashboard Wizard
+
 Open your self-hosted Studio Dashboard and enter your Google AI Studio API key and desired model name in **Step 4: Gemini AI**.
 
 ### Option 2: Environment Variables
+
 Pass your API key and model name when launching the Docker container:
 
 ```bash

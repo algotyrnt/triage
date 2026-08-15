@@ -24,6 +24,7 @@ docker compose up --build -d
 ```
 
 This starts:
+
 - **`triage-db` (`:5432`)**: PostgreSQL 16 database.
 - **`triage-engine` (`:8080`)**: Core engine serving telemetry and REST APIs.
 - **`triage-dashboard` (`:3000`)**: Studio Dashboard UI.
@@ -95,6 +96,7 @@ curl http://localhost:8081/crash
 Your HTTP client will receive a generic `500 Internal Server Error` without any sensitive internals exposed.
 
 Now switch back to your Studio Dashboard at **http://localhost:3000**:
+
 1. You will see a new **CRITICAL** incident.
 2. The isolated `*ast.FuncDecl` code block will be highlighted.
 3. Gemini AI will display the exact root cause and suggested drop-in git patch.

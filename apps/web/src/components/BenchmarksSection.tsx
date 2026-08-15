@@ -8,7 +8,10 @@ import { Activity, Zap, TrendingDown, Clock, CheckCircle2, Shield } from 'lucide
 
 export const BenchmarksSection: React.FC = () => {
   return (
-    <section id="benchmarks" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20">
+    <section
+      id="benchmarks"
+      className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20"
+    >
       {/* Header */}
       <div className="text-center max-w-3xl mx-auto space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
@@ -19,7 +22,8 @@ export const BenchmarksSection: React.FC = () => {
           Engineered for Extreme Efficiency
         </h2>
         <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
-          Triage isolates crashes with negligible server overhead while reducing LLM diagnostic token consumption by over 93%.
+          Triage isolates crashes with negligible server overhead while reducing LLM diagnostic
+          token consumption by over 93%.
         </p>
       </div>
 
@@ -37,7 +41,9 @@ export const BenchmarksSection: React.FC = () => {
           </div>
 
           <div className="text-3xl font-extrabold text-slate-900 mb-1">0.018 ms</div>
-          <p className="text-slate-500 text-xs mb-6">Average HTTP handler latency overhead per request</p>
+          <p className="text-slate-500 text-xs mb-6">
+            Average HTTP handler latency overhead per request
+          </p>
 
           <div className="space-y-3 font-mono text-xs">
             <div>
@@ -84,7 +90,9 @@ export const BenchmarksSection: React.FC = () => {
           </div>
 
           <div className="text-3xl font-extrabold text-slate-900 mb-1">180 Tokens</div>
-          <p className="text-slate-500 text-xs mb-6">Tokens sent per incident with AST FuncDecl isolation</p>
+          <p className="text-slate-500 text-xs mb-6">
+            Tokens sent per incident with AST FuncDecl isolation
+          </p>
 
           <div className="space-y-3 font-mono text-xs">
             <div>
@@ -108,7 +116,8 @@ export const BenchmarksSection: React.FC = () => {
             </div>
 
             <div className="pt-2 text-[11px] text-slate-500 font-sans leading-relaxed">
-              AST slicing cuts noise and prevents prompt saturation while reducing Gemini API costs to &lt; $0.0001 per incident.
+              AST slicing cuts noise and prevents prompt saturation while reducing Gemini API costs
+              to &lt; $0.0001 per incident.
             </div>
           </div>
         </div>
@@ -125,7 +134,9 @@ export const BenchmarksSection: React.FC = () => {
           </div>
 
           <div className="text-3xl font-extrabold text-slate-900 mb-1">&lt; 1.2 MB</div>
-          <p className="text-slate-500 text-xs mb-6">Peak resident set size for 10,000 requests/sec</p>
+          <p className="text-slate-500 text-xs mb-6">
+            Peak resident set size for 10,000 requests/sec
+          </p>
 
           <div className="space-y-2.5 text-xs text-slate-600">
             <div className="flex items-center gap-2">

@@ -34,7 +34,10 @@ export const Hero: React.FC = () => {
 
       {/* Pill Badge */}
       <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-8">
-        <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-spin" style={{ animationDuration: '8s' }} />
+        <Sparkles
+          className="w-3.5 h-3.5 text-indigo-600 animate-spin"
+          style={{ animationDuration: '8s' }}
+        />
         <span>GO CRASH ISOLATION &amp; GEMINI AI DIAGNOSTICS</span>
       </div>
 
@@ -120,7 +123,9 @@ export const Hero: React.FC = () => {
             <Zap className="w-3.5 h-3.5 text-emerald-600" />
             <span>Overhead</span>
           </div>
-          <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">&lt; 0.02 ms</div>
+          <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">
+            &lt; 0.02 ms
+          </div>
           <div className="text-[11px] text-slate-500 mt-0.5">Async bounded worker pool</div>
         </div>
 

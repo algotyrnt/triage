@@ -122,7 +122,10 @@ func main() {
   };
 
   return (
-    <section id="sdk" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20">
+    <section
+      id="sdk"
+      className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20"
+    >
       {/* Header */}
       <div className="text-center max-w-3xl mx-auto space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
@@ -133,7 +136,9 @@ func main() {
           Integrate with Any Go Router in Under 60 Seconds
         </h2>
         <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
-          Triage works as standard Go <code className="text-indigo-700 font-mono">http.Handler</code> middleware. Drop it into your existing HTTP routers without refactoring.
+          Triage works as standard Go{' '}
+          <code className="text-indigo-700 font-mono">http.Handler</code> middleware. Drop it into
+          your existing HTTP routers without refactoring.
         </p>
       </div>
 

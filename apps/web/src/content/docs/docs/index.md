@@ -46,6 +46,7 @@ Welcome to the **triage** technical documentation.
 ## What is Triage?
 
 When a Go HTTP server panics at runtime, **triage**:
+
 1. Non-blockingly catches the panic using standard Go `defer + recover()`.
 2. Gathers the stack trace and slices only the enclosing `*ast.FuncDecl` function declaration using `go/parser`.
 3. Streams the AST snippet to **Google Gemini AI** for instant root cause diagnosis and patch proposals.

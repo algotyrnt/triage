@@ -8,9 +8,11 @@ All Triage Engine endpoints are served on port `:8080`.
 ## Health Check
 
 ### `GET /health`
+
 Returns the operational health of the Triage engine and PostgreSQL connection.
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -24,12 +26,15 @@ Returns the operational health of the Triage engine and PostgreSQL connection.
 ## Telemetry Ingestion
 
 ### `POST /api/v1/telemetry`
+
 Receives panic telemetry payloads from Go SDK middleware.
 
 **Headers:**
+
 - `Content-Type: application/json`
 
 **Request Body:**
+
 ```json
 {
   "api_key": "tr_live_key_9042",
@@ -46,6 +51,7 @@ Receives panic telemetry payloads from Go SDK middleware.
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "incident_id": "inc_9f8a7b6c5d4e",
@@ -61,12 +67,15 @@ Receives panic telemetry payloads from Go SDK middleware.
 ## Incidents Management
 
 ### `GET /api/v1/incidents`
+
 Lists recent incidents (requires authentication token).
 
 **Headers:**
+
 - `Authorization: Bearer <session_token>`
 
 **Response:**
+
 ```json
 [
   {
@@ -87,13 +96,16 @@ Lists recent incidents (requires authentication token).
 ## AST Pre-Indexing
 
 ### `POST /api/v1/ast/index`
+
 Triggers synchronous pre-indexing of a repository's AST into PostgreSQL.
 
 **Headers:**
+
 - `Authorization: Bearer <session_token>`
 - `Content-Type: application/json`
 
 **Request Body:**
+
 ```json
 {
   "repo": "myorg/myrepo",
@@ -102,6 +114,7 @@ Triggers synchronous pre-indexing of a repository's AST into PostgreSQL.
 ```
 
 **Response:**
+
 ```json
 {
   "status": "INDEXED",

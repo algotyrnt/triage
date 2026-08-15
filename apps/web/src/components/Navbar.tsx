@@ -73,7 +73,10 @@ export const Navbar: React.FC = () => {
           <a href="#architecture" className="hover:text-black transition-colors">
             Architecture
           </a>
-          <a href="#simulator" className="hover:text-black transition-colors flex items-center gap-1 text-indigo-600 font-semibold">
+          <a
+            href="#simulator"
+            className="hover:text-black transition-colors flex items-center gap-1 text-indigo-600 font-semibold"
+          >
             <Sparkles className="w-3 h-3" />
             <span>Panic Inspector</span>
           </a>

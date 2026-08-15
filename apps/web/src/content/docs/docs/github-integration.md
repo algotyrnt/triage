@@ -28,12 +28,12 @@ The Studio Dashboard provides an automated manifest-based GitHub App setup:
 
 If creating a GitHub App manually, ensure the following permissions are configured:
 
-| Permission | Access | Purpose |
-| :--- | :--- | :--- |
-| **Repository Contents** | Read-only | On-demand AST fetching by commit SHA |
-| **Issues** | Read & Write | Automated triage issue filing |
-| **Metadata** | Read-only | Repository metadata lookup |
-| **User Email** | Read-only | GitHub OAuth authentication |
+| Permission              | Access       | Purpose                              |
+| :---------------------- | :----------- | :----------------------------------- |
+| **Repository Contents** | Read-only    | On-demand AST fetching by commit SHA |
+| **Issues**              | Read & Write | Automated triage issue filing        |
+| **Metadata**            | Read-only    | Repository metadata lookup           |
+| **User Email**          | Read-only    | GitHub OAuth authentication          |
 
 ---
 
@@ -49,16 +49,18 @@ When a panic occurs, Triage opens an issue with the following format:
 **Goroutine:** `goroutine 42 [running]`
 
 ### 🔍 Gemini AI Diagnostic Summary
+
 > **Root Cause:** Attempted to evaluate req.Amount on an uninitialized nil pointer (*PaymentPayload) on line 28.  
 > **Suggested Fix:** Allocate memory before access: `req := &PaymentPayload{}`
 
 ### 🌲 Enclosing AST Node (`ProcessTransaction`)
+
 \`\`\`go
 func ProcessTransaction(w http.ResponseWriter, r *http.Request) {
-    var req *PaymentPayload
-    if req.Amount <= 0 { // <--- PANIC TRIGGER [LINE 28]
-        ...
-    }
+var req *PaymentPayload
+if req.Amount <= 0 { // <--- PANIC TRIGGER [LINE 28]
+...
+}
 }
 \`\`\`
 ```

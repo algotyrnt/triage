@@ -84,6 +84,7 @@ docker run -d \
 ## Database Migration & Schema
 
 The PostgreSQL schema is located in `db/schema.sql`. It contains:
+
 - `projects`: Configured Go repositories and API keys.
 - `incidents`: Captured panics, stack traces, and AI root causes.
 - `ast_nodes`: Cached/pre-indexed AST function declarations.

@@ -8,6 +8,7 @@ Triage's core architectural differentiator is **on-demand AST slicing**. Rather 
 ## Why AST Slicing?
 
 When a Go panic occurs, passing the full source file to an LLM creates multiple problems:
+
 1. **Token Cost:** A 1,500-line file uses ~3,000 tokens per incident.
 2. **Context Dilution:** Unrelated functions in the same file confuse LLM inference.
 3. **Speed:** Parsing only the relevant function block speeds up inference by 3x.
@@ -40,6 +41,7 @@ By extracting only the `*ast.FuncDecl` containing the panic, Triage achieves a *
 ## The Go Parser Internals
 
 The Triage Engine parses source files using Go's official standard packages:
+
 - `go/parser`: `parser.ParseFile(fset, filename, src, parser.ParseComments)`
 - `go/ast`: `ast.Inspect(node, func(n ast.Node) bool)`
 
