@@ -1,0 +1,53 @@
+---
+/**
+ * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { Navbar } from '@/components/Navbar';
+import { Hero } from '@/components/Hero';
+import { InteractiveSimulator } from '@/components/InteractiveSimulator';
+import { ArchitectureSection } from '@/components/ArchitectureSection';
+import { FeaturesGrid } from '@/components/FeaturesGrid';
+import { SdkShowcase } from '@/components/SdkShowcase';
+import { BenchmarksSection } from '@/components/BenchmarksSection';
+import { FaqSection } from '@/components/FaqSection';
+import { Footer } from '@/components/Footer';
+import '@/styles/custom.css';
+---
+
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>triage — Zero-Overhead Go Crash Isolation & Gemini AI Diagnostics</title>
+    <meta
+      name="description"
+      content="Intercept Go HTTP server panics non-blockingly, isolate the enclosing *ast.FuncDecl code block, and diagnose root causes instantly with Google Gemini AI."
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+    <div class="flex flex-col min-h-screen">
+      <Navbar client:load />
+      <main class="flex-1">
+        <Hero client:load />
+        <InteractiveSimulator client:visible />
+        <ArchitectureSection client:visible />
+        <FeaturesGrid client:visible />
+        <SdkShowcase client:visible />
+        <BenchmarksSection client:visible />
+        <FaqSection client:visible />
+      </main>
+      <Footer client:visible />
+    </div>
+  </body>
+</html>
