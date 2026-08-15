@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { ScreenId } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
+import { engineClient } from '@/services/engineClient';
 import { ShieldCheck, Lock, Check, ArrowRight } from 'lucide-react';
 
 interface LoginPageProps {
@@ -18,16 +19,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
   const handleGitHubOAuthRedirect = () => {
     setLoading(true);
     // Redirect to backend OAuth route
-    const engineBase = (
-      process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry'
-    ).replace(/\/telemetry$/, '');
-    window.location.href = `${engineBase}/auth/github`;
+    window.location.href = engineClient.getAuthGitHubUrl();
   };
 
   return (
     <div className="min-h-[calc(100vh-100px)] bg-slate-50 flex flex-col items-center justify-center p-4">
       {/* 420px Centered Card */}
-      <div className="w-full max-w-[420px] bg-white border border-slate-200 rounded-sm p-6 shadow-none space-y-6">
+      <div className="w-full max-w-105 bg-white border border-slate-200 rounded-sm p-6 shadow-none space-y-6">
         {/* Header Block */}
         <div className="text-center space-y-2">
           <div className="inline-block bg-black text-white font-mono font-bold text-sm px-3 py-1 rounded-sm tracking-widest uppercase">

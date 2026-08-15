@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export const GEMINI_MODEL_NAME = process.env.NEXT_PUBLIC_GEMINI_MODEL_NAME || '';
-
 export type ScreenId =
   | 'setup'
   | 'login'

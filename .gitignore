@@ -1,14 +1,7 @@
-# =============================================================================
-# Go
-# =============================================================================
-
-# Compiled binaries — match executable named after its directory (Go convention)
+# Binaries & build artifacts
 apps/engine/engine
 apps/engine/triage-engine
 test-service/test-service
-sdk/go/*.test
-
-# Generic Go build artifacts
 *.exe
 *.exe~
 *.dll
@@ -17,58 +10,33 @@ sdk/go/*.test
 *.test
 *.out
 *.prof
-
-# Go test & module cache (local dev)
 /vendor/
 
-# =============================================================================
-# Node / Bun
-# =============================================================================
-
+# Dependencies
 node_modules/
 .pnpm-store/
 .bun/
 
-# =============================================================================
-# Next.js (apps/dashboard)
-# =============================================================================
-
+# Framework outputs
 .next/
-out/
-*.tsbuildinfo
-
-# =============================================================================
-# Astro (apps/web)
-# =============================================================================
-
 .astro/
+out/
 dist/
-
-# =============================================================================
-# General build output
-# =============================================================================
-
 build/
 .vercel/
+*.tsbuildinfo
 
-# =============================================================================
-# Environment & secrets
-# =============================================================================
-
+# Secrets & environment
 .env
 .env.*
 !.env.example
 !**/.env.example
-
 *.pem
 *.key
 *.p12
 *.pfx
 
-# =============================================================================
-# OS & IDE
-# =============================================================================
-
+# IDE & system files
 .DS_Store
 .DS_Store?
 ._*
@@ -76,19 +44,9 @@ build/
 .Trashes
 Thumbs.db
 ehthumbs.db
-
 .idea/
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
-!**/.vscode/settings.json
-!**/.vscode/extensions.json
+.vscode/
 *.swp
 *.swo
 *~
-
-# =============================================================================
-# Antigravity / Gemini IDE
-# =============================================================================
-
 .gemini/

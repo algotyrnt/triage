@@ -119,7 +119,7 @@ This starts three containers:
 
 > **Production deployment?** The only values worth overriding are the Postgres credentials. Change `POSTGRES_PASSWORD` (and the matching `DATABASE_URL`) in `docker-compose.yml` before first boot. Everything else — GitHub App credentials, OAuth secrets, Gemini API key — is configured through the setup wizard and stored securely in the database.
 
-### 3. Run the setup wizard
+### 2. Run the setup wizard
 
 Open **http://localhost:3000** and follow the 5-step wizard:
 

@@ -67,6 +67,8 @@ var (
 	githubApp     *github.AppConfig
 	sessionSecret string
 	appURL        string
+	port          string
+	engineURL     string
 )
 
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -136,10 +138,11 @@ func main() {
 		}
 	}
 
-	port := os.Getenv("PORT")
+	port = os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+	engineURL = fmt.Sprintf("http://localhost:%s", port)
 
 	if database != nil {
 		storedSecret, _ := database.GetInstanceConfig(context.Background(), "session_secret")
@@ -723,11 +726,6 @@ func handleSetupManifest(w http.ResponseWriter, r *http.Request) {
 		req.InstanceURL = appURL
 	}
 
-	engineURL := fmt.Sprintf("http://localhost:%s", os.Getenv("PORT"))
-	if engineURL == "http://localhost:" {
-		engineURL = "http://localhost:8080"
-	}
-
 	manifest := map[string]interface{}{
 		"name":         "Triage",
 		"url":          req.InstanceURL,
@@ -972,29 +970,32 @@ func handleSetupRepos(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": repos})
 }
 
-func handleGitHubAuthRoute(w http.ResponseWriter, r *http.Request) {
-	clientID := ""
+func getGitHubOAuthCredentials(ctx context.Context) (clientID, clientSecret string) {
 	if database != nil {
-		clientID, _ = database.GetInstanceConfig(r.Context(), "github_oauth_client_id")
+		clientID, _ = database.GetInstanceConfig(ctx, "github_oauth_client_id")
+		clientSecret, _ = database.GetInstanceConfig(ctx, "github_oauth_client_secret")
 	}
 	if v := os.Getenv("GITHUB_OAUTH_CLIENT_ID"); v != "" {
 		clientID = v
-	}
-	if clientID == "" {
+	} else if clientID == "" {
 		clientID = os.Getenv("GITHUB_CLIENT_ID")
 	}
+	if v := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"); v != "" {
+		clientSecret = v
+	} else if clientSecret == "" {
+		clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+	}
+	return clientID, clientSecret
+}
 
+func handleGitHubAuthRoute(w http.ResponseWriter, r *http.Request) {
+	clientID, _ := getGitHubOAuthCredentials(r.Context())
 	if clientID == "" {
 		http.Redirect(w, r, appURL+"?user=algotyrnt&auth=dev", http.StatusFound)
 		return
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	callbackURL := fmt.Sprintf("http://localhost:%s/api/v1/auth/github/callback", port)
-
+	callbackURL := fmt.Sprintf("%s/api/v1/auth/github/callback", engineURL)
 	redirectURI := fmt.Sprintf("https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&scope=user:email,read:user,read:org", clientID, callbackURL)
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
@@ -1006,24 +1007,7 @@ func handleGitHubCallbackRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID, clientSecret := "", ""
-	if database != nil {
-		clientID, _ = database.GetInstanceConfig(r.Context(), "github_oauth_client_id")
-		clientSecret, _ = database.GetInstanceConfig(r.Context(), "github_oauth_client_secret")
-	}
-	if v := os.Getenv("GITHUB_OAUTH_CLIENT_ID"); v != "" {
-		clientID = v
-	}
-	if v := os.Getenv("GITHUB_OAUTH_CLIENT_SECRET"); v != "" {
-		clientSecret = v
-	}
-	if clientID == "" {
-		clientID = os.Getenv("GITHUB_CLIENT_ID")
-	}
-	if clientSecret == "" {
-		clientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
-	}
-
+	clientID, clientSecret := getGitHubOAuthCredentials(r.Context())
 	if clientID == "" || clientSecret == "" {
 		http.Redirect(w, r, appURL+"?auth=error&reason=oauth_not_configured", http.StatusFound)
 		return
