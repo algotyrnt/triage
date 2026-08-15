@@ -1,0 +1,113 @@
+/**
+ * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import {
+  Code2,
+  Zap,
+  Cpu,
+  GitPullRequest,
+  ShieldCheck,
+  Server,
+  Sparkles,
+  Terminal,
+  Activity,
+  Layers,
+} from 'lucide-react';
+
+export const FeaturesGrid: React.FC = () => {
+  const features = [
+    {
+      icon: <Code2 className="w-6 h-6 text-indigo-600" />,
+      title: 'AST Node Isolation',
+      desc: 'Extracts only the surrounding *ast.FuncDecl code block enclosing the panicking line using Go’s standard go/parser. Eliminates 94% of irrelevant source code.',
+      badge: 'go/ast & go/parser',
+      tagColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    },
+    {
+      icon: <Zap className="w-6 h-6 text-emerald-600" />,
+      title: 'Non-Blocking Async Dispatch',
+      desc: 'Middleware captures panics with defer + recover and dispatches telemetry across a bounded 4-goroutine worker pool. Zero latency added to HTTP client responses.',
+      badge: '< 0.02ms Overhead',
+      tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      icon: <Cpu className="w-6 h-6 text-purple-600" />,
+      title: 'Gemini AI Diagnostics',
+      desc: 'Leverages Google Gemini AI with deterministic structured JSON schemas to deliver precise root-cause analysis and drop-in Git patches using your configured model.',
+      badge: 'google.golang.org/genai',
+      tagColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    },
+    {
+      icon: <GitPullRequest className="w-6 h-6 text-amber-600" />,
+      title: 'Automated GitHub Issue Filing',
+      desc: 'Seamlessly creates GitHub issues in your repository containing formatted AST code blocks, raw stack traces, Gemini diagnostic summaries, and triage labels.',
+      badge: 'GitHub App & OAuth',
+      tagColor: 'bg-amber-50 text-amber-700 border-amber-200',
+    },
+    {
+      icon: <Server className="w-6 h-6 text-cyan-600" />,
+      title: 'Single-Container Self-Hosting',
+      desc: 'Deploy the full platform with 1 single Docker container (triage/engine:latest). The engine serves REST APIs, telemetry receivers, and the Studio Dashboard UI.',
+      badge: 'Docker & Kubernetes',
+      tagColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    },
+    {
+      icon: <ShieldCheck className="w-6 h-6 text-slate-800" />,
+      title: 'Zero-Trust Secret Scrubbing',
+      desc: 'Sanitizes HTTP headers, query parameters, Authorization tokens, cookies, and database connection strings before sending panic telemetry payloads.',
+      badge: 'Enterprise Security',
+      tagColor: 'bg-slate-100 text-slate-800 border-slate-200',
+    },
+  ];
+
+  return (
+    <section
+      id="features"
+      className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20"
+    >
+      {/* Section Header */}
+      <div className="text-center max-w-3xl mx-auto space-y-3">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
+          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+          <span>ENGINE CAPABILITIES</span>
+        </div>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+          Engineered for High-Reliability Go Systems
+        </h2>
+        <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
+          Everything you need to intercept, symbolicate, diagnose, and resolve Go panics without
+          adding latency or managing heavyweight agent sidecars.
+        </p>
+      </div>
+
+      {/* Feature Grid */}
+      <div className="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {features.map((f, i) => (
+          <div
+            key={i}
+            className="bg-white border border-slate-200/90 p-6 rounded-lg shadow-xs hover:shadow-md transition-all hover:border-slate-300 flex flex-col justify-between group"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-2.5 rounded-md bg-slate-50 border border-slate-100 group-hover:bg-slate-100 transition-colors">
+                  {f.icon}
+                </div>
+                <span
+                  className={`font-mono text-[10px] font-semibold px-2 py-0.5 rounded border ${f.tagColor}`}
+                >
+                  {f.badge}
+                </span>
+              </div>
+
+              <h3 className="text-base font-bold text-slate-900 mb-2">{f.title}</h3>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">{f.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};

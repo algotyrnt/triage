@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { Metadata } from 'next';
 import '@/app/globals.css';
 

@@ -1,5 +1,249 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import 'tailwindcss';
+
+/* Base Fonts */
 :root {
-  --sl-color-accent-low: #0f172a;
-  --sl-color-accent: #38bdf8;
-  --sl-color-accent-high: #bae6fd;
+  --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --sl-font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Light Theme (Dashboard Slate/White Palette with High Contrast) */
+:root,
+:root[data-theme='light'] {
+  --sl-color-accent-low: #e0e7ff;
+  --sl-color-accent: #4338ca;
+  --sl-color-accent-high: #312e81;
+
+  /* Starlight Semantic Tokens for Light Mode */
+  --sl-color-white: #0f172a; /* Primary text & headings (Deep Slate 900) */
+  --sl-color-gray-1: #0f172a; /* Slate 900 */
+  --sl-color-gray-2: #1e293b; /* Slate 800 - Body copy */
+  --sl-color-gray-3: #334155; /* Slate 700 - Subtitles & labels */
+  --sl-color-gray-4: #64748b; /* Slate 500 - Muted text */
+  --sl-color-gray-5: #cbd5e1; /* Slate 300 - Borders & dividers */
+  --sl-color-gray-6: #f1f5f9; /* Slate 100 - Table headers & subtle bgs */
+  --sl-color-gray-7: #f8fafc; /* Slate 50 - Card bgs & zebra striping */
+  --sl-color-black: #ffffff; /* Page background */
+
+  --sl-color-bg: #f8fafc;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #ffffff;
+  --sl-color-bg-inline-code: #f1f5f9;
+  --sl-color-hairline: #e2e8f0;
+  --sl-color-hairline-light: #f1f5f9;
+
+  --sl-color-text: #1e293b;
+  --sl-color-text-accent: #4338ca;
+  --sl-color-text-invert: #ffffff;
+  --sl-color-text-muted: #64748b;
+}
+
+/* Dark Theme (Crisp, High Contrast Dark Mode) */
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #1e1b4b;
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #c7d2fe;
+
+  /* Starlight Semantic Tokens for Dark Mode */
+  --sl-color-white: #f8fafc; /* Primary text & headings (Slate 50) */
+  --sl-color-gray-1: #f8fafc; /* Slate 50 */
+  --sl-color-gray-2: #f1f5f9; /* Slate 100 - Body copy */
+  --sl-color-gray-3: #cbd5e1; /* Slate 300 - Subtitles & labels */
+  --sl-color-gray-4: #94a3b8; /* Slate 400 - Muted text */
+  --sl-color-gray-5: #334155; /* Slate 700 - Borders */
+  --sl-color-gray-6: #1e293b; /* Slate 800 - Table headers & subtle bgs */
+  --sl-color-gray-7: #0f172a; /* Slate 900 - Card bgs */
+  --sl-color-black: #0b0f19; /* Page background */
+
+  --sl-color-bg: #0b0f19;
+  --sl-color-bg-nav: #0f172a;
+  --sl-color-bg-sidebar: #0f172a;
+  --sl-color-bg-inline-code: #1e293b;
+  --sl-color-hairline: #1e293b;
+  --sl-color-hairline-light: #334155;
+
+  --sl-color-text: #f1f5f9;
+  --sl-color-text-accent: #818cf8;
+  --sl-color-text-invert: #0f172a;
+  --sl-color-text-muted: #94a3b8;
+}
+
+/* Body Base */
+body {
+  font-family: var(--sl-font);
+  background-color: var(--sl-color-bg);
+  color: var(--sl-color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography & Content Spacing */
+.sl-markdown-content {
+  color: var(--sl-color-text);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6):not(:where(.not-content *)) {
+  color: var(--sl-color-white) !important;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sl-markdown-content h1:not(:where(.not-content *)) {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-top: 1rem;
+  margin-bottom: 1.25rem;
+  color: var(--sl-color-white) !important;
+}
+
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  color: var(--sl-color-white) !important;
+}
+
+.sl-markdown-content h3:not(:where(.not-content *)) {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  color: var(--sl-color-white) !important;
+}
+
+.sl-markdown-content p,
+.sl-markdown-content li {
+  color: var(--sl-color-gray-2);
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+
+.sl-markdown-content strong:not(:where(.not-content *)) {
+  color: var(--sl-color-white);
+  font-weight: 700;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--sl-color-text-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  opacity: 0.8;
+}
+
+/* Inline Code Pill with Maximum Readability */
+:root[data-theme='light'] .sl-markdown-content code:not(pre code) {
+  font-family: var(--sl-font-mono);
+  font-size: 0.875em;
+  padding: 0.2em 0.45em;
+  border-radius: 0.375rem;
+  background-color: #f1f5f9;
+  color: #1e1b4b;
+  border: 1px solid #cbd5e1;
+  font-weight: 600;
+}
+
+:root[data-theme='dark'] .sl-markdown-content code:not(pre code) {
+  font-family: var(--sl-font-mono);
+  font-size: 0.875em;
+  padding: 0.2em 0.45em;
+  border-radius: 0.375rem;
+  background-color: #1e293b;
+  color: #e0e7ff;
+  border: 1px solid #475569;
+  font-weight: 600;
+}
+
+/* Tables in Documentation */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.75rem 0;
+  font-size: 0.875rem;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+  background-color: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 2px solid var(--sl-color-hairline);
+}
+
+.sl-markdown-content td:not(:where(.not-content *)) {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  color: var(--sl-color-gray-2);
+}
+
+.sl-markdown-content tr:nth-child(even) td:not(:where(.not-content *)) {
+  background-color: var(--sl-color-gray-7);
+}
+
+/* Documentation Cards Grid in index.md */
+.doc-card {
+  display: block;
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--sl-color-hairline);
+  background-color: var(--sl-color-bg-nav);
+  text-decoration: none !important;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-shadow: var(--sl-shadow-sm);
+}
+
+.doc-card:hover {
+  border-color: var(--sl-color-text-accent);
+  transform: translateY(-2px);
+  box-shadow: var(--sl-shadow-md);
+}
+
+.doc-card strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--sl-color-white);
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.doc-card span {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--sl-color-gray-3);
+  line-height: 1.5;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sl-color-gray-5);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sl-color-gray-4);
 }
