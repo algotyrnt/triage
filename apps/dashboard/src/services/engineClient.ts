@@ -39,16 +39,30 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
-const DEFAULT_ENGINE_URL =
-  process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry';
-const TEST_HARNESS_URL = 'http://localhost:8081/crash';
+const DEFAULT_BASE_URL = (
+  process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1'
+).replace(/\/telemetry$/, '');
 
 export class EngineClient {
-  private engineUrl: string;
+  private baseUrl: string;
+  private telemetryUrl: string;
   private authToken: string | null = null;
 
-  constructor(engineUrl: string = DEFAULT_ENGINE_URL) {
-    this.engineUrl = engineUrl;
+  constructor(engineUrl: string = DEFAULT_BASE_URL) {
+    this.baseUrl = engineUrl.replace(/\/telemetry$/, '');
+    this.telemetryUrl = `${this.baseUrl}/telemetry`;
+  }
+
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  getTelemetryUrl(): string {
+    return this.telemetryUrl;
+  }
+
+  getAuthGitHubUrl(): string {
+    return `${this.baseUrl}/auth/github`;
   }
 
   setAuthToken(token: string | null) {
@@ -68,26 +82,26 @@ export class EngineClient {
   async checkStatus(): Promise<EngineStatus> {
     const startTime = Date.now();
     try {
-      const response = await fetch(this.engineUrl, {
+      const response = await fetch(this.telemetryUrl, {
         method: 'OPTIONS',
       });
       const latencyMs = Date.now() - startTime;
       return {
         online: response.ok || response.status === 405 || response.status === 200,
-        url: this.engineUrl,
+        url: this.telemetryUrl,
         latencyMs,
       };
     } catch {
       return {
         online: false,
-        url: this.engineUrl,
+        url: this.telemetryUrl,
         latencyMs: 0,
       };
     }
   }
 
   async sendTelemetry(payload: TelemetryPayload): Promise<TelemetryResponse> {
-    const response = await fetch(this.engineUrl, {
+    const response = await fetch(this.telemetryUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -105,8 +119,7 @@ export class EngineClient {
 
   async getIncidents(): Promise<any[]> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/incidents`);
+      const res = await fetch(`${this.baseUrl}/incidents`);
       if (!res.ok) return [];
       const data = await res.json();
       return data.incidents || [];
@@ -120,8 +133,7 @@ export class EngineClient {
     gemini_model?: string;
   }> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/settings/llm`, {
+      const res = await fetch(`${this.baseUrl}/settings/llm`, {
         headers: this.getAuthHeaders(),
       });
       if (!res.ok) return {};
@@ -133,8 +145,7 @@ export class EngineClient {
 
   async updateLlmConfig(apiKey: string, model: string): Promise<boolean> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/settings/llm`, {
+      const res = await fetch(`${this.baseUrl}/settings/llm`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ gemini_api_key: apiKey, gemini_model: model }),
@@ -147,8 +158,7 @@ export class EngineClient {
 
   async getProjects(): Promise<any[]> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/projects`);
+      const res = await fetch(`${this.baseUrl}/projects`);
       if (!res.ok) return [];
       const data = await res.json();
       return data.projects || [];
@@ -161,8 +171,7 @@ export class EngineClient {
     repo: string,
     ownerUsername?: string,
   ): Promise<{ success: boolean; repo: string; api_key: string }> {
-    const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-    const res = await fetch(`${baseUrl}/projects`, {
+    const res = await fetch(`${this.baseUrl}/projects`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ repo, owner_username: ownerUsername || '' }),
@@ -175,8 +184,7 @@ export class EngineClient {
 
   async getStats(): Promise<any> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/stats`);
+      const res = await fetch(`${this.baseUrl}/stats`);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -192,8 +200,7 @@ export class EngineClient {
     llm: boolean;
   }> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/setup/status`);
+      const res = await fetch(`${this.baseUrl}/setup/status`);
       if (!res.ok)
         return {
           configured: false,
@@ -216,8 +223,7 @@ export class EngineClient {
 
   async saveLlmSetupConfig(apiKey: string, modelName: string): Promise<boolean> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/setup/llm`, {
+      const res = await fetch(`${this.baseUrl}/setup/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,8 +238,7 @@ export class EngineClient {
   }
 
   async getSetupManifest(instanceUrl: string): Promise<{ manifest: any; url: string }> {
-    const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-    const res = await fetch(`${baseUrl}/setup/manifest`, {
+    const res = await fetch(`${this.baseUrl}/setup/manifest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instance_url: instanceUrl }),
@@ -243,15 +248,13 @@ export class EngineClient {
   }
 
   async getInstallUrl(): Promise<{ url: string }> {
-    const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-    const res = await fetch(`${baseUrl}/setup/install`);
+    const res = await fetch(`${this.baseUrl}/setup/install`);
     if (!res.ok) throw new Error(`Failed to get install URL: ${await res.text()}`);
     return await res.json();
   }
 
   async saveOAuthConfig(clientId: string, clientSecret: string): Promise<{ success: boolean }> {
-    const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-    const res = await fetch(`${baseUrl}/setup/oauth`, {
+    const res = await fetch(`${this.baseUrl}/setup/oauth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -265,8 +268,7 @@ export class EngineClient {
 
   async getSetupRepos(): Promise<{ owner: string; repo: string }[]> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/setup/repos`);
+      const res = await fetch(`${this.baseUrl}/setup/repos`);
       if (!res.ok) return [];
       const data = await res.json();
       return data.repos || [];
@@ -280,8 +282,7 @@ export class EngineClient {
     app_name?: string;
     error?: string;
   }> {
-    const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-    const res = await fetch(`${baseUrl}/setup/test`, { method: 'POST' });
+    const res = await fetch(`${this.baseUrl}/setup/test`, { method: 'POST' });
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: 'Connection failed' }));
       return { success: false, error: data.error || 'Connection test failed' };
@@ -299,8 +300,7 @@ export class EngineClient {
     };
   }> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/auth/me`, {
+      const res = await fetch(`${this.baseUrl}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return { valid: false };
@@ -313,8 +313,7 @@ export class EngineClient {
 
   async getInstalledRepos(): Promise<{ owner: string; repo: string }[]> {
     try {
-      const baseUrl = this.engineUrl.replace(/\/telemetry$/, '');
-      const res = await fetch(`${baseUrl}/setup/repos`, {
+      const res = await fetch(`${this.baseUrl}/setup/repos`, {
         headers: this.getAuthHeaders(),
       });
       if (!res.ok) return [];

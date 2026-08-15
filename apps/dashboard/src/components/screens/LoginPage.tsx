@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { ScreenId } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
+import { engineClient } from '@/services/engineClient';
 import { ShieldCheck, Lock, Check, ArrowRight } from 'lucide-react';
 
 interface LoginPageProps {
@@ -18,10 +19,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
   const handleGitHubOAuthRedirect = () => {
     setLoading(true);
     // Redirect to backend OAuth route
-    const engineBase = (
-      process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1/telemetry'
-    ).replace(/\/telemetry$/, '');
-    window.location.href = `${engineBase}/auth/github`;
+    window.location.href = engineClient.getAuthGitHubUrl();
   };
 
   return (
