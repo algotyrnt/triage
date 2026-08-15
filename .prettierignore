@@ -8,3 +8,5 @@ vendor
 .git
 .gemini
 *.tsbuildinfo
+next-env.d.ts
+
