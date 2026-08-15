@@ -1,6 +1,3 @@
-# Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
-# SPDX-License-Identifier: Apache-2.0
-
 # Stage 1: Build stage
 FROM golang:1.26-alpine AS builder
 

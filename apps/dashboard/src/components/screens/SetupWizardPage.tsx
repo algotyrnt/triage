@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import React, { useState, useEffect } from 'react';
 import { ScreenId } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
