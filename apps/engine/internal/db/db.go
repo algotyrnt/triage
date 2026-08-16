@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -57,6 +58,7 @@ type Repository struct {
 	ID             string    `json:"id"`
 	Owner          string    `json:"owner"`
 	Repo           string    `json:"repo"`
+	RootDir        string    `json:"root_dir,omitempty"`
 	InstallationID int64     `json:"installation_id"`
 	CreatedAt      time.Time `json:"created_at"`
 }
@@ -203,31 +205,47 @@ func (db *DB) GetIncidentByID(ctx context.Context, id string) (*Incident, error)
 	return &inc, nil
 }
 
-func (db *DB) CreateProject(ctx context.Context, owner, repo, ownerUsername string) (string, string, error) {
+func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUsername string) (string, string, error) {
 	if db.Pool == nil {
 		return "", "", fmt.Errorf("PostgreSQL pool uninitialized")
 	}
 
-	repoID := fmt.Sprintf("repo_%s_%s", owner, repo)
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+	var repoID string
+	if cleanRootDir != "" {
+		repoID = fmt.Sprintf("repo_%s_%s_%s", owner, repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
+	} else {
+		repoID = fmt.Sprintf("repo_%s_%s", owner, repo)
+	}
+
 	_, err := db.Pool.Exec(ctx, `
-		INSERT INTO repositories (id, owner, repo, installation_id)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (owner, repo) DO UPDATE SET owner = EXCLUDED.owner
-	`, repoID, owner, repo, 1001)
+		INSERT INTO repositories (id, owner, repo, root_dir, installation_id)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (owner, repo, root_dir) DO UPDATE SET root_dir = EXCLUDED.root_dir
+	`, repoID, owner, repo, cleanRootDir, 1001)
 	if err != nil {
 		return "", "", err
 	}
 
-	rawKey := fmt.Sprintf("tr_live_%s_%d", repo, time.Now().UnixNano())
+	keySuffix := repo
+	if cleanRootDir != "" {
+		keySuffix = fmt.Sprintf("%s_%s", repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
+	}
+	rawKey := fmt.Sprintf("tr_live_%s_%d", keySuffix, time.Now().UnixNano())
 	hash := sha256.Sum256([]byte(rawKey))
 	keyHash := hex.EncodeToString(hash[:])
 	keyMasked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
 	keyID := fmt.Sprintf("key_%d", time.Now().UnixNano())
 
+	keyName := fmt.Sprintf("Key for %s/%s", owner, repo)
+	if cleanRootDir != "" {
+		keyName = fmt.Sprintf("Key for %s/%s (%s)", owner, repo, cleanRootDir)
+	}
+
 	_, err = db.Pool.Exec(ctx, `
 		INSERT INTO api_keys (id, repository_id, name, key_hash, key_masked)
 		VALUES ($1, $2, $3, $4, $5)
-	`, keyID, repoID, fmt.Sprintf("Key for %s/%s", owner, repo), keyHash, keyMasked)
+	`, keyID, repoID, keyName, keyHash, keyMasked)
 	if err != nil {
 		return "", "", err
 	}
@@ -239,7 +257,7 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	if db.Pool == nil {
 		return []Repository{}, nil
 	}
-	rows, err := db.Pool.Query(ctx, `SELECT id, owner, repo, installation_id, created_at FROM repositories ORDER BY created_at DESC`)
+	rows, err := db.Pool.Query(ctx, `SELECT id, owner, repo, COALESCE(root_dir, ''), installation_id, created_at FROM repositories ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -248,12 +266,33 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	var repos []Repository
 	for rows.Next() {
 		var r Repository
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.InstallationID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
 	}
 	return repos, nil
+}
+
+func (db *DB) GetRepositoryByAPIKey(ctx context.Context, key string) (*Repository, error) {
+	if db.Pool == nil || key == "" {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized or key is empty")
+	}
+	hash := sha256.Sum256([]byte(key))
+	keyHash := hex.EncodeToString(hash[:])
+
+	var r Repository
+	err := db.Pool.QueryRow(ctx, `
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id, r.created_at
+		FROM api_keys k
+		JOIN repositories r ON k.repository_id = r.id
+		WHERE k.key_hash = $1 AND (k.revoked_at IS NULL OR k.revoked_at > NOW()) AND (k.expires_at IS NULL OR k.expires_at > NOW())
+		LIMIT 1
+	`, keyHash).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
 }
 
 func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL string) (*User, error) {

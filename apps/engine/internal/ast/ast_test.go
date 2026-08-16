@@ -94,3 +94,58 @@ func TestASTCache(t *testing.T) {
 		t.Errorf("expected cached snippet %s, got %s", snippet, got)
 	}
 }
+
+func TestNormalizeMonorepoPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		file     string
+		rootDir  string
+		expected string
+	}{
+		{
+			name:     "root service (empty rootDir)",
+			file:     "pkg/handler/user.go",
+			rootDir:  "",
+			expected: "pkg/handler/user.go",
+		},
+		{
+			name:     "monorepo backend subfolder",
+			file:     "pkg/handler/user.go",
+			rootDir:  "backend",
+			expected: "backend/pkg/handler/user.go",
+		},
+		{
+			name:     "monorepo rootDir with leading and trailing slashes",
+			file:     "/api/routes.go",
+			rootDir:  "/services/engine/",
+			expected: "services/engine/api/routes.go",
+		},
+		{
+			name:     "file already contains rootDir prefix",
+			file:     "backend/pkg/handler/user.go",
+			rootDir:  "backend",
+			expected: "backend/pkg/handler/user.go",
+		},
+		{
+			name:     "file equals rootDir",
+			file:     "backend",
+			rootDir:  "backend",
+			expected: "backend",
+		},
+		{
+			name:     "dot rootDir",
+			file:     "main.go",
+			rootDir:  ".",
+			expected: "main.go",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := NormalizeMonorepoPath(tc.file, tc.rootDir)
+			if actual != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, actual)
+			}
+		})
+	}
+}

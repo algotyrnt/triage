@@ -35,6 +35,8 @@ type TelemetryRequest struct {
 	Owner      string `json:"owner,omitempty"`
 	Repo       string `json:"repo,omitempty"`
 	Commit     string `json:"commit,omitempty"`
+	RootDir    string `json:"root_dir,omitempty"`
+	RootPath   string `json:"root_path,omitempty"`
 	File       string `json:"file"`
 	Line       int    `json:"line"`
 	StackTrace string `json:"stack_trace"`
@@ -56,6 +58,8 @@ type IndexRequest struct {
 	Repo          string `json:"repo"`
 	Commit        string `json:"commit"`
 	WorkspacePath string `json:"workspace_path"`
+	RootDir       string `json:"root_dir,omitempty"`
+	RootPath      string `json:"root_path,omitempty"`
 }
 
 var (
@@ -181,6 +185,7 @@ func main() {
 	http.HandleFunc("/api/v1/incidents", corsMiddleware(handleIncidentsRoute))
 	http.HandleFunc("/api/v1/projects", corsMiddleware(handleProjectsRoute))
 	http.HandleFunc("/api/v1/stats", corsMiddleware(handleStatsRoute))
+	http.HandleFunc("/api/v1/repos/detect-modules", corsMiddleware(handleDetectModulesRoute))
 
 	// Setup wizard routes (first-run configuration)
 	http.HandleFunc("/api/v1/setup/status", corsMiddleware(handleSetupStatus))
@@ -287,7 +292,12 @@ func handleASTIndexRoute(w http.ResponseWriter, r *http.Request) {
 		workspacePath = os.Getenv("AST_WORKSPACE_ROOT")
 	}
 
-	count, err := astManager.IndexRepositoryAST(r.Context(), req.Owner, req.Repo, req.Commit, workspacePath)
+	rootDir := req.RootDir
+	if rootDir == "" {
+		rootDir = req.RootPath
+	}
+
+	count, err := astManager.IndexRepositoryAST(r.Context(), req.Owner, req.Repo, req.Commit, workspacePath, rootDir)
 	if err != nil {
 		log.Printf("[ERROR] AST indexing failed: %v", err)
 		w.Header().Set("Content-Type", "application/json")
@@ -340,7 +350,7 @@ func isValidTraceID(id string) bool {
 	return true
 }
 
-func validateAndResolveFilePath(reqFile string) (string, error) {
+func validateAndResolveFilePath(reqFile string, rootDir ...string) (string, error) {
 	if reqFile == "" {
 		return "", fmt.Errorf("file path is empty")
 	}
@@ -360,37 +370,62 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 		cleanRoot = evalRoot
 	}
 
-	cleanReq := filepath.Clean(reqFile)
-	var targetPath string
+	rd := ""
+	if len(rootDir) > 0 {
+		rd = rootDir[0]
+	}
+	normReq := ast.NormalizeMonorepoPath(reqFile, rd)
 
-	if filepath.IsAbs(cleanReq) {
-		rel, relErr := filepath.Rel(cleanRoot, cleanReq)
-		if relErr == nil && !strings.HasPrefix(rel, "..") {
-			targetPath = filepath.Join(cleanRoot, rel)
-		} else {
-			parts := strings.Split(filepath.ToSlash(cleanReq), "/")
-			found := false
-			for i := 0; i < len(parts); i++ {
-				subPath := filepath.Join(parts[i:]...)
-				candidate := filepath.Join(cleanRoot, subPath)
-				if _, statErr := os.Stat(candidate); statErr == nil {
-					targetPath = candidate
-					found = true
-					break
-				}
-			}
-			if !found {
-				return "", fmt.Errorf("absolute path cannot be mapped to workspace root: %s", reqFile)
-			}
-		}
-	} else {
-		targetPath = filepath.Join(cleanRoot, cleanReq)
+	candidatePaths := []string{normReq}
+	if normReq != reqFile {
+		candidatePaths = append(candidatePaths, reqFile)
 	}
 
+	for _, cand := range candidatePaths {
+		cleanCand := filepath.Clean(cand)
+		var targetPath string
+
+		if filepath.IsAbs(cleanCand) {
+			rel, relErr := filepath.Rel(cleanRoot, cleanCand)
+			if relErr == nil && !strings.HasPrefix(rel, "..") {
+				targetPath = filepath.Join(cleanRoot, rel)
+			} else {
+				parts := strings.Split(filepath.ToSlash(cleanCand), "/")
+				found := false
+				for i := 0; i < len(parts); i++ {
+					subPath := filepath.Join(parts[i:]...)
+					candidate := filepath.Join(cleanRoot, subPath)
+					if _, statErr := os.Stat(candidate); statErr == nil {
+						targetPath = candidate
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			}
+		} else {
+			targetPath = filepath.Join(cleanRoot, cleanCand)
+		}
+
+		if evalTarget, evalErr := filepath.EvalSymlinks(targetPath); evalErr == nil {
+			targetPath = evalTarget
+		}
+
+		rel, err := filepath.Rel(cleanRoot, targetPath)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			if _, statErr := os.Stat(targetPath); statErr == nil {
+				return targetPath, nil
+			}
+		}
+	}
+
+	// Default fallback to first candidate target path
+	targetPath := filepath.Join(cleanRoot, filepath.Clean(normReq))
 	if evalTarget, evalErr := filepath.EvalSymlinks(targetPath); evalErr == nil {
 		targetPath = evalTarget
 	}
-
 	rel, err := filepath.Rel(cleanRoot, targetPath)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("resolved path outside project root: %s", reqFile)
@@ -398,31 +433,44 @@ func validateAndResolveFilePath(reqFile string) (string, error) {
 	return targetPath, nil
 }
 
-func ExtractASTContext(ctx context.Context, owner, repo, commit, reqFile string, line int) (string, error) {
+func ExtractASTContext(ctx context.Context, owner, repo, commit, reqFile string, line int, rootDir ...string) (string, error) {
+	rd := ""
+	if len(rootDir) > 0 {
+		rd = rootDir[0]
+	}
+
+	normPath := ast.NormalizeMonorepoPath(reqFile, rd)
+
 	// 1. In-memory KV Cache check (< 2ms)
-	if snippet, found := astCache.Get(owner, repo, commit, reqFile, line); found {
-		log.Printf("[AST CACHE HIT] %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
+	if snippet, found := astCache.Get(owner, repo, commit, normPath, line); found {
+		log.Printf("[AST CACHE HIT] %s/%s@%s %s:%d", owner, repo, commit, normPath, line)
 		return snippet, nil
+	}
+	if normPath != reqFile {
+		if snippet, found := astCache.Get(owner, repo, commit, reqFile, line); found {
+			log.Printf("[AST CACHE HIT] %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
+			return snippet, nil
+		}
 	}
 
 	// 2. Pre-indexed PostgreSQL check fallback
 	if astManager != nil {
-		node, err := astManager.GetASTNode(ctx, owner, repo, commit, reqFile, line)
+		node, err := astManager.GetASTNode(ctx, owner, repo, commit, reqFile, line, rd)
 		if err == nil && node != nil && node.Snippet != "" {
-			log.Printf("[AST DB HIT] %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
-			astCache.Set(owner, repo, commit, reqFile, line, node.Snippet)
+			log.Printf("[AST DB HIT] %s/%s@%s %s:%d", owner, repo, commit, normPath, line)
+			astCache.Set(owner, repo, commit, normPath, line, node.Snippet)
 			return node.Snippet, nil
 		}
-		log.Printf("[AST DB MISS] %s/%s@%s %s:%d - %v", owner, repo, commit, reqFile, line, err)
+		log.Printf("[AST DB MISS] %s/%s@%s %s:%d - %v", owner, repo, commit, normPath, line, err)
 	}
 
 	// 3. On-demand fetch file source from GitHub or Local Workspace
-	content, fetchErr := astFetcher.FetchFile(ctx, owner, repo, commit, reqFile)
+	content, fetchErr := astFetcher.FetchFile(ctx, owner, repo, commit, reqFile, rd)
 	if fetchErr == nil && len(content) > 0 {
 		snippet, parseErr := ast.ExtractFuncASTFromBytes(content, line)
 		if parseErr == nil && snippet != "" {
-			log.Printf("[AST ON-DEMAND FETCHED] Extracted AST snippet for %s/%s@%s %s:%d", owner, repo, commit, reqFile, line)
-			astCache.Set(owner, repo, commit, reqFile, line, snippet)
+			log.Printf("[AST ON-DEMAND FETCHED] Extracted AST snippet for %s/%s@%s %s:%d", owner, repo, commit, normPath, line)
+			astCache.Set(owner, repo, commit, normPath, line, snippet)
 			return snippet, nil
 		}
 		log.Printf("[WARNING] On-demand AST byte parsing failed: %v", parseErr)
@@ -431,14 +479,14 @@ func ExtractASTContext(ctx context.Context, owner, repo, commit, reqFile string,
 	}
 
 	// 4. Local workspace fallback
-	resolvedPath, valErr := validateAndResolveFilePath(reqFile)
+	resolvedPath, valErr := validateAndResolveFilePath(reqFile, rd)
 	if valErr != nil {
 		return "", valErr
 	}
 
 	snippet, err := ast.ExtractFuncAST(resolvedPath, line)
 	if err == nil && snippet != "" {
-		astCache.Set(owner, repo, commit, reqFile, line, snippet)
+		astCache.Set(owner, repo, commit, normPath, line, snippet)
 	}
 	return snippet, err
 }
@@ -488,6 +536,26 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[TELEMETRY RECEIVED] Trace: %s | File: %s | Line: %d", traceID, req.File, req.Line)
 	log.Printf("Stack Trace:\n%s", req.StackTrace)
 
+	rootDir := req.RootDir
+	if rootDir == "" {
+		rootDir = req.RootPath
+	}
+
+	// Auto-lookup repository from DB if API key belongs to a registered project
+	if database != nil && req.APIKey != "" {
+		if repoRecord, err := database.GetRepositoryByAPIKey(r.Context(), req.APIKey); err == nil && repoRecord != nil {
+			if req.Owner == "" {
+				req.Owner = repoRecord.Owner
+			}
+			if req.Repo == "" {
+				req.Repo = repoRecord.Repo
+			}
+			if rootDir == "" {
+				rootDir = repoRecord.RootDir
+			}
+		}
+	}
+
 	var astSnippet string
 	var astErr error
 	if req.ASTSnippet != "" {
@@ -498,7 +566,7 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("[AST SNIPPET PROVIDED IN PAYLOAD]\n%s", astSnippet)
 	} else if req.File != "" && req.Line > 0 {
-		astSnippet, astErr = ExtractASTContext(r.Context(), req.Owner, req.Repo, req.Commit, req.File, req.Line)
+		astSnippet, astErr = ExtractASTContext(r.Context(), req.Owner, req.Repo, req.Commit, req.File, req.Line, rootDir)
 		if astErr != nil {
 			log.Printf("[WARNING] [TRACE %s] AST extraction failed: %v", traceID, astErr)
 		} else {
@@ -608,6 +676,8 @@ func handleProjectsRoute(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Repo          string `json:"repo"`
 			Owner         string `json:"owner"`
+			RootDir       string `json:"root_dir"`
+			ServicePath   string `json:"service_path"`
 			OwnerUsername string `json:"owner_username"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -628,10 +698,15 @@ func handleProjectsRoute(w http.ResponseWriter, r *http.Request) {
 		if owner == "" {
 			owner = "algotyrnt"
 		}
+		rootDir := req.RootDir
+		if rootDir == "" {
+			rootDir = req.ServicePath
+		}
+		rootDir = strings.Trim(strings.TrimSpace(rootDir), "/")
 
 		apiKey := fmt.Sprintf("tr_live_%s_%d", repoName, time.Now().UnixNano())
 		if database != nil {
-			k, _, err := database.CreateProject(r.Context(), owner, repoName, req.OwnerUsername)
+			k, _, err := database.CreateProject(r.Context(), owner, repoName, rootDir, req.OwnerUsername)
 			if err == nil && k != "" {
 				apiKey = k
 			}
@@ -639,9 +714,10 @@ func handleProjectsRoute(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"repo":    fmt.Sprintf("%s/%s", owner, repoName),
-			"api_key": apiKey,
+			"success":  true,
+			"repo":     fmt.Sprintf("%s/%s", owner, repoName),
+			"root_dir": rootDir,
+			"api_key":  apiKey,
 		})
 		return
 	}
@@ -1180,4 +1256,113 @@ func handleSetupLLMRoute(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+type DetectedModule struct {
+	Path   string `json:"path"`
+	Name   string `json:"name"`
+	IsRoot bool   `json:"is_root"`
+}
+
+func handleDetectModulesRoute(w http.ResponseWriter, r *http.Request) {
+	owner := r.URL.Query().Get("owner")
+	repo := r.URL.Query().Get("repo")
+	if strings.Contains(repo, "/") {
+		parts := strings.Split(repo, "/")
+		owner = parts[0]
+		repo = parts[1]
+	}
+
+	modules := []DetectedModule{
+		{Path: "", Name: "Repository Root (/)", IsRoot: true},
+	}
+	seen := map[string]bool{"": true}
+
+	// 1. Try detecting via GitHub App if configured
+	if githubApp != nil && database != nil && owner != "" && repo != "" {
+		installID, err := database.GetInstallationForRepo(r.Context(), owner, repo)
+		if err == nil && installID > 0 {
+			token, tokenErr := githubApp.GetInstallationToken(r.Context(), installID)
+			if tokenErr == nil {
+				// Query GitHub repo tree recursively
+				treesURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/git/trees/HEAD?recursive=1", owner, repo)
+				treeReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, treesURL, nil)
+				treeReq.Header.Set("Authorization", "Bearer "+token)
+				treeReq.Header.Set("Accept", "application/vnd.github+json")
+
+				client := &http.Client{Timeout: 10 * time.Second}
+				resp, err := client.Do(treeReq)
+				if err == nil && resp.StatusCode == http.StatusOK {
+					var treeData struct {
+						Tree []struct {
+							Path string `json:"path"`
+							Type string `json:"type"`
+						} `json:"tree"`
+					}
+					if jsonErr := json.NewDecoder(resp.Body).Decode(&treeData); jsonErr == nil {
+						for _, item := range treeData.Tree {
+							if item.Type == "blob" && strings.HasSuffix(item.Path, "go.mod") {
+								dir := filepath.ToSlash(filepath.Dir(item.Path))
+								if dir == "." {
+									dir = ""
+								}
+								if !seen[dir] {
+									seen[dir] = true
+									displayName := fmt.Sprintf("%s/ (Go Module)", dir)
+									modules = append(modules, DetectedModule{
+										Path:   dir,
+										Name:   displayName,
+										IsRoot: false,
+									})
+								}
+							}
+						}
+					}
+					resp.Body.Close()
+				}
+			}
+		}
+	}
+
+	// 2. Scan local workspace if present
+	wsRoot := os.Getenv("AST_WORKSPACE_ROOT")
+	if wsRoot == "" {
+		wsRoot = "."
+	}
+	_ = filepath.Walk(wsRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			name := info.Name()
+			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.Name() == "go.mod" {
+			rel, relErr := filepath.Rel(wsRoot, path)
+			if relErr == nil {
+				dir := filepath.ToSlash(filepath.Dir(rel))
+				if dir == "." {
+					dir = ""
+				}
+				if !seen[dir] {
+					seen[dir] = true
+					displayName := fmt.Sprintf("%s/ (Go Module)", dir)
+					modules = append(modules, DetectedModule{
+						Path:   dir,
+						Name:   displayName,
+						IsRoot: false,
+					})
+				}
+			}
+		}
+		return nil
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"modules": modules,
+	})
 }

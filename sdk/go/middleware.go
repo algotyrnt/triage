@@ -18,9 +18,10 @@ import (
 )
 
 type middlewareConfig struct {
-	commit string
-	owner  string
-	repo   string
+	commit   string
+	owner    string
+	repo     string
+	rootPath string
 }
 
 type Option func(*middlewareConfig)
@@ -49,6 +50,16 @@ func WithRepo(ownerRepo string) Option {
 	}
 }
 
+// WithRootPath sets the service root directory within a monorepo (e.g. "backend", "apps/api").
+// Used to properly normalize file paths relative to the repository root for on-demand AST resolution.
+func WithRootPath(rootPath string) Option {
+	return func(c *middlewareConfig) {
+		if rootPath != "" {
+			c.rootPath = strings.Trim(strings.TrimSpace(rootPath), "/")
+		}
+	}
+}
+
 func getVCSCommit() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
@@ -65,6 +76,7 @@ type TelemetryPayload struct {
 	Owner      string `json:"owner,omitempty"`
 	Repo       string `json:"repo,omitempty"`
 	Commit     string `json:"commit,omitempty"`
+	RootPath   string `json:"root_path,omitempty"`
 	File       string `json:"file"`
 	Line       int    `json:"line"`
 	StackTrace string `json:"stack_trace"`
@@ -77,6 +89,7 @@ type TelemetryJob struct {
 	Owner      string
 	Repo       string
 	Commit     string
+	RootPath   string
 	File       string
 	Line       int
 	StackTrace string
@@ -96,7 +109,7 @@ func init() {
 		go func() {
 			for job := range telemetryQueue {
 				atomic.AddUint64(&processedCount, 1)
-				sendTelemetry(job.EngineURL, job.APIKey, job.Owner, job.Repo, job.Commit, job.File, job.Line, job.StackTrace, job.TraceID)
+				sendTelemetry(job.EngineURL, job.APIKey, job.Owner, job.Repo, job.Commit, job.RootPath, job.File, job.Line, job.StackTrace, job.TraceID)
 			}
 		}()
 	}
@@ -192,6 +205,7 @@ func Middleware(apiKey, engineURL string, opts ...Option) func(http.Handler) htt
 						Owner:      cfg.owner,
 						Repo:       cfg.repo,
 						Commit:     cfg.commit,
+						RootPath:   cfg.rootPath,
 						File:       file,
 						Line:       line,
 						StackTrace: stackStr,
@@ -238,12 +252,13 @@ func parseTopApplicationFrame(stackTrace string) (string, int) {
 	return "", 0
 }
 
-func sendTelemetry(engineURL string, apiKey string, owner string, repo string, commit string, file string, line int, stackTrace string, traceID string) {
+func sendTelemetry(engineURL string, apiKey string, owner string, repo string, commit string, rootPath string, file string, line int, stackTrace string, traceID string) {
 	payload := TelemetryPayload{
 		APIKey:     apiKey,
 		Owner:      owner,
 		Repo:       repo,
 		Commit:     commit,
+		RootPath:   rootPath,
 		File:       file,
 		Line:       line,
 		StackTrace: stackTrace,

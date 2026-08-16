@@ -25,9 +25,16 @@ import { engineClient } from '@/services/engineClient';
 interface SettingsPageProps {
   apiKeys: ApiKey[];
   onNavigate: (screen: ScreenId) => void;
+  activeRepo?: string;
+  activeRootDir?: string;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate }) => {
+export const SettingsPage: React.FC<SettingsPageProps> = ({
+  apiKeys,
+  onNavigate,
+  activeRepo = 'algotyrnt/beacon-app',
+  activeRootDir = '',
+}) => {
   const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'webhooks' | 'ai' | 'danger'>(
     'ai',
   );
@@ -40,10 +47,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
   const [showSecret, setShowSecret] = useState(false);
   const [webhookSaved, setWebhookSaved] = useState(false);
 
+  // General settings
+  const parts = activeRepo.split('/');
+  const repoOwner = parts[0] || 'algotyrnt';
+  const repoName = parts[1] || activeRepo;
+  const [serviceRootDir, setServiceRootDir] = useState(activeRootDir);
+  const [generalSaved, setGeneralSaved] = useState(false);
+
   // Danger Zone delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
-  const targetRepoName = 'algotyrnt/beacon-app';
+  const targetRepoName = activeRepo;
 
   // AI settings
   const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -407,29 +421,80 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ apiKeys, onNavigate 
             <div className="bg-white border border-slate-200 rounded-sm p-4 space-y-4 font-mono text-xs">
               <div className="border-b border-slate-100 pb-3">
                 <h2 className="text-sm font-bold text-slate-900 font-mono">
-                  General Project Attributes
+                  General Project Attributes & Monorepo Configuration
                 </h2>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  View and manage repository metadata and subdirectory service scoping.
+                </p>
               </div>
 
-              <div className="space-y-3">
+              {generalSaved && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-sm flex items-center gap-2 text-xs font-bold">
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>Project configuration saved successfully.</span>
+                </div>
+              )}
+
+              <div className="space-y-4">
                 <div>
-                  <label className="font-bold text-slate-800 block">Project Name:</label>
+                  <label className="font-bold text-slate-800 block">Project Repository:</label>
                   <input
                     type="text"
-                    value="beacon-app"
+                    value={activeRepo}
                     readOnly
                     className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-sm text-slate-700 font-mono cursor-not-allowed"
                   />
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-800 block">GitHub Organization:</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-800 block">Repository Name:</label>
+                    <input
+                      type="text"
+                      value={repoName}
+                      readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-sm text-slate-700 font-mono cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-800 block">GitHub Organization / Owner:</label>
+                    <input
+                      type="text"
+                      value={repoOwner}
+                      readOnly
+                      className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-sm text-slate-700 font-mono cursor-not-allowed"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800 block">
+                    Go Service Subdirectory (Monorepo Root Path):
+                  </label>
                   <input
                     type="text"
-                    value="algotyrnt"
-                    readOnly
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-sm text-slate-700 font-mono cursor-not-allowed"
+                    value={serviceRootDir}
+                    onChange={(e) => setServiceRootDir(e.target.value)}
+                    placeholder="e.g. backend or apps/api (leave empty for repository root)"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
                   />
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    Scoping directory for AST symbolication and GitHub source fetching in monorepo structures.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGeneralSaved(true);
+                      setTimeout(() => setGeneralSaved(false), 2500);
+                    }}
+                    className="bg-black hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-sm border border-black transition-colors cursor-pointer"
+                  >
+                    Save Project Attributes
+                  </button>
                 </div>
               </div>
             </div>

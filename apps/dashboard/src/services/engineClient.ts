@@ -169,17 +169,39 @@ export class EngineClient {
 
   async createProject(
     repo: string,
+    rootDir?: string,
     ownerUsername?: string,
-  ): Promise<{ success: boolean; repo: string; api_key: string }> {
+  ): Promise<{ success: boolean; repo: string; root_dir?: string; api_key: string }> {
     const res = await fetch(`${this.baseUrl}/projects`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
-      body: JSON.stringify({ repo, owner_username: ownerUsername || '' }),
+      body: JSON.stringify({
+        repo,
+        root_dir: rootDir || '',
+        owner_username: ownerUsername || '',
+      }),
     });
     if (!res.ok) {
       throw new Error(`Failed to create project: ${await res.text()}`);
     }
     return await res.json();
+  }
+
+  async detectGoModules(
+    owner: string,
+    repo: string,
+  ): Promise<{ path: string; name: string; is_root: boolean }[]> {
+    try {
+      const params = new URLSearchParams({ owner, repo });
+      const res = await fetch(`${this.baseUrl}/repos/detect-modules?${params.toString()}`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (!res.ok) return [{ path: '', name: 'Repository Root (/)', is_root: true }];
+      const data = await res.json();
+      return data.modules || [{ path: '', name: 'Repository Root (/)', is_root: true }];
+    } catch {
+      return [{ path: '', name: 'Repository Root (/)', is_root: true }];
+    }
   }
 
   async getStats(): Promise<any> {

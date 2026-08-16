@@ -28,6 +28,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
   const [activeRepo, setActiveRepo] = useState<string>('');
+  const [activeRootDir, setActiveRootDir] = useState<string>('');
   const [activeApiKey, setActiveApiKey] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<{
     username: string;
@@ -99,6 +100,9 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
         if (projects && projects.length > 0) {
           const firstProject = projects[0];
           setActiveRepo(`${firstProject.owner}/${firstProject.repo}`);
+          if (firstProject.root_dir) {
+            setActiveRootDir(firstProject.root_dir);
+          }
           // Load incidents
           const liveIncidents = await engineClient.getIncidents();
           if (liveIncidents && liveIncidents.length > 0) {
@@ -185,11 +189,12 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
     showToast('Logged out of Triage Console', 'success');
   };
 
-  const handleProjectSetup = async (repo: string, apiKey: string) => {
+  const handleProjectSetup = async (repo: string, apiKey: string, rootDir?: string) => {
     setActiveRepo(repo);
+    setActiveRootDir(rootDir || '');
     let finalKey = apiKey;
     try {
-      const res = await engineClient.createProject(repo, currentUser?.username);
+      const res = await engineClient.createProject(repo, rootDir, currentUser?.username);
       if (res && res.api_key) {
         finalKey = res.api_key;
       }
@@ -198,7 +203,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
     }
     setActiveApiKey(finalKey);
     showToast(
-      `Project ${repo} setup complete with API Key ${finalKey.substring(0, 12)}...`,
+      `Project ${repo}${rootDir ? ` (${rootDir})` : ''} setup complete with API Key ${finalKey.substring(0, 12)}...`,
       'success',
     );
   };
@@ -261,8 +266,8 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           <OnboardingPage
             currentUser={currentUser}
             onNavigate={(screen) => setCurrentScreen(screen)}
-            onProjectSetup={(repo, key) => {
-              handleProjectSetup(repo, key);
+            onProjectSetup={(repo, key, rootDir) => {
+              handleProjectSetup(repo, key, rootDir);
               setCurrentScreen('dashboard');
             }}
           />
@@ -273,6 +278,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
             incidents={incidents}
             onNavigate={(screen) => setCurrentScreen(screen)}
             activeRepo={activeRepo}
+            rootDir={activeRootDir}
             apiKey={activeApiKey}
             onSelectIncident={(id) => {
               setSelectedIncidentId(id);
@@ -319,7 +325,12 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           />
         )}
         {currentScreen === 'settings' && (
-          <SettingsPage apiKeys={[]} onNavigate={(screen) => setCurrentScreen(screen)} />
+          <SettingsPage
+            apiKeys={[]}
+            onNavigate={(screen) => setCurrentScreen(screen)}
+            activeRepo={activeRepo}
+            activeRootDir={activeRootDir}
+          />
         )}
       </main>
 
