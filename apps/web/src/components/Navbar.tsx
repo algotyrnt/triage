@@ -161,6 +161,16 @@ export const Navbar: React.FC = () => {
             Benchmarks
           </a>
           <a
+            href="https://github.com/algotyrnt/triage/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-1.5 text-slate-700 hover:text-black py-1 font-semibold"
+          >
+            <Tag className="w-3.5 h-3.5 text-slate-500" />
+            <span>Releases</span>
+          </a>
+          <a
             href="/docs/overview"
             className="block text-slate-900 font-bold py-1 border-t border-slate-100 pt-2 items-center gap-1.5"
           >
