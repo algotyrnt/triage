@@ -100,9 +100,7 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
         if (projects && projects.length > 0) {
           const firstProject = projects[0];
           setActiveRepo(`${firstProject.owner}/${firstProject.repo}`);
-          if (firstProject.root_dir) {
-            setActiveRootDir(firstProject.root_dir);
-          }
+          setActiveRootDir(firstProject.root_dir || '');
           // Load incidents
           const liveIncidents = await engineClient.getIncidents();
           if (liveIncidents && liveIncidents.length > 0) {
