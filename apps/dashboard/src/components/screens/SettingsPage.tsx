@@ -53,6 +53,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const repoName = parts[1] || activeRepo;
   const [serviceRootDir, setServiceRootDir] = useState(activeRootDir);
   const [generalSaved, setGeneralSaved] = useState(false);
+  const [savingGeneral, setSavingGeneral] = useState(false);
+
+  useEffect(() => {
+    setServiceRootDir(activeRootDir);
+  }, [activeRootDir]);
 
   // Danger Zone delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -487,13 +492,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <div className="pt-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setGeneralSaved(true);
-                      setTimeout(() => setGeneralSaved(false), 2500);
+                    disabled={savingGeneral}
+                    onClick={async () => {
+                      setSavingGeneral(true);
+                      try {
+                        await engineClient.createProject(activeRepo, serviceRootDir, repoOwner);
+                        setGeneralSaved(true);
+                        setTimeout(() => setGeneralSaved(false), 2500);
+                      } catch (err) {
+                        console.error('Failed to save project attributes:', err);
+                      } finally {
+                        setSavingGeneral(false);
+                      }
                     }}
-                    className="bg-black hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-sm border border-black transition-colors cursor-pointer"
+                    className="bg-black hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-sm border border-black transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    Save Project Attributes
+                    {savingGeneral ? 'Saving...' : generalSaved ? '✓ Saved' : 'Save Project Attributes'}
                   </button>
                 </div>
               </div>
