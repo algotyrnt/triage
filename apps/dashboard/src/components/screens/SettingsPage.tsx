@@ -463,7 +463,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
 
                   <div>
-                    <label className="font-bold text-slate-800 block">GitHub Organization / Owner:</label>
+                    <label className="font-bold text-slate-800 block">
+                      GitHub Organization / Owner:
+                    </label>
                     <input
                       type="text"
                       value={repoOwner}
@@ -485,7 +487,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
                   />
                   <p className="text-[11px] text-slate-500 font-mono">
-                    Scoping directory for AST symbolication and GitHub source fetching in monorepo structures.
+                    Scoping directory for AST symbolication and GitHub source fetching in monorepo
+                    structures.
                   </p>
                 </div>
 
@@ -507,7 +510,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     }}
                     className="bg-black hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-sm border border-black transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {savingGeneral ? 'Saving...' : generalSaved ? '✓ Saved' : 'Save Project Attributes'}
+                    {savingGeneral
+                      ? 'Saving...'
+                      : generalSaved
+                        ? '✓ Saved'
+                        : 'Save Project Attributes'}
                   </button>
                 </div>
               </div>

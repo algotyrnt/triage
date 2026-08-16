@@ -183,9 +183,7 @@ require (
               {rootDir ? 'Monorepo' : 'Root AST'}
             </span>
           </div>
-          <div className="font-mono text-xs font-bold text-slate-900 truncate">
-            {activeRepo}
-          </div>
+          <div className="font-mono text-xs font-bold text-slate-900 truncate">{activeRepo}</div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
             <span>{rootDir ? `Subdir: ${rootDir}/` : 'Root: /'}</span>
             <span className="text-slate-800 font-mono">Go 1.22+</span>

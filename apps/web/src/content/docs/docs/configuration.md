@@ -45,9 +45,9 @@ handler := triage.Middleware(
 )(next http.Handler)
 ```
 
-| Parameter   | Type     | Description                                                                                     |
-| :---------- | :------- | :---------------------------------------------------------------------------------------------- |
-| `apiKey`    | `string` | Telemetry ingestion API key. Identifies repository, monorepo subfolder, and permissions.        |
-| `engineURL` | `string` | Full HTTP telemetry endpoint of your Triage engine (`https://.../api/v1/telemetry`).           |
+| Parameter   | Type     | Description                                                                              |
+| :---------- | :------- | :--------------------------------------------------------------------------------------- |
+| `apiKey`    | `string` | Telemetry ingestion API key. Identifies repository, monorepo subfolder, and permissions. |
+| `engineURL` | `string` | Full HTTP telemetry endpoint of your Triage engine (`https://.../api/v1/telemetry`).     |
 
 All other metadata (Git commit SHA, GitHub repository, monorepo directory) is auto-resolved by the Go binary runtime and the Triage engine.

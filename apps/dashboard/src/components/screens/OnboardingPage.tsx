@@ -362,7 +362,11 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-slate-600 font-sans">
-                If your Go backend lives in a subfolder (e.g. <code className="font-mono text-slate-800">backend</code>, <code className="font-mono text-slate-800">apps/api</code>, or <code className="font-mono text-slate-800">services/engine</code>), specify it below for precise AST symbolication.
+                If your Go backend lives in a subfolder (e.g.{' '}
+                <code className="font-mono text-slate-800">backend</code>,{' '}
+                <code className="font-mono text-slate-800">apps/api</code>, or{' '}
+                <code className="font-mono text-slate-800">services/engine</code>), specify it below
+                for precise AST symbolication.
               </p>
 
               {/* Detected Go Module Quick Selector */}
@@ -387,9 +391,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                         >
                           <Folder className="w-3 h-3" />
                           <span>{mod.path ? `${mod.path}/` : 'Root (/)'}</span>
-                          {mod.is_root && (
-                            <span className="text-[9px] opacity-75">(Root)</span>
-                          )}
+                          {mod.is_root && <span className="text-[9px] opacity-75">(Root)</span>}
                         </button>
                       );
                     })}
@@ -516,7 +518,10 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="flex items-center gap-1.5">
                   <Key className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Production Telemetry Key (Repo: {customRepoInput.trim() || selectedRepo}{rootDir ? ` • ${rootDir}/` : ''})</span>
+                  <span>
+                    Production Telemetry Key (Repo: {customRepoInput.trim() || selectedRepo}
+                    {rootDir ? ` • ${rootDir}/` : ''})
+                  </span>
                 </span>
                 <span className="text-[10px] text-emerald-400 font-bold">STATUS: ACTIVE</span>
               </div>
