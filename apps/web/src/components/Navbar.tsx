@@ -131,7 +131,7 @@ export const Navbar: React.FC = () => {
           <a
             href="#simulator"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-indigo-600 font-semibold py-1 flex items-center gap-1.5"
+            className="block text-indigo-600 font-semibold py-1 items-center gap-1.5"
           >
             <Sparkles className="w-4 h-4" />
             <span>Panic Inspector</span>
@@ -152,7 +152,7 @@ export const Navbar: React.FC = () => {
           </a>
           <a
             href="/docs/overview"
-            className="block text-slate-900 font-bold py-1 border-t border-slate-100 pt-2 flex items-center gap-1.5"
+            className="block text-slate-900 font-bold py-1 border-t border-slate-100 pt-2 items-center gap-1.5"
           >
             <BookOpen className="w-4 h-4" />
             <span>Documentation</span>
