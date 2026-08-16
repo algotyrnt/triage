@@ -1,0 +1,201 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  tag-sdk:
+    name: Release & Index Go SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and Push Submodule Tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          SDK_TAG="sdk/go/${TAG}"
+          echo "Processing SDK Tag: $SDK_TAG"
+          
+          if git rev-parse "$SDK_TAG" >/dev/null 2>&1; then
+            echo "Tag $SDK_TAG already exists."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$SDK_TAG" -m "Release SDK $TAG"
+            git push origin "$SDK_TAG"
+            echo "Pushed tag $SDK_TAG"
+          fi
+
+      - name: Warm Go Proxy & pkg.go.dev Cache
+        run: |
+          TAG="${{ github.ref_name }}"
+          echo "Warming Go module cache for github.com/algotyrnt/triage/sdk/go@$TAG"
+          curl -s -f "https://proxy.golang.org/github.com/algotyrnt/triage/sdk/go/@v/${TAG}.info" || true
+
+  docker-engine:
+    name: Build & Push Engine Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-engine
+          tags: |
+            type=raw,value=${{ github.ref_name }}
+            type=semver,pattern=v{{version}}
+            type=raw,value=latest
+
+      - name: Build and push Engine image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/engine
+          file: ./apps/engine/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  docker-dashboard:
+    name: Build & Push Dashboard Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-dashboard
+          tags: |
+            type=raw,value=${{ github.ref_name }}
+            type=semver,pattern=v{{version}}
+            type=raw,value=latest
+
+      - name: Build and push Dashboard image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/dashboard
+          file: ./apps/dashboard/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  build-web:
+    name: Build Web & Documentation Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies & Build Astro Web
+        working-directory: apps/web
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Package Web Distribution Bundle
+        run: |
+          tar -czf "triage-web-${{ github.ref_name }}.tar.gz" -C apps/web/dist .
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: triage-web-${{ github.ref_name }}.tar.gz
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [tag-sdk, docker-engine, docker-dashboard, build-web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Web Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: ./
+
+      - name: Generate Release Notes & Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Triage ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') }}
+          files: |
+            docker-compose.prod.yml
+            db/schema.sql
+            triage-web-${{ github.ref_name }}.tar.gz
+          body: |
+            ## Triage ${{ github.ref_name }}
+
+            ### Quick Installation
+
+            #### Go SDK
+            ```bash
+            go get github.com/algotyrnt/triage/sdk/go@${{ github.ref_name }}
+            ```
+
+            #### Self-Hosting with Docker Compose
+            ```bash
+            mkdir -p db
+            curl -sSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/db/schema.sql" -o db/schema.sql
+            curl -sSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml" -o docker-compose.prod.yml
+            POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=${{ github.ref_name }} docker compose -f docker-compose.prod.yml up -d
+            ```
+
+            #### Pre-built Docker Images
+            - **Engine**: `docker pull ghcr.io/${{ github.repository }}-engine:${{ github.ref_name }}`
+            - **Dashboard**: `docker pull ghcr.io/${{ github.repository }}-dashboard:${{ github.ref_name }}`

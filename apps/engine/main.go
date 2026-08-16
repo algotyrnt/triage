@@ -31,6 +31,9 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Version is the current build version of the Triage Engine, overridable via ldflags at build time.
+var Version = "v0.1.0-dev"
+
 type TelemetryRequest struct {
 	APIKey     string `json:"api_key"`
 	Owner      string `json:"owner,omitempty"`
@@ -745,13 +748,13 @@ func handleStatsRoute(w http.ResponseWriter, r *http.Request) {
 
 	stats := map[string]interface{}{
 		"status":          "healthy",
-		"engine_version":  "v1.4.2",
+		"engine_version":  Version,
 		"total_incidents": 0,
 		"funcs_indexed":   1420,
 	}
 
 	if database != nil {
-		s, err := database.GetStats(r.Context())
+		s, err := database.GetStats(r.Context(), Version)
 		if err == nil {
 			stats = s
 		}

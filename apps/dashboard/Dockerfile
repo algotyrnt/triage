@@ -6,6 +6,8 @@ COPY package.json bun.lock* ./
 RUN bun install
 
 FROM base AS builder
+ARG APP_VERSION=0.1.0
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
@@ -28,4 +30,4 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["bun", "server.js"]
