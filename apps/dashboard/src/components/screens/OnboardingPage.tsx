@@ -540,10 +540,7 @@ func main() {
 
 	// Wrap HTTP multiplexer with triage panic recovery middleware
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	handler := triage.Middleware("${activeKey}",
-		telemetryURL,
-		triage.WithRepo("${customRepoInput.trim() || selectedRepo || 'owner/repo'}"),${rootDir ? `\n\t\ttriage.WithRootPath("${rootDir}"),` : ''}
-	)(mux)
+	handler := triage.Middleware("${activeKey}", telemetryURL)(mux)
 
 	http.ListenAndServe(":8081", handler)
 }`}

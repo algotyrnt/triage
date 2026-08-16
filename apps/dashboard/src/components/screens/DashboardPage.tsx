@@ -70,10 +70,7 @@ func main() {
 
 	// Initialize Triage Panic Symbolication Engine
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	handler := triage.Middleware("${apiKey}", 
-		telemetryURL,
-		triage.WithRepo("${activeRepo}"),${rootDir ? `\n\t\ttriage.WithRootPath("${rootDir}"),` : ''}
-	)(mux)
+	handler := triage.Middleware("${apiKey}", telemetryURL)(mux)
 
 	log.Println("[INFO] Server listening on :8081...")
 	http.ListenAndServe(":8081", handler)
@@ -89,10 +86,7 @@ import (
 // RecoveryMiddleware wraps HTTP handlers to isolate panics at route boundaries
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	return triage.Middleware("${apiKey}",
-		telemetryURL,
-		triage.WithRepo("${activeRepo}"),${rootDir ? `\n\t\ttriage.WithRootPath("${rootDir}"),` : ''}
-	)(next)
+	return triage.Middleware("${apiKey}", telemetryURL)(next)
 }`,
     'go.mod': `module ${activeRepo}
 
