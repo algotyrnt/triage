@@ -67,7 +67,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-engine
           tags: |
-            type=semver,pattern={{version}}
+            type=raw,value=${{ github.ref_name }}
+            type=semver,pattern=v{{version}}
             type=raw,value=latest
 
       - name: Build and push Engine image
@@ -108,7 +109,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}-dashboard
           tags: |
-            type=semver,pattern={{version}}
+            type=raw,value=${{ github.ref_name }}
+            type=semver,pattern=v{{version}}
             type=raw,value=latest
 
       - name: Build and push Dashboard image
@@ -188,8 +190,10 @@ jobs:
 
             #### Self-Hosting with Docker Compose
             ```bash
-            curl -O https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml
-            TRIAGE_VERSION=${{ github.ref_name }} docker compose -f docker-compose.prod.yml up -d
+            mkdir -p db
+            curl -sSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/db/schema.sql" -o db/schema.sql
+            curl -sSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml" -o docker-compose.prod.yml
+            POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=${{ github.ref_name }} docker compose -f docker-compose.prod.yml up -d
             ```
 
             #### Pre-built Docker Images
