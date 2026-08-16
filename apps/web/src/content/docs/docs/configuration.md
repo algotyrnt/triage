@@ -34,21 +34,20 @@ The Next.js dashboard (`apps/dashboard`) supports:
 
 ---
 
-## Go SDK Options Reference
+## Go SDK Middleware Reference
 
-The Go SDK (`sdk/go`) options configured via `triage.Middleware()`:
+The Go SDK (`sdk/go`) middleware is initialized with just your API key and Engine URL:
 
 ```go
 handler := triage.Middleware(
     apiKey string,
-    opts ...Option,
+    engineURL string,
 )(next http.Handler)
 ```
 
-| Option             | Signature                            | Description                                           |
-| :----------------- | :----------------------------------- | :---------------------------------------------------- |
-| `WithRepo`         | `WithRepo(repo string)`              | GitHub repository (`owner/repo`) for AST resolution.  |
-| `WithGatewayURL`   | `WithGatewayURL(url string)`         | Engine telemetry endpoint.                            |
-| `WithCommit`       | `WithCommit(sha string)`             | Explicit git commit SHA override.                     |
-| `WithWorkerPool`   | `WithWorkerPool(workers, queue int)` | Adjust async telemetry worker count and queue buffer. |
-| `WithCustomLogger` | `WithCustomLogger(l Logger)`         | Inject a custom logger for SDK output.                |
+| Parameter   | Type     | Description                                                                              |
+| :---------- | :------- | :--------------------------------------------------------------------------------------- |
+| `apiKey`    | `string` | Telemetry ingestion API key. Identifies repository, monorepo subfolder, and permissions. |
+| `engineURL` | `string` | Full HTTP telemetry endpoint of your Triage engine (`https://.../api/v1/telemetry`).     |
+
+All other metadata (Git commit SHA, GitHub repository, monorepo directory) is auto-resolved by the Go binary runtime and the Triage engine.

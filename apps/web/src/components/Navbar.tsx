@@ -22,32 +22,6 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-50">
-      {/* Top operational announcement banner */}
-      <div className="bg-slate-900 text-slate-300 text-xs py-1.5 px-4 font-mono flex items-center justify-between border-b border-slate-800">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-200 font-semibold">Triage Core v1.0 Active</span>
-            <span className="text-slate-600 hidden sm:inline">•</span>
-            <span className="hidden sm:inline text-slate-400">
-              Zero-Overhead Go Panic Recovery & Gemini AI Diagnosis
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 text-xs">
-            <a
-              href="https://github.com/algotyrnt/triage"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <GithubIcon className="w-3.5 h-3.5" />
-              <span>algotyrnt/triage</span>
-            </a>
-          </div>
-        </div>
-      </div>
-
       {/* Main Navigation Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
         {/* Brand Block */}
@@ -98,6 +72,17 @@ export const Navbar: React.FC = () => {
         {/* Action Buttons */}
         <div className="hidden sm:flex items-center gap-3">
           <a
+            href="https://github.com/algotyrnt/triage"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-600 hover:text-black p-2 rounded-sm border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center"
+            title="GitHub Repository"
+            aria-label="GitHub Repository"
+          >
+            <GithubIcon className="w-4 h-4" />
+          </a>
+
+          <a
             href="/docs/quickstart"
             className="text-xs font-mono text-slate-700 hover:text-black px-3 py-1.5 rounded-sm border border-slate-300 hover:bg-slate-50 transition-colors flex items-center gap-1.5"
           >
@@ -146,7 +131,7 @@ export const Navbar: React.FC = () => {
           <a
             href="#simulator"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-indigo-600 font-semibold py-1 flex items-center gap-1.5"
+            className="block text-indigo-600 font-semibold py-1 items-center gap-1.5"
           >
             <Sparkles className="w-4 h-4" />
             <span>Panic Inspector</span>
@@ -167,12 +152,22 @@ export const Navbar: React.FC = () => {
           </a>
           <a
             href="/docs/overview"
-            className="block text-slate-900 font-bold py-1 border-t border-slate-100 pt-2 flex items-center gap-1.5"
+            className="block text-slate-900 font-bold py-1 border-t border-slate-100 pt-2 items-center gap-1.5"
           >
             <BookOpen className="w-4 h-4" />
             <span>Documentation</span>
           </a>
           <div className="pt-2 flex flex-col gap-2">
+            <a
+              href="https://github.com/algotyrnt/triage"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMobileMenuOpen(false)}
+              className="w-full text-center border border-slate-300 text-slate-700 py-2 rounded-sm font-semibold flex items-center justify-center gap-2 hover:bg-slate-50"
+            >
+              <GithubIcon className="w-4 h-4" />
+              <span>GitHub Repository</span>
+            </a>
             <a
               href="/docs/self-hosting"
               onClick={() => setMobileMenuOpen(false)}

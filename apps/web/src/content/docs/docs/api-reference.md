@@ -38,15 +38,11 @@ Receives panic telemetry payloads from Go SDK middleware.
 ```json
 {
   "api_key": "tr_live_key_9042",
-  "trace_id": "tr_7f9c2d1e8a4b0c3d9a1f",
-  "repo": "myorg/myrepo",
-  "commit_sha": "7f8b9e1a2c3d4e5f60718293",
+  "commit": "7f8b9e1a2c3d4e5f60718293",
   "file": "handlers/payment.go",
   "line": 28,
-  "function_name": "ProcessTransaction",
-  "panic_message": "runtime error: invalid memory address or nil pointer dereference",
-  "raw_stack_trace": "goroutine 42 [running]:\n...",
-  "goroutine_id": "goroutine 42 [running]"
+  "stack_trace": "goroutine 42 [running]:\n...",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736"
 }
 ```
 

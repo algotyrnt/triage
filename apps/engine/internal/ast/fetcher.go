@@ -19,7 +19,21 @@ import (
 
 // FileFetcher defines the interface for fetching source file content.
 type FileFetcher interface {
-	FetchFile(ctx context.Context, owner, repo, commit, filePath string) ([]byte, error)
+	FetchFile(ctx context.Context, owner, repo, commit, filePath string, rootDir ...string) ([]byte, error)
+}
+
+// NormalizeMonorepoPath combines rootDir and filePath if rootDir is specified
+// and filePath does not already contain rootDir as a prefix.
+func NormalizeMonorepoPath(filePath, rootDir string) string {
+	cleanFile := strings.TrimPrefix(filepath.ToSlash(filePath), "/")
+	cleanRoot := strings.Trim(strings.TrimSpace(filepath.ToSlash(rootDir)), "/")
+	if cleanRoot == "" || cleanRoot == "." {
+		return cleanFile
+	}
+	if strings.HasPrefix(cleanFile, cleanRoot+"/") || cleanFile == cleanRoot {
+		return cleanFile
+	}
+	return cleanRoot + "/" + cleanFile
 }
 
 // OnDemandFetcher fetches source files on-demand from GitHub (via installation tokens)
@@ -47,8 +61,8 @@ func NewOnDemandFetcher() *OnDemandFetcher {
 }
 
 // FetchFile retrieves file content for AST parsing. Implements FileFetcher interface.
-func (f *OnDemandFetcher) FetchFile(ctx context.Context, owner, repo, commit, filePath string) ([]byte, error) {
-	result, err := f.FetchFileWithMeta(ctx, owner, repo, commit, filePath)
+func (f *OnDemandFetcher) FetchFile(ctx context.Context, owner, repo, commit, filePath string, rootDir ...string) ([]byte, error) {
+	result, err := f.FetchFileWithMeta(ctx, owner, repo, commit, filePath, rootDir...)
 	if err != nil {
 		return nil, err
 	}
@@ -56,35 +70,63 @@ func (f *OnDemandFetcher) FetchFile(ctx context.Context, owner, repo, commit, fi
 }
 
 // FetchFileWithMeta retrieves file content along with the blob SHA for caching.
-func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, commit, filePath string) (*FetchResult, error) {
-	cleanPath := strings.TrimPrefix(filepath.ToSlash(filePath), "/")
-
-	// 1. If GitHub App is configured, try installation token-based fetch (Contents API)
-	if f.GitHubApp != nil && f.GetInstallationID != nil && owner != "" && repo != "" && commit != "" {
-		result, err := f.fetchFromGitHubApp(ctx, owner, repo, commit, cleanPath)
-		if err == nil && len(result.Content) > 0 {
-			return result, nil
-		}
-		// Log but don't fail — fall through to other methods
-		if err != nil {
-			log.Printf("[AST FETCH] GitHub App fetch failed for %s/%s@%s %s: %v", owner, repo, commit, cleanPath, err)
-		}
+func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, commit, filePath string, rootDir ...string) (*FetchResult, error) {
+	rd := ""
+	if len(rootDir) > 0 {
+		rd = rootDir[0]
 	}
 
-	// 2. Fallback: raw.githubusercontent.com with GITHUB_TOKEN (legacy)
-	if owner != "" && repo != "" && commit != "" {
-		content, err := f.fetchFromGitHubRaw(ctx, owner, repo, commit, cleanPath)
+	normPath := NormalizeMonorepoPath(filePath, rd)
+	cleanOrig := strings.TrimPrefix(filepath.ToSlash(filePath), "/")
+
+	candidatePaths := []string{normPath}
+	if cleanOrig != normPath {
+		candidatePaths = append(candidatePaths, cleanOrig)
+	}
+
+	var lastErr error
+	for _, candidate := range candidatePaths {
+		// 1. If GitHub App is configured, try installation token-based fetch (Contents API)
+		if f.GitHubApp != nil && f.GetInstallationID != nil && owner != "" && repo != "" {
+			result, err := f.fetchFromGitHubApp(ctx, owner, repo, commit, candidate)
+			if err == nil && len(result.Content) > 0 {
+				return result, nil
+			}
+			if err != nil {
+				lastErr = err
+				log.Printf("[AST FETCH] GitHub App fetch failed for %s/%s@%s %s: %v", owner, repo, commit, candidate, err)
+			}
+		}
+
+		// 2. Fallback: raw.githubusercontent.com with GITHUB_TOKEN (legacy)
+		if owner != "" && repo != "" {
+			rawCommit := commit
+			if rawCommit == "" {
+				rawCommit = "HEAD"
+			}
+			content, err := f.fetchFromGitHubRaw(ctx, owner, repo, rawCommit, candidate)
+			if err == nil && len(content) > 0 {
+				return &FetchResult{Content: content}, nil
+			}
+			if err != nil {
+				lastErr = err
+			}
+		}
+
+		// 3. Final fallback: local workspace filesystem
+		content, err := f.fetchFromLocalWorkspace(candidate)
 		if err == nil && len(content) > 0 {
 			return &FetchResult{Content: content}, nil
 		}
+		if err != nil {
+			lastErr = err
+		}
 	}
 
-	// 3. Final fallback: local workspace filesystem
-	content, err := f.fetchFromLocalWorkspace(cleanPath)
-	if err != nil {
-		return nil, err
+	if lastErr != nil {
+		return nil, lastErr
 	}
-	return &FetchResult{Content: content}, nil
+	return nil, fmt.Errorf("failed to fetch file: %s", filePath)
 }
 
 // fetchFromGitHubApp uses the GitHub App installation token to fetch file content

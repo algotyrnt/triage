@@ -26,6 +26,7 @@ interface DashboardPageProps {
   onSelectIncident: (id: string) => void;
   onNavigate: (screen: ScreenId) => void;
   activeRepo?: string;
+  rootDir?: string;
   apiKey?: string;
 }
 
@@ -34,6 +35,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onSelectIncident,
   onNavigate,
   activeRepo = 'algotyrnt/triage',
+  rootDir = '',
   apiKey = 'tr_live_demo_key_9042',
 }) => {
   const [activeCodeTab, setActiveCodeTab] = useState<'main.go' | 'middleware.go' | 'go.mod'>(
@@ -59,6 +61,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 import (
 	"log"
 	"net/http"
+	"os"
 	triage "github.com/algotyrnt/triage/sdk/go"
 )
 
@@ -67,10 +70,7 @@ func main() {
 
 	// Initialize Triage Panic Symbolication Engine
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	handler := triage.Middleware("${apiKey}", 
-		triage.WithRepo("${activeRepo}"),
-		triage.WithGatewayURL(telemetryURL),
-	)(mux)
+	handler := triage.Middleware("${apiKey}", telemetryURL)(mux)
 
 	log.Println("[INFO] Server listening on :8081...")
 	http.ListenAndServe(":8081", handler)
@@ -79,12 +79,14 @@ func main() {
 
 import (
 	"net/http"
+	"os"
 	triage "github.com/algotyrnt/triage/sdk/go"
 )
 
 // RecoveryMiddleware wraps HTTP handlers to isolate panics at route boundaries
 func RecoveryMiddleware(next http.Handler) http.Handler {
-	return triage.Middleware("${apiKey}", triage.WithRepo("${activeRepo}"))(next)
+	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
+	return triage.Middleware("${apiKey}", telemetryURL)(next)
 }`,
     'go.mod': `module ${activeRepo}
 
@@ -116,6 +118,12 @@ require (
             <span>Projects</span>
             <span>/</span>
             <span className="font-bold text-slate-900">{activeRepo}</span>
+            {rootDir && (
+              <>
+                <span>/</span>
+                <span className="text-indigo-600 font-semibold">{rootDir}</span>
+              </>
+            )}
           </div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight font-sans mt-1">
             System Overview & Ingestion Dashboard
@@ -172,12 +180,12 @@ require (
               <span>Monitored Repo</span>
             </span>
             <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded-sm text-slate-700 font-mono">
-              On-Demand AST
+              {rootDir ? 'Monorepo' : 'Root AST'}
             </span>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900 truncate">{activeRepo}</div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
-            <span>Branch: main</span>
+            <span>{rootDir ? `Subdir: ${rootDir}/` : 'Root: /'}</span>
             <span className="text-slate-800 font-mono">Go 1.22+</span>
           </div>
         </div>
@@ -257,7 +265,7 @@ require (
           </div>
 
           {/* Code Viewer in Charcoal (#111827) */}
-          <div className="bg-slate-900 text-slate-100 p-4 font-mono text-xs relative group border-b border-slate-800 min-h-[300px]">
+          <div className="bg-slate-900 text-slate-100 p-4 font-mono text-xs relative group border-b border-slate-800 min-h-75">
             <button
               onClick={handleCopySnippet}
               className="absolute top-3 right-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded-sm text-[11px] border border-slate-700 flex items-center gap-1 transition-colors font-mono"

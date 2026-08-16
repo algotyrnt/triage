@@ -17,38 +17,6 @@ import (
 	"time"
 )
 
-type middlewareConfig struct {
-	commit string
-	owner  string
-	repo   string
-}
-
-type Option func(*middlewareConfig)
-
-// WithCommit sets the Git commit SHA for on-demand source code resolution.
-// If not provided, the commit is auto-detected via debug.ReadBuildInfo() (Go 1.18+ embedded VCS info).
-func WithCommit(commit string) Option {
-	return func(c *middlewareConfig) {
-		if commit != "" {
-			c.commit = commit
-		}
-	}
-}
-
-// WithRepo sets the repository owner and name (e.g. "owner/repo").
-// Used for on-demand AST resolution via the GitHub Contents API.
-func WithRepo(ownerRepo string) Option {
-	return func(c *middlewareConfig) {
-		if ownerRepo != "" {
-			parts := strings.Split(ownerRepo, "/")
-			if len(parts) == 2 {
-				c.owner = parts[0]
-				c.repo = parts[1]
-			}
-		}
-	}
-}
-
 func getVCSCommit() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
@@ -62,8 +30,6 @@ func getVCSCommit() string {
 
 type TelemetryPayload struct {
 	APIKey     string `json:"api_key"`
-	Owner      string `json:"owner,omitempty"`
-	Repo       string `json:"repo,omitempty"`
 	Commit     string `json:"commit,omitempty"`
 	File       string `json:"file"`
 	Line       int    `json:"line"`
@@ -74,8 +40,6 @@ type TelemetryPayload struct {
 type TelemetryJob struct {
 	EngineURL  string
 	APIKey     string
-	Owner      string
-	Repo       string
 	Commit     string
 	File       string
 	Line       int
@@ -96,7 +60,7 @@ func init() {
 		go func() {
 			for job := range telemetryQueue {
 				atomic.AddUint64(&processedCount, 1)
-				sendTelemetry(job.EngineURL, job.APIKey, job.Owner, job.Repo, job.Commit, job.File, job.Line, job.StackTrace, job.TraceID)
+				sendTelemetry(job.EngineURL, job.APIKey, job.Commit, job.File, job.Line, job.StackTrace, job.TraceID)
 			}
 		}()
 	}
@@ -165,15 +129,8 @@ func enqueueTelemetry(job TelemetryJob) {
 // Usage:
 //
 //	handler := triage.Middleware(apiKey, engineURL)(mux)
-//	handler := triage.Middleware(apiKey, engineURL, triage.WithRepo("owner/repo"))(mux)
-func Middleware(apiKey, engineURL string, opts ...Option) func(http.Handler) http.Handler {
-	cfg := &middlewareConfig{
-		commit: getVCSCommit(),
-	}
-
-	for _, opt := range opts {
-		opt(cfg)
-	}
+func Middleware(apiKey, engineURL string) func(http.Handler) http.Handler {
+	commit := getVCSCommit()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,9 +146,7 @@ func Middleware(apiKey, engineURL string, opts ...Option) func(http.Handler) htt
 					enqueueTelemetry(TelemetryJob{
 						EngineURL:  engineURL,
 						APIKey:     apiKey,
-						Owner:      cfg.owner,
-						Repo:       cfg.repo,
-						Commit:     cfg.commit,
+						Commit:     commit,
 						File:       file,
 						Line:       line,
 						StackTrace: stackStr,
@@ -238,11 +193,9 @@ func parseTopApplicationFrame(stackTrace string) (string, int) {
 	return "", 0
 }
 
-func sendTelemetry(engineURL string, apiKey string, owner string, repo string, commit string, file string, line int, stackTrace string, traceID string) {
+func sendTelemetry(engineURL string, apiKey string, commit string, file string, line int, stackTrace string, traceID string) {
 	payload := TelemetryPayload{
 		APIKey:     apiKey,
-		Owner:      owner,
-		Repo:       repo,
 		Commit:     commit,
 		File:       file,
 		Line:       line,

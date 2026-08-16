@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -63,12 +64,12 @@ func (m *Manager) Close() {
 }
 
 func generateNodeID(owner, repo, commit, file string, line int) string {
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s:%s:%d", owner, repo, commit, file, line)))
+	hash := sha256.Sum256(fmt.Appendf(nil, "%s:%s:%s:%s:%d", owner, repo, commit, file, line))
 	return "ast-" + hex.EncodeToString(hash[:12])
 }
 
 // GetASTNode queries pre-parsed AST node snippet directly from PostgreSQL.
-func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file string, line int) (*ASTNode, error) {
+func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file string, line int, rootDir ...string) (*ASTNode, error) {
 	if m.pool == nil {
 		return nil, fmt.Errorf("PostgreSQL database is uninitialized")
 	}
@@ -80,28 +81,46 @@ func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file stri
 		LIMIT 1;
 	`
 
-	var node ASTNode
-	err := m.pool.QueryRow(ctx, query, owner, repo, commit, file, line).Scan(
-		&node.ID,
-		&node.Owner,
-		&node.Repo,
-		&node.Commit,
-		&node.FilePath,
-		&node.StartLine,
-		&node.Snippet,
-		&node.CreatedAt,
-	)
-	if err != nil {
-		return nil, err
+	rd := ""
+	if len(rootDir) > 0 {
+		rd = rootDir[0]
 	}
 
-	node.EndLine = node.StartLine
-	return &node, nil
+	normPath := NormalizeMonorepoPath(file, rd)
+	cleanOrig := strings.TrimPrefix(filepath.ToSlash(file), "/")
+
+	candidates := []string{cleanOrig}
+	if normPath != cleanOrig {
+		candidates = append(candidates, normPath)
+	}
+
+	for _, cand := range candidates {
+		var node ASTNode
+		err := m.pool.QueryRow(ctx, query, owner, repo, commit, cand, line).Scan(
+			&node.ID,
+			&node.Owner,
+			&node.Repo,
+			&node.Commit,
+			&node.FilePath,
+			&node.StartLine,
+			&node.Snippet,
+			&node.CreatedAt,
+		)
+		if err == nil {
+			node.EndLine = node.StartLine
+			return &node, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	return nil, pgx.ErrNoRows
 }
 
 // IndexRepositoryAST processes repository Go files once, extracts FuncDecl AST nodes,
 // and saves them directly to PostgreSQL.
-func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, workspacePath string) (int, error) {
+func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, workspacePath string, rootDir ...string) (int, error) {
 	if workspacePath == "" {
 		workspacePath = "."
 	}
@@ -110,8 +129,26 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 		return 0, fmt.Errorf("PostgreSQL database is uninitialized")
 	}
 
+	cleanRootDir := ""
+	if len(rootDir) > 0 {
+		cleanRootDir = strings.Trim(strings.TrimSpace(filepath.ToSlash(rootDir[0])), "/")
+	}
+
+	walkPath := workspacePath
+	if cleanRootDir != "" && cleanRootDir != "." {
+		walkPath = filepath.Join(workspacePath, cleanRootDir)
+	}
+
+	statInfo, statErr := os.Stat(walkPath)
+	if statErr != nil {
+		return 0, statErr
+	}
+	if !statInfo.IsDir() {
+		return 0, fmt.Errorf("walk path %s is not a directory", walkPath)
+	}
+
 	count := 0
-	err := filepath.Walk(workspacePath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Printf("[AST INDEX] Walk error for path %s: %v", path, err)
 			return nil
@@ -131,6 +168,11 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 			log.Printf("[AST INDEX] Failed to compute relative path for %s: %v", path, relErr)
 			return nil
 		}
+		relPath = filepath.ToSlash(relPath)
+
+		// Module-relative path (relative to the scoped service directory)
+		moduleRelPath, _ := filepath.Rel(walkPath, path)
+		moduleRelPath = filepath.ToSlash(moduleRelPath)
 
 		// Parse Go file using Go standard library parser
 		fset, node, parseErr := parseGoFile(path)
@@ -151,22 +193,29 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 				snippet = EXCLUDED.snippet,
 				commit_sha = EXCLUDED.commit_sha;
 		`
+		totalQueued := 0
 		for _, fn := range funcs {
 			nodeID := generateNodeID(owner, repo, commit, relPath, fn.StartLine)
 			batch.Queue(query, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, fn.Snippet)
+			totalQueued++
+
+			// Also index by moduleRelPath if it differs from relPath
+			if moduleRelPath != "" && moduleRelPath != relPath {
+				altNodeID := generateNodeID(owner, repo, commit, moduleRelPath, fn.StartLine)
+				batch.Queue(query, altNodeID, owner, repo, commit, moduleRelPath, fn.StartLine, fn.Name, fn.Snippet)
+				totalQueued++
+			}
 		}
 
 		br := m.pool.SendBatch(ctx, batch)
 
 		var firstErr error
-		for i := 0; i < len(funcs); i++ {
+		for i := 0; i < totalQueued; i++ {
 			_, execErr := br.Exec()
 			if execErr != nil {
 				if firstErr == nil {
 					firstErr = execErr
 				}
-			} else {
-				count++
 			}
 		}
 		if closeErr := br.Close(); closeErr != nil && firstErr == nil {
@@ -176,6 +225,7 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 			return firstErr
 		}
 
+		count += len(funcs)
 		return nil
 	})
 

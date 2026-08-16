@@ -137,3 +137,18 @@ export interface SystemHealthComponent {
   latency: string;
   detail: string;
 }
+
+export interface Project {
+  id: string;
+  owner: string;
+  repo: string;
+  root_dir?: string;
+  installation_id?: number;
+  created_at?: string;
+}
+
+export interface DetectedModule {
+  path: string;
+  name: string;
+  is_root: boolean;
+}

@@ -29,8 +29,7 @@ func main() {
     // Wrap your mux with triage panic isolation middleware
     handler := triage.Middleware(
         "tr_live_key_9042",
-        triage.WithRepo("myorg/myrepo"),
-        triage.WithGatewayURL("https://triage.yourcompany.com/api/v1/telemetry"),
+        "https://triage.yourcompany.com/api/v1/telemetry",
     )(mux)
 
     http.ListenAndServe(":8080", handler)
@@ -49,7 +48,7 @@ func main() {
     // Add triage middleware to chi router stack
     r.Use(triage.Middleware(
         "tr_live_key_9042",
-        triage.WithRepo("myorg/myrepo"),
+        "https://triage.yourcompany.com/api/v1/telemetry",
     ))
 
     r.Get("/orders", handleGetOrders)
@@ -68,7 +67,7 @@ func main() {
     // Wrap gin router with triage panic recovery adapter
     r.Use(gin.WrapH(triage.Middleware(
         "tr_live_key_9042",
-        triage.WithRepo("myorg/myrepo"),
+        "https://triage.yourcompany.com/api/v1/telemetry",
     )(r)))
 
     r.GET("/api/users", handleGetUsers)
@@ -87,7 +86,7 @@ func main() {
     // Use triage standard HTTP middleware adapter with Echo
     e.Use(echo.WrapMiddleware(triage.Middleware(
         "tr_live_key_9042",
-        triage.WithRepo("myorg/myrepo"),
+        "https://triage.yourcompany.com/api/v1/telemetry",
     )))
 
     e.GET("/health", handleHealth)
@@ -107,7 +106,7 @@ func main() {
     // Adapt triage middleware for Fiber fast HTTP stack
     app.Use(adaptor.HTTPMiddleware(triage.Middleware(
         "tr_live_key_9042",
-        triage.WithRepo("myorg/myrepo"),
+        "https://triage.yourcompany.com/api/v1/telemetry",
     )))
 
     app.Get("/metrics", handleMetrics)
@@ -187,35 +186,41 @@ func main() {
           </pre>
         </div>
 
-        {/* Bottom options table */}
+        {/* Bottom features bar */}
         <div className="bg-slate-900/80 border-t border-slate-800 px-6 py-4 font-mono text-xs">
           <div className="text-slate-400 font-bold mb-2 flex items-center justify-between">
-            <span>Available Configuration Options:</span>
+            <span>SDK Runtime Architecture & Guarantees:</span>
             <a
               href="/docs/sdk"
               className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 text-[11px] font-sans font-medium"
             >
-              <span>Full SDK Reference</span>
+              <span>Full SDK Documentation</span>
               <ArrowRight className="w-3 h-3" />
             </a>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] text-slate-300">
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
-              <span className="text-emerald-400 font-bold">triage.WithRepo("org/repo")</span>
+              <span className="text-emerald-400 font-bold">Zero-Boilerplate Config</span>
               <p className="text-slate-400 mt-1 font-sans">
-                GitHub repository for on-demand AST fetching.
+                Local VCS commit detection with API-key-based repository and root-path resolution.
               </p>
             </div>
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
-              <span className="text-cyan-400 font-bold">triage.WithGatewayURL(url)</span>
+              <span className="text-cyan-400 font-bold">Non-Blocking Dispatch</span>
               <p className="text-slate-400 mt-1 font-sans">
-                Custom engine endpoint for self-hosted instances.
+                Bounded 4-worker pool with 1,000-job buffer protects memory.
               </p>
             </div>
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
-              <span className="text-purple-400 font-bold">triage.WithCommit(sha)</span>
+              <span className="text-amber-400 font-bold">OpenTelemetry Native</span>
               <p className="text-slate-400 mt-1 font-sans">
-                Explicit Git commit SHA override for AST matching.
+                Auto-injects W3C traceparent and X-Triage-Trace-ID headers.
+              </p>
+            </div>
+            <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+              <span className="text-purple-400 font-bold">Panic Crash Isolation</span>
+              <p className="text-slate-400 mt-1 font-sans">
+                Standard library defer and recover boundary for non-blocking crash recovery.
               </p>
             </div>
           </div>

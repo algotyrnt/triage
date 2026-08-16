@@ -71,3 +71,43 @@ func TestValidateAndResolveFilePath_Symlink(t *testing.T) {
 		t.Errorf("expected error for symlink pointing outside workspace root, got nil")
 	}
 }
+
+func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceDir := filepath.Join(tmpDir, "monorepo")
+	backendDir := filepath.Join(workspaceDir, "backend", "pkg", "handler")
+	if err := os.MkdirAll(backendDir, 0755); err != nil {
+		t.Fatalf("failed to create backend dir: %v", err)
+	}
+
+	userGo := filepath.Join(backendDir, "user.go")
+	if err := os.WriteFile(userGo, []byte("package handler\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	expectedPath := userGo
+	if evalExpected, err := filepath.EvalSymlinks(userGo); err == nil {
+		expectedPath = evalExpected
+	}
+
+	_ = os.Setenv("AST_WORKSPACE_ROOT", workspaceDir)
+	defer os.Unsetenv("AST_WORKSPACE_ROOT")
+
+	// 1. Resolve relative file "pkg/handler/user.go" with rootDir "backend"
+	resolved, err := validateAndResolveFilePath("pkg/handler/user.go", "backend")
+	if err != nil {
+		t.Fatalf("expected no error resolving monorepo path, got: %v", err)
+	}
+	if resolved != expectedPath {
+		t.Errorf("expected resolved path %s, got %s", expectedPath, resolved)
+	}
+
+	// 2. Resolve already prefixed file "backend/pkg/handler/user.go" with rootDir "backend"
+	resolved2, err := validateAndResolveFilePath("backend/pkg/handler/user.go", "backend")
+	if err != nil {
+		t.Fatalf("expected no error resolving already-prefixed path, got: %v", err)
+	}
+	if resolved2 != expectedPath {
+		t.Errorf("expected resolved path %s, got %s", expectedPath, resolved2)
+	}
+}

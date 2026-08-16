@@ -75,8 +75,7 @@ func main() {
 	// Wrap mux with Triage middleware:
 	handler := triage.Middleware(
 		"tr_live_your_api_key",
-		triage.WithGatewayURL("http://localhost:8080/api/v1/telemetry"),
-		triage.WithRepo("myorg/myrepo"),
+		"http://localhost:8080/api/v1/telemetry",
 	)(mux)
 
 	http.ListenAndServe(":8081", handler)
