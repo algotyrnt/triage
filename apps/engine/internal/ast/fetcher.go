@@ -87,7 +87,7 @@ func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, co
 	var lastErr error
 	for _, candidate := range candidatePaths {
 		// 1. If GitHub App is configured, try installation token-based fetch (Contents API)
-		if f.GitHubApp != nil && f.GetInstallationID != nil && owner != "" && repo != "" && commit != "" {
+		if f.GitHubApp != nil && f.GetInstallationID != nil && owner != "" && repo != "" {
 			result, err := f.fetchFromGitHubApp(ctx, owner, repo, commit, candidate)
 			if err == nil && len(result.Content) > 0 {
 				return result, nil
@@ -99,8 +99,12 @@ func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, co
 		}
 
 		// 2. Fallback: raw.githubusercontent.com with GITHUB_TOKEN (legacy)
-		if owner != "" && repo != "" && commit != "" {
-			content, err := f.fetchFromGitHubRaw(ctx, owner, repo, commit, candidate)
+		if owner != "" && repo != "" {
+			rawCommit := commit
+			if rawCommit == "" {
+				rawCommit = "HEAD"
+			}
+			content, err := f.fetchFromGitHubRaw(ctx, owner, repo, rawCommit, candidate)
 			if err == nil && len(content) > 0 {
 				return &FetchResult{Content: content}, nil
 			}
