@@ -86,19 +86,35 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
       repo = parts[1];
     }
 
-    setLoadingModules(true);
-    engineClient
-      .detectGoModules(owner, repo)
-      .then((modules) => {
-        setDetectedModules(modules);
-        // If there's a non-root module detected and current rootDir is empty, suggest first detected
-        if (modules.length > 1 && !rootDir) {
-          const nonRoot = modules.find((m) => !m.is_root);
-          if (nonRoot) setRootDir(nonRoot.path);
-        }
-      })
-      .catch((e) => console.warn('Failed to detect Go modules:', e))
-      .finally(() => setLoadingModules(false));
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setLoadingModules(true);
+      engineClient
+        .detectGoModules(owner, repo)
+        .then((modules) => {
+          if (cancelled) return;
+          setDetectedModules(modules);
+          // If there's a non-root module detected and current rootDir is empty, suggest first detected
+          setRootDir((prev) => {
+            if (!prev && modules.length > 1) {
+              const nonRoot = modules.find((m) => !m.is_root);
+              return nonRoot ? nonRoot.path : prev;
+            }
+            return prev;
+          });
+        })
+        .catch((e) => {
+          if (!cancelled) console.warn('Failed to detect Go modules:', e);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingModules(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [selectedRepo, customRepoInput, username]);
 
   const generateNewKey = () => {
@@ -384,6 +400,8 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               {/* Manual Input for Monorepo Subdirectory */}
               <div className="flex items-center gap-2">
                 <input
+                  id="monorepo-root-dir-input"
+                  aria-label="Go backend subdirectory"
                   type="text"
                   value={rootDir}
                   onChange={(e) => setRootDir(e.target.value)}
