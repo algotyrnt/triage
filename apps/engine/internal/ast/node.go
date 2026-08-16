@@ -63,7 +63,7 @@ func (m *Manager) Close() {
 }
 
 func generateNodeID(owner, repo, commit, file string, line int) string {
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%s:%s:%d", owner, repo, commit, file, line)))
+	hash := sha256.Sum256(fmt.Appendf(nil, "%s:%s:%s:%s:%d", owner, repo, commit, file, line))
 	return "ast-" + hex.EncodeToString(hash[:12])
 }
 
