@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS repositories (
   id              VARCHAR(64) PRIMARY KEY,
   owner           VARCHAR(255) NOT NULL,
   repo            VARCHAR(255) NOT NULL,
-  root_dir        VARCHAR(255) DEFAULT '',
+  root_dir        VARCHAR(255) NOT NULL DEFAULT '',
   installation_id BIGINT NOT NULL,
   created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT unique_owner_repo_root UNIQUE (owner, repo, root_dir)
