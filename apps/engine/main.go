@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -63,6 +64,8 @@ type IndexRequest struct {
 }
 
 var (
+	githubNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_\.\-]+$`)
+
 	database   *db.DB
 	astManager *ast.Manager
 	astCache   = ast.NewASTCache()
@@ -1265,12 +1268,41 @@ type DetectedModule struct {
 }
 
 func handleDetectModulesRoute(w http.ResponseWriter, r *http.Request) {
+	apiKey := r.Header.Get("X-Triage-API-Key")
+	if apiKey == "" {
+		apiKey = r.URL.Query().Get("api_key")
+	}
+	if apiKey == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+	if !isValidAPIKey(r.Context(), apiKey) {
+		if sessionSecret != "" && apiKey != "" {
+			if _, err := session.ValidateSessionJWT(apiKey, sessionSecret); err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+		} else {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
+
 	owner := r.URL.Query().Get("owner")
 	repo := r.URL.Query().Get("repo")
 	if strings.Contains(repo, "/") {
 		parts := strings.Split(repo, "/")
-		owner = parts[0]
-		repo = parts[1]
+		if len(parts) == 2 {
+			owner = parts[0]
+			repo = parts[1]
+		}
+	}
+
+	if owner == "" || repo == "" || !githubNamePattern.MatchString(owner) || !githubNamePattern.MatchString(repo) {
+		http.Error(w, "Invalid owner or repo parameter", http.StatusBadRequest)
+		return
 	}
 
 	modules := []DetectedModule{
@@ -1279,7 +1311,7 @@ func handleDetectModulesRoute(w http.ResponseWriter, r *http.Request) {
 	seen := map[string]bool{"": true}
 
 	// 1. Try detecting via GitHub App if configured
-	if githubApp != nil && database != nil && owner != "" && repo != "" {
+	if githubApp != nil && database != nil {
 		installID, err := database.GetInstallationForRepo(r.Context(), owner, repo)
 		if err == nil && installID > 0 {
 			token, tokenErr := githubApp.GetInstallationToken(r.Context(), installID)
@@ -1292,33 +1324,35 @@ func handleDetectModulesRoute(w http.ResponseWriter, r *http.Request) {
 
 				client := &http.Client{Timeout: 10 * time.Second}
 				resp, err := client.Do(treeReq)
-				if err == nil && resp.StatusCode == http.StatusOK {
-					var treeData struct {
-						Tree []struct {
-							Path string `json:"path"`
-							Type string `json:"type"`
-						} `json:"tree"`
-					}
-					if jsonErr := json.NewDecoder(resp.Body).Decode(&treeData); jsonErr == nil {
-						for _, item := range treeData.Tree {
-							if item.Type == "blob" && strings.HasSuffix(item.Path, "go.mod") {
-								dir := filepath.ToSlash(filepath.Dir(item.Path))
-								if dir == "." {
-									dir = ""
-								}
-								if !seen[dir] {
-									seen[dir] = true
-									displayName := fmt.Sprintf("%s/ (Go Module)", dir)
-									modules = append(modules, DetectedModule{
-										Path:   dir,
-										Name:   displayName,
-										IsRoot: false,
-									})
+				if err == nil && resp != nil {
+					if resp.StatusCode == http.StatusOK {
+						var treeData struct {
+							Tree []struct {
+								Path string `json:"path"`
+								Type string `json:"type"`
+							} `json:"tree"`
+						}
+						if jsonErr := json.NewDecoder(resp.Body).Decode(&treeData); jsonErr == nil {
+							for _, item := range treeData.Tree {
+								if item.Type == "blob" && strings.HasSuffix(item.Path, "go.mod") {
+									dir := filepath.ToSlash(filepath.Dir(item.Path))
+									if dir == "." {
+										dir = ""
+									}
+									if !seen[dir] {
+										seen[dir] = true
+										displayName := fmt.Sprintf("%s/ (Go Module)", dir)
+										modules = append(modules, DetectedModule{
+											Path:   dir,
+											Name:   displayName,
+											IsRoot: false,
+										})
+									}
 								}
 							}
 						}
 					}
-					resp.Body.Close()
+					_ = resp.Body.Close()
 				}
 			}
 		}
@@ -1334,6 +1368,9 @@ func handleDetectModulesRoute(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		if info.IsDir() {
+			if path == wsRoot {
+				return nil
+			}
 			name := info.Name()
 			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" {
 				return filepath.SkipDir
