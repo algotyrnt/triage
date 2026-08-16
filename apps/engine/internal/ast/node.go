@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -109,6 +110,9 @@ func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file stri
 			node.EndLine = node.StartLine
 			return &node, nil
 		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 	}
 
 	return nil, pgx.ErrNoRows
@@ -133,6 +137,14 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 	walkPath := workspacePath
 	if cleanRootDir != "" && cleanRootDir != "." {
 		walkPath = filepath.Join(workspacePath, cleanRootDir)
+	}
+
+	statInfo, statErr := os.Stat(walkPath)
+	if statErr != nil {
+		return 0, statErr
+	}
+	if !statInfo.IsDir() {
+		return 0, fmt.Errorf("walk path %s is not a directory", walkPath)
 	}
 
 	count := 0
