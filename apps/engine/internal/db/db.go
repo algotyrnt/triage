@@ -211,12 +211,9 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 	}
 
 	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
-	var repoID string
-	if cleanRootDir != "" {
-		repoID = fmt.Sprintf("repo_%s_%s_%s", owner, repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
-	} else {
-		repoID = fmt.Sprintf("repo_%s_%s", owner, repo)
-	}
+	tupleStr := fmt.Sprintf("%s/%s:%s", owner, repo, cleanRootDir)
+	tupleHash := sha256.Sum256([]byte(tupleStr))
+	repoID := fmt.Sprintf("repo_%s", hex.EncodeToString(tupleHash[:16]))
 
 	_, err := db.Pool.Exec(ctx, `
 		INSERT INTO repositories (id, owner, repo, root_dir, installation_id)
@@ -286,7 +283,7 @@ func (db *DB) GetRepositoryByAPIKey(ctx context.Context, key string) (*Repositor
 		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id, r.created_at
 		FROM api_keys k
 		JOIN repositories r ON k.repository_id = r.id
-		WHERE k.key_hash = $1 AND (k.revoked_at IS NULL OR k.revoked_at > NOW()) AND (k.expires_at IS NULL OR k.expires_at > NOW())
+		WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > NOW())
 		LIMIT 1
 	`, keyHash).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.CreatedAt)
 	if err != nil {
