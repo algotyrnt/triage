@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { BookOpen, ExternalLink, Terminal, Shield, Activity } from 'lucide-react';
+import { BookOpen, ExternalLink, Terminal, Shield, Activity, Tag } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 
 export const Footer: React.FC = () => {
@@ -24,10 +24,15 @@ export const Footer: React.FC = () => {
               Zero-overhead Go panic isolation, on-demand AST slicing, and automated Gemini AI
               incident triage engine.
             </p>
-            <div className="flex items-center gap-2 text-xs font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded w-fit">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Core Engine v1.0 Active</span>
-            </div>
+            <a
+              href="https://github.com/algotyrnt/triage/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-mono text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded w-fit transition-colors"
+            >
+              <Tag className="w-3 h-3 text-slate-500" />
+              <span>Self-Hosted &amp; Open Source</span>
+            </a>
           </div>
 
           {/* Column 2: Documentation */}
