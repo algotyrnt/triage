@@ -1,6 +1,6 @@
 # Production Docker Compose for Triage Stack
 # Usage:
-#   TRIAGE_VERSION=v0.1.0 docker compose -f docker-compose.prod.yml up -d
+#   POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=v0.1.0 docker compose -f docker-compose.prod.yml up -d
 #
 version: '3.8'
 
@@ -11,10 +11,8 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-triage}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-triage_secret_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD environment variable must be set}
       POSTGRES_DB: ${POSTGRES_DB:-triage_db}
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
@@ -32,7 +30,7 @@ services:
       - '${ENGINE_PORT:-8080}:8080'
     environment:
       PORT: '8080'
-      DATABASE_URL: 'postgres://${POSTGRES_USER:-triage}:${POSTGRES_PASSWORD:-triage_secret_password}@postgres:5432/${POSTGRES_DB:-triage_db}?sslmode=disable'
+      DATABASE_URL: 'postgres://${POSTGRES_USER:-triage}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-triage_db}?sslmode=disable'
       GEMINI_API_KEY: '${GEMINI_API_KEY:-}'
       APP_URL: '${APP_URL:-http://localhost:3000}'
     depends_on:
@@ -47,7 +45,6 @@ services:
       - '${DASHBOARD_PORT:-3000}:3000'
     environment:
       PORT: '3000'
-      NEXT_PUBLIC_ENGINE_URL: '${NEXT_PUBLIC_ENGINE_URL:-http://localhost:8080/api/v1/telemetry}'
     depends_on:
       - engine
 
