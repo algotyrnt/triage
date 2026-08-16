@@ -47,10 +47,26 @@ Pass functional options to `triage.Middleware()`:
 | Option                               | Type       | Description                                                                              |
 | :----------------------------------- | :--------- | :--------------------------------------------------------------------------------------- |
 | `WithRepo(repo string)`              | `string`   | Sets the GitHub repository (`owner/repo`) for on-demand AST fetching.                    |
+| `WithRootPath(path string)`          | `string`   | Sets the Go backend subfolder in a monorepo (e.g. `backend`, `apps/api`, `services/eng`). |
 | `WithGatewayURL(url string)`         | `string`   | Custom engine telemetry URL (defaults to production managed gateway).                    |
 | `WithCommit(sha string)`             | `string`   | Explicit Git commit SHA override (auto-detected via `debug.ReadBuildInfo()` if omitted). |
 | `WithWorkerPool(workers, queue int)` | `int, int` | Configures async dispatch worker pool size (default: 4 workers, 1000 queue depth).       |
 | `WithCustomLogger(logger Logger)`    | `Logger`   | Custom logger interface for SDK debug logs.                                              |
+
+### Monorepo Support (`WithRootPath`)
+
+If your Go backend is located in a subdirectory of a larger repository (such as `/backend`, `/apps/api`, or `/services/engine`), supply `triage.WithRootPath(...)`:
+
+```go
+handler := triage.Middleware(
+	"tr_live_your_api_key",
+	triage.WithRepo("myorg/my-monorepo"),
+	triage.WithRootPath("backend"), // Scopes AST lookups to the "backend" directory
+	triage.WithGatewayURL("https://triage.yourcompany.com/api/v1/telemetry"),
+)(mux)
+```
+
+The Triage engine will automatically normalize module-relative stack trace paths (e.g. `handlers/user.go`) to repository file paths (`backend/handlers/user.go`) when fetching source files from GitHub.
 
 ### Example with Full Options:
 
@@ -58,6 +74,7 @@ Pass functional options to `triage.Middleware()`:
 handler := triage.Middleware(
 	"tr_live_your_api_key",
 	triage.WithRepo("myorg/myrepo"),
+	triage.WithRootPath("apps/api"),
 	triage.WithGatewayURL("http://localhost:8080/api/v1/telemetry"),
 	triage.WithCommit("8f3a1b4c5d6e7f8091a2b3c4"),
 	triage.WithWorkerPool(8, 2000),

@@ -48,6 +48,7 @@ handler := triage.Middleware(
 | Option             | Signature                            | Description                                           |
 | :----------------- | :----------------------------------- | :---------------------------------------------------- |
 | `WithRepo`         | `WithRepo(repo string)`              | GitHub repository (`owner/repo`) for AST resolution.  |
+| `WithRootPath`     | `WithRootPath(path string)`          | Go backend subdirectory for monorepo setups.          |
 | `WithGatewayURL`   | `WithGatewayURL(url string)`         | Engine telemetry endpoint.                            |
 | `WithCommit`       | `WithCommit(sha string)`             | Explicit git commit SHA override.                     |
 | `WithWorkerPool`   | `WithWorkerPool(workers, queue int)` | Adjust async telemetry worker count and queue buffer. |

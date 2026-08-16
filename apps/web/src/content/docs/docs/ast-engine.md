@@ -75,6 +75,17 @@ func ExtractEnclosingFunc(src []byte, targetLine int) (*ast.FuncDecl, []string, 
 
 ---
 
+## Monorepo Subdirectory Resolution
+
+In monorepos where Go backends live in subfolders (e.g. `backend`, `apps/api`), runtime panic stack traces may reference files either relative to the module root (e.g. `handlers/payment.go`) or the repository root (`backend/handlers/payment.go`).
+
+Triage handles this transparently:
+
+1. **Path Normalization:** The engine normalizes candidate paths using the registered `root_dir` (or `WithRootPath`), ensuring files are accurately fetched from the GitHub Contents API without path mismatch.
+2. **Dual-Key AST Indexing:** When indexing monorepo AST nodes, Triage indexes both the repository-relative path and the module-relative path in PostgreSQL, guaranteeing $O(1)$ symbolication lookups regardless of how the runtime frame is formatted.
+
+---
+
 ## Pre-Indexing (Optional)
 
 While Triage resolves AST nodes dynamically on demand, you can also pre-index entire repositories via the API:
@@ -85,6 +96,7 @@ curl -X POST http://localhost:8080/api/v1/ast/index \
   -H "Content-Type: application/json" \
   -d '{
     "repo": "myorg/myrepo",
+    "root_dir": "backend",
     "commit_sha": "main"
   }'
 ```

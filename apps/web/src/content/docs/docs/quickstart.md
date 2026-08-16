@@ -77,6 +77,7 @@ func main() {
 		"tr_live_your_api_key",
 		triage.WithGatewayURL("http://localhost:8080/api/v1/telemetry"),
 		triage.WithRepo("myorg/myrepo"),
+		// triage.WithRootPath("backend"), // Uncomment if Go service lives in a monorepo subfolder
 	)(mux)
 
 	http.ListenAndServe(":8081", handler)

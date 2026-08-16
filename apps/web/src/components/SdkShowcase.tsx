@@ -199,11 +199,17 @@ func main() {
               <ArrowRight className="w-3 h-3" />
             </a>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] text-slate-300">
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
               <span className="text-emerald-400 font-bold">triage.WithRepo("org/repo")</span>
               <p className="text-slate-400 mt-1 font-sans">
                 GitHub repository for on-demand AST fetching.
+              </p>
+            </div>
+            <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+              <span className="text-amber-400 font-bold">triage.WithRootPath("backend")</span>
+              <p className="text-slate-400 mt-1 font-sans">
+                Go backend subfolder for monorepo architectures.
               </p>
             </div>
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">

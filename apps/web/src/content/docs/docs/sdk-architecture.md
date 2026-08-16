@@ -69,6 +69,7 @@ The SDK dispatches the following JSON payload to `POST /api/v1/telemetry`:
   "api_key": "tr_live_key_9042",
   "trace_id": "tr_7f9c2d1e8a4b0c3d9a1f",
   "repo": "myorg/myrepo",
+  "root_path": "backend",
   "commit_sha": "7f8b9e1a2c3d4e5f60718293",
   "file": "handlers/payment.go",
   "line": 28,
