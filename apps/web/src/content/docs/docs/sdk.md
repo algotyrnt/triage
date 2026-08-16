@@ -15,6 +15,8 @@ go get github.com/algotyrnt/triage/sdk/go
 
 ## Basic Middleware Usage
 
+By default, the SDK only requires your **API key** and the **Engine URL**. Repository metadata, monorepo subdirectories, and Git commit hashes are automatically resolved by the backend and the Go runtime:
+
 ```go
 package main
 
@@ -30,8 +32,7 @@ func main() {
 	// Wrap handler with triage panic isolation middleware
 	handler := triage.Middleware(
 		"tr_live_your_api_key",
-		triage.WithGatewayURL("https://triage.yourcompany.com/api/v1/telemetry"),
-		triage.WithRepo("myorg/myrepo"),
+		"https://triage.yourcompany.com/api/v1/telemetry",
 	)(mux)
 
 	http.ListenAndServe(":8080", handler)
@@ -40,46 +41,13 @@ func main() {
 
 ---
 
-## Configuration Options
+## How Zero-Configuration Works
 
-Pass functional options to `triage.Middleware()`:
+The Triage SDK is designed with **zero client-side configuration boilerplate**. You only pass `apiKey` and `engineURL`:
 
-| Option                               | Type       | Description                                                                              |
-| :----------------------------------- | :--------- | :--------------------------------------------------------------------------------------- |
-| `WithRepo(repo string)`              | `string`   | Sets the GitHub repository (`owner/repo`) for on-demand AST fetching.                    |
-| `WithRootPath(path string)`          | `string`   | Sets the Go backend subfolder in a monorepo (e.g. `backend`, `apps/api`, `services/eng`). |
-| `WithGatewayURL(url string)`         | `string`   | Custom engine telemetry URL (defaults to production managed gateway).                    |
-| `WithCommit(sha string)`             | `string`   | Explicit Git commit SHA override (auto-detected via `debug.ReadBuildInfo()` if omitted). |
-| `WithWorkerPool(workers, queue int)` | `int, int` | Configures async dispatch worker pool size (default: 4 workers, 1000 queue depth).       |
-| `WithCustomLogger(logger Logger)`    | `Logger`   | Custom logger interface for SDK debug logs.                                              |
-
-### Monorepo Support (`WithRootPath`)
-
-If your Go backend is located in a subdirectory of a larger repository (such as `/backend`, `/apps/api`, or `/services/engine`), supply `triage.WithRootPath(...)`:
-
-```go
-handler := triage.Middleware(
-	"tr_live_your_api_key",
-	triage.WithRepo("myorg/my-monorepo"),
-	triage.WithRootPath("backend"), // Scopes AST lookups to the "backend" directory
-	triage.WithGatewayURL("https://triage.yourcompany.com/api/v1/telemetry"),
-)(mux)
-```
-
-The Triage engine will automatically normalize module-relative stack trace paths (e.g. `handlers/user.go`) to repository file paths (`backend/handlers/user.go`) when fetching source files from GitHub.
-
-### Example with Full Options:
-
-```go
-handler := triage.Middleware(
-	"tr_live_your_api_key",
-	triage.WithRepo("myorg/myrepo"),
-	triage.WithRootPath("apps/api"),
-	triage.WithGatewayURL("http://localhost:8080/api/v1/telemetry"),
-	triage.WithCommit("8f3a1b4c5d6e7f8091a2b3c4"),
-	triage.WithWorkerPool(8, 2000),
-)(mux)
-```
+1. **Repository & Monorepo Subfolder Resolution:** When you register a repository in the Triage dashboard (even as a subfolder in a monorepo like `/backend` or `/apps/api`), your API key is uniquely bound to that project. The Triage engine looks up repository metadata automatically upon telemetry arrival.
+2. **Git Commit Detection:** The SDK automatically extracts the Git commit SHA from Go's embedded binary build info via `debug.ReadBuildInfo()`.
+3. **Trace Context Propagation:** The SDK automatically extracts or generates OpenTelemetry-compatible W3C `traceparent` headers (`00-<trace_id>-0000000000000001-01`) and `X-Triage-Trace-ID`.
 
 ---
 
@@ -91,7 +59,7 @@ handler := triage.Middleware(
 mux := http.NewServeMux()
 mux.HandleFunc("/process", processHandler)
 
-handler := triage.Middleware("tr_live_key")(mux)
+handler := triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")(mux)
 http.ListenAndServe(":8080", handler)
 ```
 
@@ -99,7 +67,7 @@ http.ListenAndServe(":8080", handler)
 
 ```go
 r := chi.NewRouter()
-r.Use(triage.Middleware("tr_live_key", triage.WithRepo("myorg/myrepo")))
+r.Use(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry"))
 
 r.Get("/items", getItemsHandler)
 http.ListenAndServe(":8080", r)
@@ -110,7 +78,7 @@ http.ListenAndServe(":8080", r)
 ```go
 r := gin.New()
 // Use Gin's WrapH helper to adapt standard http.Handler middleware
-r.Use(gin.WrapH(triage.Middleware("tr_live_key", triage.WithRepo("myorg/myrepo"))(r)))
+r.Use(gin.WrapH(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")(r)))
 
 r.GET("/api/users", handleUsers)
 r.Run(":8080")
@@ -120,7 +88,7 @@ r.Run(":8080")
 
 ```go
 e := echo.New()
-e.Use(echo.WrapMiddleware(triage.Middleware("tr_live_key", triage.WithRepo("myorg/myrepo"))))
+e.Use(echo.WrapMiddleware(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")))
 
 e.GET("/ping", handlePing)
 e.Start(":8080")
@@ -130,7 +98,7 @@ e.Start(":8080")
 
 ```go
 app := fiber.New()
-app.Use(adaptor.HTTPMiddleware(triage.Middleware("tr_live_key", triage.WithRepo("myorg/myrepo"))))
+app.Use(adaptor.HTTPMiddleware(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")))
 
 app.Get("/stats", handleStats)
 app.Listen(":8080")

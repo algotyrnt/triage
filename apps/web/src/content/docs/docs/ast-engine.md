@@ -81,7 +81,7 @@ In monorepos where Go backends live in subfolders (e.g. `backend`, `apps/api`), 
 
 Triage handles this transparently:
 
-1. **Path Normalization:** The engine normalizes candidate paths using the registered `root_dir` (or `WithRootPath`), ensuring files are accurately fetched from the GitHub Contents API without path mismatch.
+1. **Path Normalization:** The engine normalizes candidate paths using the project's registered `root_dir`, ensuring files are accurately fetched from the GitHub Contents API without path mismatch.
 2. **Dual-Key AST Indexing:** When indexing monorepo AST nodes, Triage indexes both the repository-relative path and the module-relative path in PostgreSQL, guaranteeing $O(1)$ symbolication lookups regardless of how the runtime frame is formatted.
 
 ---
