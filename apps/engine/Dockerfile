@@ -8,7 +8,8 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o engine-server main.go
+ARG VERSION=v0.1.0-dev
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.Version=${VERSION}" -o engine-server main.go
 
 # Stage 2: Minimal Production Image
 FROM alpine:3.20
