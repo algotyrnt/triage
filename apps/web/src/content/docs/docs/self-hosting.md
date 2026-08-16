@@ -10,11 +10,14 @@ Triage is designed for frictionless self-hosting. You can run the entire platfor
 You can run the official production containers published to GitHub Container Registry (`ghcr.io`):
 
 ```bash
+# Set release version to latest
+export TRIAGE_VERSION=latest
+
 mkdir -p db
 curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql" -o db/schema.sql
 curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml" -o docker-compose.prod.yml
 
-# Start the stack with the latest release (or specify e.g. TRIAGE_VERSION=v0.1.0)
+# Start the stack (POSTGRES_PASSWORD is mandatory for production)
 POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=latest docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -64,6 +67,6 @@ The PostgreSQL schema is located in `db/schema.sql`. It contains:
 
 ## Production Checklist
 
-1. **Postgres Credentials:** Change the default `POSTGRES_PASSWORD` in `docker-compose.yml`.
+1. **Postgres Password:** Always supply an explicit, strong `POSTGRES_PASSWORD` when launching `docker-compose.prod.yml`.
 2. **Session Secrets:** The engine auto-generates a cryptographic session secret on first boot and stores it in PostgreSQL.
 3. **HTTPS / Reverse Proxy:** Place Caddy, Nginx, or Cloudflare in front of `:8080` and `:3000` for SSL termination.
