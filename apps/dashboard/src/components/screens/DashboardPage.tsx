@@ -267,7 +267,7 @@ require (
           </div>
 
           {/* Code Viewer in Charcoal (#111827) */}
-          <div className="bg-slate-900 text-slate-100 p-4 font-mono text-xs relative group border-b border-slate-800 min-h-[300px]">
+          <div className="bg-slate-900 text-slate-100 p-4 font-mono text-xs relative group border-b border-slate-800 min-h-75">
             <button
               onClick={handleCopySnippet}
               className="absolute top-3 right-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white px-2.5 py-1 rounded-sm text-[11px] border border-slate-700 flex items-center gap-1 transition-colors font-mono"
