@@ -198,7 +198,9 @@ export class EngineClient {
       });
       if (!res.ok) return [{ path: '', name: 'Repository Root (/)', is_root: true }];
       const data = await res.json();
-      return data.modules || [{ path: '', name: 'Repository Root (/)', is_root: true }];
+      return Array.isArray(data.modules) && data.modules.length > 0
+        ? data.modules
+        : [{ path: '', name: 'Repository Root (/)', is_root: true }];
     } catch {
       return [{ path: '', name: 'Repository Root (/)', is_root: true }];
     }
