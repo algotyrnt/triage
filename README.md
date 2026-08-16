@@ -67,7 +67,7 @@ Go HTTP Server (your app)
 ### Install
 
 ```bash
-go get github.com/algotyrnt/triage/sdk/go
+go get github.com/algotyrnt/triage/sdk/go@latest
 ```
 
 ### Usage
@@ -130,15 +130,11 @@ On panic, the middleware:
 #### Option A: Production with Pre-Built Images (Recommended)
 
 ```bash
-# Set release version to latest
-export TRIAGE_VERSION=latest
-
 mkdir -p db
-curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql" -o db/schema.sql
-curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml" -o docker-compose.prod.yml
+curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql -o db/schema.sql
+curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml -o docker-compose.prod.yml
 
-# Start the stack (POSTGRES_PASSWORD is required for production security)
-POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=latest docker compose -f docker-compose.prod.yml up -d
+POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
 ```
 
 #### Option B: Local Development from Source

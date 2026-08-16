@@ -10,15 +10,11 @@ Triage is designed for frictionless self-hosting. You can run the entire platfor
 You can run the official production containers published to GitHub Container Registry (`ghcr.io`):
 
 ```bash
-# Set release version to latest
-export TRIAGE_VERSION=latest
-
 mkdir -p db
-curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql" -o db/schema.sql
-curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml" -o docker-compose.prod.yml
+curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql -o db/schema.sql
+curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml -o docker-compose.prod.yml
 
-# Start the stack (POSTGRES_PASSWORD is mandatory for production)
-POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=latest docker compose -f docker-compose.prod.yml up -d
+POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
 ```
 
 ---
