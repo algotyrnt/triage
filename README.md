@@ -1,12 +1,41 @@
 # triage
 
-> **Work in Progress** — interfaces, telemetry protocols, and SDK signatures may change before v1.0.
+[![GitHub Release](https://img.shields.io/github/v/release/algotyrnt/triage?include_prereleases&logo=github&color=6366f1)](https://github.com/algotyrnt/triage/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/algotyrnt/triage/sdk/go.svg)](https://pkg.go.dev/github.com/algotyrnt/triage/sdk/go)
+[![Docker Engine](https://img.shields.io/badge/docker-ghcr.io%2Falgotyrnt%2Ftriage--engine-blue?logo=docker)](https://github.com/algotyrnt/triage/pkgs/container/triage-engine)
+[![Docker Dashboard](https://img.shields.io/badge/docker-ghcr.io%2Falgotyrnt%2Ftriage--dashboard-blue?logo=docker)](https://github.com/algotyrnt/triage/pkgs/container/triage-dashboard)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
+> **Work in Progress (Pre-v1.0)** — interfaces, telemetry protocols, and SDK signatures are in active development. Releases follow SemVer starting at `v0.1.0`.
 
 Zero-overhead Go panic isolation and AI-powered incident diagnostics. When a panic occurs in a Go HTTP server, triage intercepts it non-blockingly, isolates the exact `*ast.FuncDecl` surrounding the crash site, runs it through Gemini AI for root-cause analysis, and automatically files a GitHub issue — all without blocking your server's response.
 
 ---
 
-## How it works
+## Releases & Installation
+
+### Go SDK
+
+Install the latest release via `go get`:
+
+```bash
+go get github.com/algotyrnt/triage/sdk/go@latest
+```
+
+Or pin a specific version:
+
+```bash
+go get github.com/algotyrnt/triage/sdk/go@v0.1.0
+```
+
+### Pre-Built Containers (GHCR)
+
+Multi-architecture images (`linux/amd64`, `linux/arm64`) are published automatically on every release:
+
+- **Engine:** `docker pull ghcr.io/algotyrnt/triage-engine:latest` (or `:v0.1.0`)
+- **Dashboard:** `docker pull ghcr.io/algotyrnt/triage-dashboard:latest` (or `:v0.1.0`)
+
+---
 
 ```
 Go HTTP Server (your app)
@@ -98,9 +127,24 @@ On panic, the middleware:
 
 ### 1. Start the stack
 
-No environment setup needed — `docker-compose.yml` already contains all the values required to wire the services together (database URL, ports, inter-service URLs).
+#### Option A: Production with Pre-Built Images (Recommended)
+
+Download the production Compose file and database schema:
 
 ```bash
+mkdir -p db
+curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql" -o db/schema.sql
+curl -sSL "https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml" -o docker-compose.prod.yml
+
+# Start the stack with the latest release
+TRIAGE_VERSION=latest docker compose -f docker-compose.prod.yml up -d
+```
+
+#### Option B: Local Development from Source
+
+```bash
+git clone https://github.com/algotyrnt/triage.git
+cd triage
 docker compose up --build -d
 ```
 
@@ -111,8 +155,6 @@ This starts three containers:
 | `triage-db`        | `5432` | PostgreSQL 16 — schema auto-applied from `db/schema.sql` |
 | `triage-engine`    | `8080` | Go engine — all API, setup, and auth routes              |
 | `triage-dashboard` | `3000` | Next.js Studio Dashboard                                 |
-
-> **Production deployment?** The only values worth overriding are the Postgres credentials. Change `POSTGRES_PASSWORD` (and the matching `DATABASE_URL`) in `docker-compose.yml` before first boot. Everything else — GitHub App credentials, OAuth secrets, Gemini API key — is configured through the setup wizard and stored securely in the database.
 
 ### 2. Run the setup wizard
 
