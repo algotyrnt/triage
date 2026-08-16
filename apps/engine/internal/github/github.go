@@ -133,7 +133,10 @@ func (c *AppConfig) FetchFileContent(ctx context.Context, installationID int64, 
 		return nil, "", fmt.Errorf("failed to get token: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s", owner, repo, filePath, commitSHA)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, filePath)
+	if commitSHA != "" {
+		url = fmt.Sprintf("%s?ref=%s", url, commitSHA)
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create request: %w", err)
