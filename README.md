@@ -64,25 +64,18 @@ func main() {
 }
 ```
 
-### Options
+### Zero Configuration by Default
 
-`engineURL` is the only required argument beyond the API key — it must be the full URL of your engine's telemetry endpoint.
-
-| Option                   | Description                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| `WithCommit(sha string)` | Override the Git commit SHA (auto-detected via `debug.ReadBuildInfo` if omitted) |
-| `WithRepo("owner/repo")` | Set the GitHub repository for on-demand AST resolution                           |
-| `WithRootPath("backend")`| Set Go backend subdirectory for monorepos (e.g., `backend`, `apps/api`)         |
+Because the Triage engine automatically resolves your repository, monorepo root directory, and Git commit hash directly from your API key and binary build metadata, the 2-argument signature is all you need:
 
 ```go
-// With optional metadata (including monorepo support)
 handler := triage.Middleware(
 	"tr_live_your_api_key",
 	"https://triage.yourcompany.com/api/v1/telemetry",
-	triage.WithRepo("yourorg/yourrepo"),
-	triage.WithRootPath("backend"), // normalize paths relative to monorepo root
 )(mux)
 ```
+
+The Triage engine automatically resolves your repository, monorepo root directory, and permissions from the API key, while the SDK automatically detects the Git commit SHA via `debug.ReadBuildInfo()` and propagates OpenTelemetry W3C trace headers (`traceparent`, `X-Triage-Trace-ID`).
 
 On panic, the middleware:
 
