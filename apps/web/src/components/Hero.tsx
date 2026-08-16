@@ -40,7 +40,7 @@ export const Hero: React.FC = () => {
         className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-8 transition-colors group"
       >
         <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-          v0.1.0 Beta
+          Releases
         </span>
         <span>Go Crash Isolation &amp; Gemini AI Diagnostics</span>
         <ArrowRight className="w-3 h-3 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
