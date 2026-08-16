@@ -30,21 +30,26 @@ export const Hero: React.FC = () => {
   return (
     <section className="pt-16 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center relative overflow-hidden">
       {/* Background ambient accents */}
-      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-3/4 h-72 bg-gradient-to-r from-indigo-100/50 via-purple-50/40 to-cyan-100/50 blur-3xl -z-10 rounded-full pointer-events-none" />
+      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-3/4 h-72 bg-linear-to-r from-indigo-100/50 via-purple-50/40 to-cyan-100/50 blur-3xl -z-10 rounded-full pointer-events-none" />
 
       {/* Pill Badge */}
-      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-8">
-        <Sparkles
-          className="w-3.5 h-3.5 text-indigo-600 animate-spin"
-          style={{ animationDuration: '8s' }}
-        />
-        <span>GO CRASH ISOLATION &amp; GEMINI AI DIAGNOSTICS</span>
-      </div>
+      <a
+        href="https://github.com/algotyrnt/triage/releases"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-8 transition-colors group"
+      >
+        <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
+          Releases
+        </span>
+        <span>Go Crash Isolation &amp; Gemini AI Diagnostics</span>
+        <ArrowRight className="w-3 h-3 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
+      </a>
 
       {/* Main Headline */}
       <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] max-w-5xl mx-auto">
         Zero-Latency Go Crash Isolation.{' '}
-        <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent block sm:inline">
+        <span className="bg-linear-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent block sm:inline">
           Instant Gemini AI Diagnosis.
         </span>
       </h1>

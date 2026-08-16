@@ -191,9 +191,10 @@ jobs:
             #### Self-Hosting with Docker Compose
             ```bash
             mkdir -p db
-            curl -sSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/db/schema.sql" -o db/schema.sql
-            curl -sSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml" -o docker-compose.prod.yml
-            POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=${{ github.ref_name }} docker compose -f docker-compose.prod.yml up -d
+            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/db/schema.sql" -o db/schema.sql
+            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml" -o docker-compose.prod.yml
+
+            POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
             ```
 
             #### Pre-built Docker Images

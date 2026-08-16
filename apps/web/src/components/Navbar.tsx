@@ -14,6 +14,7 @@ import {
   X,
   ArrowRight,
   Sparkles,
+  Tag,
 } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 
@@ -59,6 +60,15 @@ export const Navbar: React.FC = () => {
           </a>
           <a href="#benchmarks" className="hover:text-black transition-colors">
             Benchmarks
+          </a>
+          <a
+            href="https://github.com/algotyrnt/triage/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-black transition-colors flex items-center gap-1 text-slate-700 font-semibold"
+          >
+            <Tag className="w-3 h-3 text-slate-500" />
+            <span>Releases</span>
           </a>
           <a
             href="/docs/overview"
@@ -149,6 +159,16 @@ export const Navbar: React.FC = () => {
             className="block text-slate-700 hover:text-black py-1"
           >
             Benchmarks
+          </a>
+          <a
+            href="https://github.com/algotyrnt/triage/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-1.5 text-slate-700 hover:text-black py-1 font-semibold"
+          >
+            <Tag className="w-3.5 h-3.5 text-slate-500" />
+            <span>Releases</span>
           </a>
           <a
             href="/docs/overview"

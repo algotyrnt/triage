@@ -1,6 +1,6 @@
 # Production Docker Compose for Triage Stack
 # Usage:
-#   POSTGRES_PASSWORD=your_secure_password TRIAGE_VERSION=v0.1.0 docker compose -f docker-compose.prod.yml up -d
+#   POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
 #
 version: '3.8'
 
@@ -24,6 +24,7 @@ services:
 
   engine:
     image: ghcr.io/algotyrnt/triage-engine:${TRIAGE_VERSION:-latest}
+    pull_policy: always
     container_name: triage-engine
     restart: always
     ports:
@@ -39,6 +40,7 @@ services:
 
   dashboard:
     image: ghcr.io/algotyrnt/triage-dashboard:${TRIAGE_VERSION:-latest}
+    pull_policy: always
     container_name: triage-dashboard
     restart: always
     ports:
