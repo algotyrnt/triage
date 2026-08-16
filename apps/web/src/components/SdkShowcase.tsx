@@ -202,7 +202,7 @@ func main() {
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
               <span className="text-emerald-400 font-bold">Zero-Boilerplate Config</span>
               <p className="text-slate-400 mt-1 font-sans">
-                Engine auto-resolves repo, monorepo paths, and VCS commit.
+                Local VCS commit detection with API-key-based repository and root-path resolution.
               </p>
             </div>
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
@@ -218,9 +218,9 @@ func main() {
               </p>
             </div>
             <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
-              <span className="text-purple-400 font-bold">Sub-Millisecond Isolation</span>
+              <span className="text-purple-400 font-bold">Panic Crash Isolation</span>
               <p className="text-slate-400 mt-1 font-sans">
-                Standard library defer/recover adds zero latency to healthy requests.
+                Standard library defer and recover boundary for non-blocking crash recovery.
               </p>
             </div>
           </div>
