@@ -72,13 +72,15 @@ func main() {
 | ------------------------ | -------------------------------------------------------------------------------- |
 | `WithCommit(sha string)` | Override the Git commit SHA (auto-detected via `debug.ReadBuildInfo` if omitted) |
 | `WithRepo("owner/repo")` | Set the GitHub repository for on-demand AST resolution                           |
+| `WithRootPath("backend")`| Set Go backend subdirectory for monorepos (e.g., `backend`, `apps/api`)         |
 
 ```go
-// With optional metadata
+// With optional metadata (including monorepo support)
 handler := triage.Middleware(
 	"tr_live_your_api_key",
 	"https://triage.yourcompany.com/api/v1/telemetry",
 	triage.WithRepo("yourorg/yourrepo"),
+	triage.WithRootPath("backend"), // normalize paths relative to monorepo root
 )(mux)
 ```
 
