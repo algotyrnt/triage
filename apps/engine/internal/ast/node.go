@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"log"
 	"os"
 	"path/filepath"
@@ -118,8 +120,8 @@ func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file stri
 	return nil, pgx.ErrNoRows
 }
 
-// IndexRepositoryAST processes repository Go files once, extracts FuncDecl AST nodes,
-// and saves them directly to PostgreSQL.
+// IndexRepositoryAST processes repository Go packages, resolves cross-file type definitions,
+// receiver methods, and helpers, and saves rich multi-file AST context snippets directly to PostgreSQL.
 func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, workspacePath string, rootDir ...string) (int, error) {
 	if workspacePath == "" {
 		workspacePath = "."
@@ -147,7 +149,8 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 		return 0, fmt.Errorf("walk path %s is not a directory", walkPath)
 	}
 
-	count := 0
+	// Discover all package directories containing Go files
+	pkgDirs := make(map[string]bool)
 	err := filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Printf("[AST INDEX] Walk error for path %s: %v", path, err)
@@ -159,75 +162,88 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 			}
 			return nil
 		}
-		if !strings.HasSuffix(info.Name(), ".go") {
-			return nil
+		if strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go") {
+			pkgDirs[filepath.Dir(path)] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for dir := range pkgDirs {
+		fset := token.NewFileSet()
+		filter := func(info os.FileInfo) bool {
+			return strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go")
 		}
 
-		relPath, relErr := filepath.Rel(workspacePath, path)
-		if relErr != nil {
-			log.Printf("[AST INDEX] Failed to compute relative path for %s: %v", path, relErr)
-			return nil
-		}
-		relPath = filepath.ToSlash(relPath)
-
-		// Module-relative path (relative to the scoped service directory)
-		moduleRelPath, _ := filepath.Rel(walkPath, path)
-		moduleRelPath = filepath.ToSlash(moduleRelPath)
-
-		// Parse Go file using Go standard library parser
-		fset, node, parseErr := parseGoFile(path)
-		if parseErr != nil {
-			return nil
+		pkgs, parseErr := parser.ParseDir(fset, dir, filter, parser.ParseComments)
+		if parseErr != nil || len(pkgs) == 0 {
+			continue
 		}
 
-		funcs := extractFunctions(fset, node)
-		if len(funcs) == 0 {
-			return nil
-		}
-
-		batch := &pgx.Batch{}
-		query := `
-			INSERT INTO ast_nodes (id, owner, repo, commit_sha, file_path, line_number, function_name, snippet)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (id) DO UPDATE SET
-				snippet = EXCLUDED.snippet,
-				commit_sha = EXCLUDED.commit_sha;
-		`
-		totalQueued := 0
-		for _, fn := range funcs {
-			nodeID := generateNodeID(owner, repo, commit, relPath, fn.StartLine)
-			batch.Queue(query, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, fn.Snippet)
-			totalQueued++
-
-			// Also index by moduleRelPath if it differs from relPath
-			if moduleRelPath != "" && moduleRelPath != relPath {
-				altNodeID := generateNodeID(owner, repo, commit, moduleRelPath, fn.StartLine)
-				batch.Queue(query, altNodeID, owner, repo, commit, moduleRelPath, fn.StartLine, fn.Name, fn.Snippet)
-				totalQueued++
+		for _, pkg := range pkgs {
+			pkgCtx := NewPackageContext(fset, pkg.Name, pkg.Files)
+			if len(pkgCtx.Functions) == 0 {
+				continue
 			}
-		}
 
-		br := m.pool.SendBatch(ctx, batch)
+			batch := &pgx.Batch{}
+			query := `
+				INSERT INTO ast_nodes (id, owner, repo, commit_sha, file_path, line_number, function_name, snippet)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				ON CONFLICT (id) DO UPDATE SET
+					snippet = EXCLUDED.snippet,
+					commit_sha = EXCLUDED.commit_sha;
+			`
+			totalQueued := 0
 
-		var firstErr error
-		for i := 0; i < totalQueued; i++ {
-			_, execErr := br.Exec()
-			if execErr != nil {
-				if firstErr == nil {
-					firstErr = execErr
+			for i := range pkgCtx.Functions {
+				fn := &pkgCtx.Functions[i]
+				types, helpers, vars := pkgCtx.ResolveDependencies(fn)
+				richSnippet := pkgCtx.FormatContext(fn, types, helpers, vars)
+
+				relPath, relErr := filepath.Rel(workspacePath, fn.FilePath)
+				if relErr != nil {
+					relPath = fn.FilePath
+				}
+				relPath = filepath.ToSlash(relPath)
+
+				moduleRelPath, _ := filepath.Rel(walkPath, fn.FilePath)
+				moduleRelPath = filepath.ToSlash(moduleRelPath)
+
+				nodeID := generateNodeID(owner, repo, commit, relPath, fn.StartLine)
+				batch.Queue(query, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, richSnippet)
+				totalQueued++
+
+				if moduleRelPath != "" && moduleRelPath != relPath {
+					altNodeID := generateNodeID(owner, repo, commit, moduleRelPath, fn.StartLine)
+					batch.Queue(query, altNodeID, owner, repo, commit, moduleRelPath, fn.StartLine, fn.Name, richSnippet)
+					totalQueued++
+				}
+			}
+
+			if totalQueued > 0 {
+				br := m.pool.SendBatch(ctx, batch)
+				var firstErr error
+				for i := 0; i < totalQueued; i++ {
+					_, execErr := br.Exec()
+					if execErr != nil && firstErr == nil {
+						firstErr = execErr
+					}
+				}
+				if closeErr := br.Close(); closeErr != nil && firstErr == nil {
+					firstErr = closeErr
+				}
+				if firstErr != nil {
+					log.Printf("[AST INDEX] Batch execution error for dir %s: %v", dir, firstErr)
+				} else {
+					count += len(pkgCtx.Functions)
 				}
 			}
 		}
-		if closeErr := br.Close(); closeErr != nil && firstErr == nil {
-			firstErr = closeErr
-		}
-		if firstErr != nil {
-			return firstErr
-		}
+	}
 
-		count += len(funcs)
-		return nil
-	})
-
-	return count, err
+	return count, nil
 }
