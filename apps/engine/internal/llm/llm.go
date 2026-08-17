@@ -36,12 +36,12 @@ func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName
 	}
 
 	prompt := fmt.Sprintf(`You are an expert Go backend engineer and automated incident diagnostician.
-Analyze the following Go panic crash telemetry and isolated function AST node.
+Analyze the following Go panic crash telemetry and surrounding Go AST package context (including the crash site, struct/type definitions, constructors, and package helpers).
 
 ### Stack Trace:
 %s
 
-### Surrounding Function AST Node:
+### Surrounding AST & Package Context:
 %s
 
 Respond ONLY with a valid JSON object with the following schema:
