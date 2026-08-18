@@ -11,20 +11,22 @@ import (
 )
 
 type Claims struct {
-	UserID    string `json:"user_id"`
-	Username  string `json:"username"`
-	AvatarURL string `json:"avatar_url"`
-	GitHubID  string `json:"github_id"`
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	AvatarURL   string `json:"avatar_url"`
+	GitHubID    string `json:"github_id"`
+	GitHubToken string `json:"gh_token,omitempty"`
 	jwt.RegisteredClaims
 }
 
-func MintSessionJWT(userID, username, avatarURL, githubID, secret string) (string, error) {
+func MintSessionJWT(userID, username, avatarURL, githubID, githubToken, secret string) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		UserID:    userID,
-		Username:  username,
-		AvatarURL: avatarURL,
-		GitHubID:  githubID,
+		UserID:      userID,
+		Username:    username,
+		AvatarURL:   avatarURL,
+		GitHubID:    githubID,
+		GitHubToken: githubToken,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(now),
