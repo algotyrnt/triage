@@ -84,25 +84,20 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     setAnalyzing(true);
     setAnalysisError(null);
     try {
-      const res = await fetch('/api/gemini/analyze-panic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          panicMessage: incident.panicMessage,
-          rawStackTrace: incident.rawStackTrace,
-          triggeringFile: incident.triggeringFile,
-          astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
-        }),
+      const data = await engineClient.analyzePanic({
+        panicMessage: incident.panicMessage,
+        rawStackTrace: incident.rawStackTrace,
+        triggeringFile: incident.triggeringFile,
+        astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
       });
-      if (!res.ok) {
-        throw new Error(`AI Analysis API returned status ${res.status}`);
+      if (!data.success || !data.rootCause) {
+        throw new Error(data.error || 'Failed to run AI analysis');
       }
-      const data = await res.json();
       setAiAnalysis({
         rootCause: data.rootCause,
-        explanation: data.explanation,
-        severity: data.severity,
-        recommendedFix: data.recommendedFix,
+        explanation: data.explanation || data.rootCause,
+        severity: (data.severity as any) || 'CRITICAL',
+        recommendedFix: data.recommendedFix || '',
       });
     } catch (e) {
       console.error(e);
@@ -115,25 +110,22 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
   // Trigger Gemini AI Fix Patch Generator
   const handleGenerateFixPatch = async () => {
     setGeneratingPatch(true);
+    setAnalysisError(null);
     try {
-      const res = await fetch('/api/gemini/generate-fix-pr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          triggeringFile: incident.triggeringFile,
-          panicMessage: incident.panicMessage,
-          astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
-        }),
+      const data = await engineClient.generateFixPatch({
+        triggeringFile: incident.triggeringFile,
+        panicMessage: incident.panicMessage,
+        astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
+        rootCause: aiAnalysis?.rootCause,
+        stackTrace: incident.rawStackTrace,
       });
-      if (!res.ok) {
-        throw new Error(`Fix patch generation returned status ${res.status}`);
+      if (!data.success || !data.patch) {
+        throw new Error(data.error || 'Fix patch generation failed');
       }
-      const data = await res.json();
-      if (data.patch) {
-        setPatchCode(data.patch);
-      }
+      setPatchCode(data.patch);
     } catch (e) {
       console.error(e);
+      setAnalysisError(e instanceof Error ? e.message : 'Failed to generate fix patch');
     } finally {
       setGeneratingPatch(false);
     }
