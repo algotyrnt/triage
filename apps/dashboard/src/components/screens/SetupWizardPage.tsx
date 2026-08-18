@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ScreenId, RepositoryItem } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
 import { engineClient } from '@/services/engineClient';
+import { logger } from '@/services/logger';
 import {
   Settings,
   CheckCircle2,
@@ -22,6 +23,11 @@ import {
   PlusCircle,
   Eye,
   EyeOff,
+  Building2,
+  User,
+  Layers,
+  Lock,
+  Globe,
 } from 'lucide-react';
 
 interface SetupWizardPageProps {
@@ -39,6 +45,26 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   // Step 2: Install App
   const [appInstalled, setAppInstalled] = useState(false);
   const [repos, setRepos] = useState<RepositoryItem[]>([]);
+  const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('all');
+
+  const orgCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of repos) {
+      if (r.owner) {
+        counts[r.owner] = (counts[r.owner] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [repos]);
+
+  const availableOrgs = useMemo(() => {
+    return Object.keys(orgCounts).sort((a, b) => a.localeCompare(b));
+  }, [orgCounts]);
+
+  const filteredRepos = useMemo(() => {
+    if (selectedOwnerFilter === 'all') return repos;
+    return repos.filter((r) => r.owner && r.owner.toLowerCase() === selectedOwnerFilter.toLowerCase());
+  }, [repos, selectedOwnerFilter]);
 
   // Step 3: OAuth
   const [oauthConfigured, setOauthConfigured] = useState(false);
@@ -106,7 +132,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
         setCurrentStep(2);
       }
     } catch (err) {
-      console.error('Failed to check status', err);
+      logger.error('Failed to check setup status', err);
     }
   };
 
@@ -115,7 +141,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       const installedRepos = await engineClient.getInstalledRepos();
       setRepos(installedRepos);
     } catch (err) {
-      console.error('Failed to fetch repos', err);
+      logger.error('Failed to fetch installed repositories', err);
     }
   };
 
@@ -380,9 +406,41 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                     </button>
                   </div>
 
-                  {repos.length > 0 ? (
+                  {availableOrgs.length > 1 && (
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs font-mono scrollbar-thin">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOwnerFilter('all')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                          selectedOwnerFilter === 'all'
+                            ? 'bg-black text-white border-black font-bold'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <Layers className="w-3 h-3" />
+                        <span>All ({repos.length})</span>
+                      </button>
+                      {availableOrgs.map((org) => (
+                        <button
+                          key={org}
+                          type="button"
+                          onClick={() => setSelectedOwnerFilter(org)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                            selectedOwnerFilter === org
+                              ? 'bg-black text-white border-black font-bold'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <Building2 className="w-3 h-3" />
+                          <span>{org} ({orgCounts[org]})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {filteredRepos.length > 0 ? (
                     <ul className="space-y-1 max-h-48 overflow-y-auto">
-                      {repos.map((repo, idx) => (
+                      {filteredRepos.map((repo, idx) => (
                         <li
                           key={idx}
                           className="text-sm font-mono text-slate-700 flex items-center justify-between p-1.5 hover:bg-white rounded-sm"
@@ -393,11 +451,24 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                               {repo.owner}/{repo.repo}
                             </span>
                           </div>
-                          {repo.lang && (
-                            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm">
-                              {repo.lang}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {repo.private ? (
+                              <span className="flex items-center gap-1 bg-slate-900 text-slate-200 px-1.5 py-0.5 rounded-sm border border-slate-700 font-semibold text-[10px]">
+                                <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                <span>Private</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-sm border border-slate-200 text-[10px]">
+                                <Globe className="w-2.5 h-2.5 text-slate-400" />
+                                <span>Public</span>
+                              </span>
+                            )}
+                            {repo.lang && (
+                              <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm">
+                                {repo.lang}
+                              </span>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
