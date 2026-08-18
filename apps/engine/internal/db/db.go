@@ -545,12 +545,7 @@ func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL stri
 	return &u, nil
 }
 
-func (db *DB) GetStats(ctx context.Context, version ...string) (map[string]interface{}, error) {
-	v := "v0.1.0-dev"
-	if len(version) > 0 && version[0] != "" {
-		v = version[0]
-	}
-
+func (db *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	if db.Pool == nil {
 		return map[string]interface{}{
 			"status":          "healthy",
@@ -558,7 +553,6 @@ func (db *DB) GetStats(ctx context.Context, version ...string) (map[string]inter
 			"total_incidents": 0,
 			"total_projects":  1,
 			"funcs_indexed":   1420,
-			"engine_version":  v,
 			"uptime_seconds":  120,
 		}, nil
 	}
@@ -573,7 +567,6 @@ func (db *DB) GetStats(ctx context.Context, version ...string) (map[string]inter
 		"total_incidents": incCount,
 		"total_projects":  repoCount,
 		"funcs_indexed":   1420,
-		"engine_version":  v,
 		"uptime_seconds":  3600,
 	}, nil
 }

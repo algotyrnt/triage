@@ -19,10 +19,8 @@ import (
 
 func newTestServer() *api.Server {
 	return api.NewServer(api.Config{
-		SessionSecret: "test-secret",
-		AppURL:        "http://localhost:3000",
-		EngineURL:     "http://localhost:8080",
-		Version:       "v0.1.0-test",
+		AppURL:    "http://localhost:3000",
+		EngineURL: "http://localhost:8080",
 	})
 }
 
