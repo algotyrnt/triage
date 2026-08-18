@@ -19,6 +19,7 @@ import {
   Zap,
   Terminal,
   RefreshCw,
+  FolderGit2,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -122,7 +123,14 @@ require (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500">
-            <span>Projects</span>
+            <button
+              onClick={() => onNavigate('projects')}
+              className="text-slate-500 hover:text-black hover:underline cursor-pointer flex items-center gap-1"
+              title="Back to All Projects"
+            >
+              <FolderGit2 className="w-3 h-3" />
+              <span>Projects</span>
+            </button>
             <span>/</span>
             <span className="font-bold text-slate-900">{activeRepo}</span>
             {rootDir && (
@@ -138,6 +146,14 @@ require (
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => onNavigate('projects')}
+            className="text-xs font-mono bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-sm transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            title="View all monitored projects"
+          >
+            <FolderGit2 className="w-3 h-3 text-slate-500" />
+            <span>All Projects</span>
+          </button>
           <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-mono px-2.5 py-1 rounded-sm flex items-center gap-2 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
             <span>Engine Operational</span>

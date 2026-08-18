@@ -4,6 +4,7 @@
  */
 
 export type ScreenId =
+  | 'projects'
   | 'setup'
   | 'login'
   | 'new'
@@ -19,6 +20,8 @@ export type IncidentStatus = 'CRITICAL' | 'INVESTIGATING' | 'RESOLVED';
 
 export interface Incident {
   id: string; // e.g. "INC-8094"
+  repositoryId?: string;
+  repositoryName?: string;
   title: string; // e.g. "nil pointer dereference in GetProfile()"
   status: IncidentStatus;
   triggeringFile: string; // e.g. "pkg/handler/user.go:42"
