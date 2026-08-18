@@ -52,7 +52,10 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
       if (inc.repositoryId && project.id && inc.repositoryId === project.id) {
         return true;
       }
-      if (inc.repositoryName && (inc.repositoryName === projectRepoSlug || inc.repositoryName === project.repo)) {
+      if (
+        inc.repositoryName &&
+        (inc.repositoryName === projectRepoSlug || inc.repositoryName === project.repo)
+      ) {
         return true;
       }
       return false;
@@ -120,7 +123,8 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             Go Projects &amp; Microservices
           </h1>
           <p className="text-sm text-slate-600 max-w-2xl">
-            Select a project to inspect AST crash symbols, stream runtime panics, and dispatch Gemini AI automated patches.
+            Select a project to inspect AST crash symbols, stream runtime panics, and dispatch
+            Gemini AI automated patches.
           </p>
         </div>
 
@@ -161,9 +165,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             </span>
           </div>
           <div className="text-2xl font-bold font-mono text-slate-900">{totalProjects}</div>
-          <div className="text-[11px] font-mono text-slate-500">
-            Go 1.22+ AST Instrumented
-          </div>
+          <div className="text-[11px] font-mono text-slate-500">Go 1.22+ AST Instrumented</div>
         </div>
 
         {/* Metric 2: Panics Recorded */}
@@ -178,9 +180,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             </span>
           </div>
           <div className="text-2xl font-bold font-mono text-slate-900">{totalIncidents}</div>
-          <div className="text-[11px] font-mono text-slate-500">
-            Across all active services
-          </div>
+          <div className="text-[11px] font-mono text-slate-500">Across all active services</div>
         </div>
 
         {/* Metric 3: Critical Incidents */}
@@ -201,9 +201,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             </span>
           </div>
           <div className="text-2xl font-bold font-mono text-red-600">{criticalIncidents}</div>
-          <div className="text-[11px] font-mono text-slate-500">
-            Open unresolved crash events
-          </div>
+          <div className="text-[11px] font-mono text-slate-500">Open unresolved crash events</div>
         </div>
 
         {/* Metric 4: Core Engine Status */}
@@ -256,7 +254,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
                 : 'text-slate-600 hover:text-black'
             }`}
           >
-            With Panics ({projects.filter((p) => getProjectIncidents(p).some((i) => i.status === 'CRITICAL')).length})
+            With Panics (
+            {
+              projects.filter((p) => getProjectIncidents(p).some((i) => i.status === 'CRITICAL'))
+                .length
+            }
+            )
           </button>
           <button
             onClick={() => setStatusFilter('healthy')}
@@ -266,7 +269,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
                 : 'text-slate-600 hover:text-black'
             }`}
           >
-            Healthy ({projects.filter((p) => !getProjectIncidents(p).some((i) => i.status === 'CRITICAL')).length})
+            Healthy (
+            {
+              projects.filter((p) => !getProjectIncidents(p).some((i) => i.status === 'CRITICAL'))
+                .length
+            }
+            )
           </button>
         </div>
       </div>

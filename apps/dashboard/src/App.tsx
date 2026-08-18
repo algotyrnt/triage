@@ -57,17 +57,13 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
       commitHash: '8f3a1b4',
       branch: 'main',
       timestamp:
-        new Date(item.created_at || Date.now())
-          .toISOString()
-          .replace('T', ' ')
-          .substring(0, 19) + ' UTC',
+        new Date(item.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 19) +
+        ' UTC',
       goroutineId: 'goroutine [running]',
       panicMessage: item.panic_message,
       rawStackTrace: item.stack_trace,
       githubIssueUrl: item.github_issue_url || undefined,
-      githubIssueNumber: item.github_issue_number
-        ? Number(item.github_issue_number)
-        : undefined,
+      githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
       githubPrUrl: item.github_pr_url || undefined,
       githubPrNumber: item.github_pr_number ? Number(item.github_pr_number) : undefined,
       suggestedPatch: item.suggested_patch || undefined,
