@@ -171,7 +171,13 @@ export class EngineClient {
     repo: string,
     rootDir?: string,
     ownerUsername?: string,
-  ): Promise<{ success: boolean; repo: string; root_dir?: string; api_key: string }> {
+  ): Promise<{
+    success: boolean;
+    repo: string;
+    root_dir?: string;
+    api_key: string;
+    key_masked?: string;
+  }> {
     const res = await fetch(`${this.baseUrl}/projects`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
@@ -369,6 +375,91 @@ export class EngineClient {
       return data.repos || [];
     } catch {
       return [];
+    }
+  }
+
+  async getProjectKeys(
+    owner?: string,
+    repo?: string,
+    rootDir?: string,
+  ): Promise<import('@/types').ApiKey[]> {
+    try {
+      const url = new URL(`${this.baseUrl}/projects/keys`);
+      if (owner) url.searchParams.set('owner', owner);
+      if (repo) url.searchParams.set('repo', repo);
+      if (rootDir) url.searchParams.set('root_dir', rootDir);
+      const res = await fetch(url.toString(), {
+        headers: this.getAuthHeaders(),
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!Array.isArray(data.keys)) return [];
+      return data.keys.map((k: any) => ({
+        id: k.id,
+        name: k.name || 'API Key',
+        keyMasked: k.key_masked || 'tr_live_...xxxx',
+        fullKey: k.raw_key || undefined,
+        createdAt: k.created_at ? new Date(k.created_at).toISOString().split('T')[0] : 'Recently',
+        lastUsed: 'Recently',
+        status: (k.status === 'REVOKED' ? 'REVOKED' : 'ACTIVE') as 'ACTIVE' | 'REVOKED',
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async createApiKey(
+    owner: string,
+    repo: string,
+    rootDir?: string,
+    name?: string,
+  ): Promise<{ success: boolean; key?: import('@/types').ApiKey & { raw_key?: string } }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/projects/keys`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          owner,
+          repo,
+          root_dir: rootDir || '',
+          name: name || `Key for ${repo}`,
+        }),
+      });
+      if (!res.ok) return { success: false };
+      const data = await res.json();
+      if (data.key) {
+        return {
+          success: true,
+          key: {
+            id: data.key.id,
+            name: data.key.name,
+            keyMasked: data.key.key_masked,
+            fullKey: data.key.raw_key,
+            raw_key: data.key.raw_key,
+            createdAt: data.key.created_at
+              ? new Date(data.key.created_at).toISOString().split('T')[0]
+              : 'Today',
+            lastUsed: 'Never',
+            status: 'ACTIVE',
+          },
+        };
+      }
+      return { success: false };
+    } catch {
+      return { success: false };
+    }
+  }
+
+  async revokeApiKey(keyId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.baseUrl}/projects/keys/revoke`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ key_id: keyId }),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 }

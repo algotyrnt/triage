@@ -20,6 +20,8 @@ import {
   Key,
   Brain,
   PlusCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface SetupWizardPageProps {
@@ -47,6 +49,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   const [llmConfigured, setLlmConfigured] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
 
   // Step 5: Test
   const [connectionSuccess, setConnectionSuccess] = useState(false);
@@ -85,7 +88,13 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
         fetchRepos();
       }
       if (status.oauth) setOauthConfigured(true);
-      if (status.llm) setLlmConfigured(true);
+      if (status.llm) {
+        setLlmConfigured(true);
+        engineClient.getLlmConfig().then((cfg) => {
+          if (cfg.gemini_api_key) setGeminiApiKey(cfg.gemini_api_key);
+          if (cfg.gemini_model) setGeminiModel(cfg.gemini_model);
+        });
+      }
 
       if (status.github_app && status.installation && status.oauth && status.llm) {
         setCurrentStep(5);
@@ -524,13 +533,23 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
                     Gemini API Key
                   </label>
-                  <input
-                    type="password"
-                    value={geminiApiKey}
-                    onChange={(e) => setGeminiApiKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none focus:border-black"
-                    placeholder="AIzaSy..."
-                  />
+                  <div className="relative">
+                    <input
+                      type={showGeminiKey ? 'text' : 'password'}
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 pr-10 text-sm font-mono focus:outline-none focus:border-black"
+                      placeholder="AIzaSy..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGeminiKey(!showGeminiKey)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 font-mono text-xs"
+                      title={showGeminiKey ? 'Hide Key' : 'Show Key'}
+                    >
+                      {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">

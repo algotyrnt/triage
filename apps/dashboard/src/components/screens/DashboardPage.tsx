@@ -36,7 +36,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigate,
   activeRepo = 'algotyrnt/triage',
   rootDir = '',
-  apiKey = 'tr_live_demo_key_9042',
+  apiKey: rawApiKey,
 }) => {
   const [activeCodeTab, setActiveCodeTab] = useState<'main.go' | 'middleware.go' | 'go.mod'>(
     'main.go',
@@ -48,6 +48,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     funcs_indexed: number;
     total_projects: number;
   } | null>(null);
+
+  const parts = activeRepo.split('/');
+  const owner = parts[0] || 'algotyrnt';
+  const repoName = parts[1] || activeRepo;
+  const storageKey = `triage_key_${owner}_${repoName}_${rootDir}`;
+  const localKey = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+  const apiKey = rawApiKey || localKey || 'tr_live_telemetry_key';
 
   useEffect(() => {
     engineClient.getStats().then((data) => {

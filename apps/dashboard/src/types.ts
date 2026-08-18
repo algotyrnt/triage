@@ -117,10 +117,10 @@ export interface ApiKey {
   id: string;
   name: string;
   keyMasked: string;
-  fullKey: string;
+  fullKey?: string;
   createdAt: string;
-  lastUsed: string;
-  status: 'ACTIVE' | 'REVOKED';
+  lastUsed?: string;
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
 }
 
 export interface MetricHourly {
@@ -144,6 +144,7 @@ export interface Project {
   repo: string;
   root_dir?: string;
   installation_id?: number;
+  api_key_masked?: string;
   created_at?: string;
 }
 

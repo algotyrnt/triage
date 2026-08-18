@@ -99,8 +99,17 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
         const projects = await engineClient.getProjects();
         if (projects && projects.length > 0) {
           const firstProject = projects[0];
-          setActiveRepo(`${firstProject.owner}/${firstProject.repo}`);
-          setActiveRootDir(firstProject.root_dir || '');
+          const owner = firstProject.owner;
+          const repo = firstProject.repo;
+          const rootDir = firstProject.root_dir || '';
+          setActiveRepo(`${owner}/${repo}`);
+          setActiveRootDir(rootDir);
+
+          const storageKey = `triage_key_${owner}_${repo}_${rootDir}`;
+          const localStoredKey = localStorage.getItem(storageKey);
+          const keyToUse = localStoredKey || firstProject.api_key_masked || '';
+          setActiveApiKey(keyToUse);
+
           // Load incidents
           const liveIncidents = await engineClient.getIncidents();
           if (liveIncidents && liveIncidents.length > 0) {
@@ -191,6 +200,12 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
     setActiveRepo(repo);
     setActiveRootDir(rootDir || '');
     let finalKey = apiKey;
+    const parts = repo.split('/');
+    const owner = parts[0] || currentUser?.username || 'algotyrnt';
+    const repoName = parts[1] || repo;
+    const cleanRoot = rootDir || '';
+    const storageKey = `triage_key_${owner}_${repoName}_${cleanRoot}`;
+
     try {
       const res = await engineClient.createProject(repo, rootDir, currentUser?.username);
       if (res && res.api_key) {
@@ -200,8 +215,9 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
       // Fallback to local generated key
     }
     setActiveApiKey(finalKey);
+    localStorage.setItem(storageKey, finalKey);
     showToast(
-      `Project ${repo}${rootDir ? ` (${rootDir})` : ''} setup complete with API Key ${finalKey.substring(0, 12)}...`,
+      `Project ${repo}${cleanRoot ? ` (${cleanRoot})` : ''} setup complete with API Key ${finalKey.substring(0, 12)}...`,
       'success',
     );
   };
@@ -325,6 +341,8 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
         {currentScreen === 'settings' && (
           <SettingsPage
             apiKeys={[]}
+            activeApiKey={activeApiKey}
+            onKeyUpdated={(newKey) => setActiveApiKey(newKey)}
             onNavigate={(screen) => setCurrentScreen(screen)}
             activeRepo={activeRepo}
             activeRootDir={activeRootDir}

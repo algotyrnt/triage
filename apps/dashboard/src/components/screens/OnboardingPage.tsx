@@ -166,11 +166,51 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     }
   };
 
+  const [generatingKey, setGeneratingKey] = useState(false);
+
   const generateNewKey = () => {
     const hex = Math.random().toString(36).substring(2, 12);
     const key = `tr_live_${hex}`;
     setGeneratedKey(key);
     return key;
+  };
+
+  const handleProceedToStep3 = async () => {
+    const repo = customRepoInput.trim() || selectedRepo;
+    if (!repo) {
+      setCurrentStep(3);
+      return;
+    }
+    setGeneratingKey(true);
+    try {
+      const storageKey = `triage_key_${activeOwner}_${activeRepoName}_${rootDir}`;
+      const res = await engineClient.createProject(repo, rootDir, username);
+      if (res && res.api_key) {
+        setGeneratedKey(res.api_key);
+        localStorage.setItem(storageKey, res.api_key);
+      } else {
+        const existingStoredKey = localStorage.getItem(storageKey);
+        if (existingStoredKey) {
+          setGeneratedKey(existingStoredKey);
+        } else {
+          const fallback = generateNewKey();
+          localStorage.setItem(storageKey, fallback);
+        }
+      }
+    } catch (e) {
+      console.warn('Project registration warning:', e);
+      const storageKey = `triage_key_${activeOwner}_${activeRepoName}_${rootDir}`;
+      const existingStoredKey = localStorage.getItem(storageKey);
+      if (existingStoredKey) {
+        setGeneratedKey(existingStoredKey);
+      } else if (!generatedKey) {
+        const fallback = generateNewKey();
+        localStorage.setItem(storageKey, fallback);
+      }
+    } finally {
+      setGeneratingKey(false);
+      setCurrentStep(3);
+    }
   };
 
   const filteredRepos = repos.filter(
@@ -180,7 +220,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   );
 
   const installedCount = repos.filter((r) => r.installed).length;
-  const activeKey = generatedKey || 'tr_live_demo_key_9042';
+  const activeKey = generatedKey || 'tr_live_fetching_key';
 
   const handleCopy = async () => {
     try {
@@ -193,7 +233,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   };
 
   const handleCompleteSetup = () => {
-    const key = generatedKey || generateNewKey();
+    const key = generatedKey || activeKey;
     const repo = customRepoInput.trim() || selectedRepo;
     if (onProjectSetup) {
       onProjectSetup(repo, key, rootDir);
@@ -235,7 +275,13 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
           return (
             <button
               key={step.num}
-              onClick={() => setCurrentStep(step.num as any)}
+              onClick={() => {
+                if (step.num === 3 && !generatedKey) {
+                  handleProceedToStep3();
+                } else {
+                  setCurrentStep(step.num as any);
+                }
+              }}
               className={`text-left p-2.5 rounded-sm transition-all border ${
                 isActive
                   ? 'border-black bg-black text-white'
@@ -680,11 +726,21 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                 Back to Repositories
               </button>
               <button
-                onClick={() => setCurrentStep(3)}
-                className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+                onClick={handleProceedToStep3}
+                disabled={generatingKey}
+                className="bg-black hover:bg-slate-800 disabled:bg-slate-700 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
               >
-                <span>Generate Ingestion API Key</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                {generatingKey ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Generating Ingestion Key...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Generate Ingestion API Key</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
               </button>
             </div>
           </div>
