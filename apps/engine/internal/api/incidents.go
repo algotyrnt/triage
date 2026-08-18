@@ -24,10 +24,42 @@ func (s *Server) HandleIncidents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	incidents, err := s.db.GetIncidents(r.Context(), 50)
+	repoQuery := r.URL.Query().Get("repo")
+	repoIDQuery := r.URL.Query().Get("repository_id")
+
+	incidents, err := s.db.GetIncidents(r.Context(), 100)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to fetch incidents: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	if repoIDQuery != "" {
+		filtered := make([]db.Incident, 0)
+		for _, inc := range incidents {
+			if inc.RepositoryID == repoIDQuery {
+				filtered = append(filtered, inc)
+			}
+		}
+		incidents = filtered
+	} else if repoQuery != "" {
+		var matchedRepoID string
+		if projects, pErr := s.db.GetProjects(r.Context()); pErr == nil {
+			for _, p := range projects {
+				if fmt.Sprintf("%s/%s", p.Owner, p.Repo) == repoQuery || p.Repo == repoQuery {
+					matchedRepoID = p.ID
+					break
+				}
+			}
+		}
+		if matchedRepoID != "" {
+			filtered := make([]db.Incident, 0)
+			for _, inc := range incidents {
+				if inc.RepositoryID == matchedRepoID {
+					filtered = append(filtered, inc)
+				}
+			}
+			incidents = filtered
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"incidents": incidents})
