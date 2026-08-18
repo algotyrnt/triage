@@ -23,6 +23,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// SetDefaultHeaders attaches standard GitHub API headers including User-Agent and API version.
+func SetDefaultHeaders(req *http.Request) {
+	if req != nil {
+		req.Header.Set("User-Agent", "Triage-Engine")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	}
+}
+
 type AppConfig struct {
 	AppID              int64
 	PrivateKey         *rsa.PrivateKey
@@ -99,7 +107,7 @@ func (c *AppConfig) GetInstallationToken(ctx context.Context, installationID int
 
 	req.Header.Set("Authorization", "Bearer "+appJWT)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -146,7 +154,7 @@ func (c *AppConfig) FetchFileContent(ctx context.Context, installationID int64, 
 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -212,7 +220,7 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -231,7 +239,7 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 				retryReq.Header.Set("Authorization", "Bearer "+token)
 				retryReq.Header.Set("Accept", "application/vnd.github+json")
 				retryReq.Header.Set("Content-Type", "application/json")
-				retryReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+				SetDefaultHeaders(retryReq)
 
 				retryResp, doErr := http.DefaultClient.Do(retryReq)
 				if doErr == nil {
@@ -276,7 +284,7 @@ func (c *AppConfig) GetDefaultBranch(ctx context.Context, installationID int64, 
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -308,7 +316,7 @@ func (c *AppConfig) GetDefaultBranch(ctx context.Context, installationID int64, 
 	}
 	refReq.Header.Set("Authorization", "Bearer "+token)
 	refReq.Header.Set("Accept", "application/vnd.github+json")
-	refReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(refReq)
 
 	refResp, err := http.DefaultClient.Do(refReq)
 	if err != nil {
@@ -353,7 +361,7 @@ func (c *AppConfig) CreateBranch(ctx context.Context, installationID int64, owne
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -393,7 +401,7 @@ func (c *AppConfig) UpdateFileContent(ctx context.Context, installationID int64,
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -431,7 +439,7 @@ func (c *AppConfig) CreatePullRequest(ctx context.Context, installationID int64,
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -469,7 +477,7 @@ func (c *AppConfig) VerifyApp(ctx context.Context) error {
 
 	req.Header.Set("Authorization", "Bearer "+appJWT)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	SetDefaultHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -518,7 +526,7 @@ func (c *AppConfig) ListAppInstallations(ctx context.Context) ([]AppInstallation
 		}
 		req.Header.Set("Authorization", "Bearer "+appJWT)
 		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		SetDefaultHeaders(req)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -586,7 +594,7 @@ func (c *AppConfig) ListInstallationRepositories(ctx context.Context, installati
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+		SetDefaultHeaders(req)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -642,6 +650,9 @@ func (c *AppConfig) ListInstallationRepositories(ctx context.Context, installati
 	return allRepos, nil
 }
 
+// FetchUserRepositories fetches all repositories accessible to the given user token.
+// NOTE: This function is kept for potential tooling/test use.
+// The dashboard fetches user repos directly from the browser; the engine uses GitHub App tokens.
 func FetchUserRepositories(ctx context.Context, username string, accessToken ...string) ([]RepositoryInfo, error) {
 	token := ""
 	if len(accessToken) > 0 && accessToken[0] != "" {
@@ -650,9 +661,12 @@ func FetchUserRepositories(ctx context.Context, username string, accessToken ...
 	if token == "" {
 		token = os.Getenv("GITHUB_TOKEN")
 	}
+	if token == "" {
+		token = os.Getenv("GITHUB_ACCESS_TOKEN")
+	}
 
-	if token == "" && username == "" {
-		return nil, fmt.Errorf("username or access token cannot be empty")
+	if token == "" {
+		return nil, fmt.Errorf("GitHub authentication token is required to fetch repositories (public fallback disabled)")
 	}
 
 	var allRepos []RepositoryInfo
@@ -661,28 +675,24 @@ func FetchUserRepositories(ctx context.Context, username string, accessToken ...
 
 	// 1. Fetch user & affiliated repositories (both public and private)
 	page := 1
-	for page <= 5 {
-		var url string
-		if token != "" {
-			// When token is provided, /user/repos with visibility=all returns all accessible repositories (private, internal, public)
-			url = fmt.Sprintf("https://api.github.com/user/repos?visibility=all&per_page=100&page=%d&sort=updated&affiliation=owner,collaborator,organization_member", page)
-		} else {
-			url = fmt.Sprintf("https://api.github.com/users/%s/repos?per_page=100&page=%d&sort=updated", username, page)
-		}
-
+	for page <= 10 {
+		url := fmt.Sprintf("https://api.github.com/user/repos?visibility=all&per_page=100&page=%d&sort=updated&affiliation=owner,collaborator,organization_member", page)
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
+		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
+		SetDefaultHeaders(req)
 
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch user repos: %w", err)
+		}
+
+		if resp.StatusCode == http.StatusUnauthorized {
+			resp.Body.Close()
+			return nil, fmt.Errorf("github token expired or invalid (HTTP 401)")
 		}
 
 		if resp.StatusCode != http.StatusOK {
@@ -730,76 +740,74 @@ func FetchUserRepositories(ctx context.Context, username string, accessToken ...
 		page++
 	}
 
-	// 2. If token is available, also discover organization memberships and fetch their repos
-	if token != "" {
-		orgsReq, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user/orgs?per_page=100", nil)
-		if err == nil {
-			orgsReq.Header.Set("Accept", "application/vnd.github+json")
-			orgsReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-			orgsReq.Header.Set("Authorization", "Bearer "+token)
+	// 2. Discover organization memberships and fetch all their repos
+	orgsReq, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user/orgs?per_page=100", nil)
+	if err == nil {
+		orgsReq.Header.Set("Authorization", "Bearer "+token)
+		orgsReq.Header.Set("Accept", "application/vnd.github+json")
+		SetDefaultHeaders(orgsReq)
 
-			if orgsResp, oErr := client.Do(orgsReq); oErr == nil && orgsResp.StatusCode == http.StatusOK {
-				var orgs []struct {
-					Login string `json:"login"`
-				}
-				_ = json.NewDecoder(orgsResp.Body).Decode(&orgs)
-				orgsResp.Body.Close()
+		if orgsResp, oErr := client.Do(orgsReq); oErr == nil && orgsResp.StatusCode == http.StatusOK {
+			var orgs []struct {
+				Login string `json:"login"`
+			}
+			_ = json.NewDecoder(orgsResp.Body).Decode(&orgs)
+			orgsResp.Body.Close()
 
-				for _, org := range orgs {
-					orgPage := 1
-					for orgPage <= 3 {
-						orgUrl := fmt.Sprintf("https://api.github.com/orgs/%s/repos?type=all&per_page=100&page=%d", org.Login, orgPage)
-						oReq, rErr := http.NewRequestWithContext(ctx, "GET", orgUrl, nil)
-						if rErr != nil {
-							break
-						}
-						oReq.Header.Set("Accept", "application/vnd.github+json")
-						oReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-						oReq.Header.Set("Authorization", "Bearer "+token)
-
-						oResp, dErr := client.Do(oReq)
-						if dErr != nil || oResp.StatusCode != http.StatusOK {
-							if oResp != nil {
-								oResp.Body.Close()
-							}
-							break
-						}
-
-						var orgItems []struct {
-							Name          string `json:"name"`
-							Private       bool   `json:"private"`
-							DefaultBranch string `json:"default_branch"`
-							Language      string `json:"language"`
-							Owner         struct {
-								Login string `json:"login"`
-							} `json:"owner"`
-						}
-						_ = json.NewDecoder(oResp.Body).Decode(&orgItems)
-						oResp.Body.Close()
-
-						if len(orgItems) == 0 {
-							break
-						}
-
-						for _, r := range orgItems {
-							key := strings.ToLower(fmt.Sprintf("%s/%s", r.Owner.Login, r.Name))
-							if !seen[key] {
-								seen[key] = true
-								allRepos = append(allRepos, RepositoryInfo{
-									Owner:         r.Owner.Login,
-									Repo:          r.Name,
-									DefaultBranch: r.DefaultBranch,
-									Language:      r.Language,
-									Private:       r.Private,
-								})
-							}
-						}
-
-						if len(orgItems) < 100 {
-							break
-						}
-						orgPage++
+			for _, org := range orgs {
+				orgPage := 1
+				for orgPage <= 5 {
+					orgUrl := fmt.Sprintf("https://api.github.com/orgs/%s/repos?type=all&per_page=100&page=%d", org.Login, orgPage)
+					oReq, rErr := http.NewRequestWithContext(ctx, "GET", orgUrl, nil)
+					if rErr != nil {
+						break
 					}
+					oReq.Header.Set("Authorization", "Bearer "+token)
+					oReq.Header.Set("Accept", "application/vnd.github+json")
+					SetDefaultHeaders(oReq)
+
+					oResp, dErr := client.Do(oReq)
+					if dErr != nil || oResp.StatusCode != http.StatusOK {
+						if oResp != nil {
+							oResp.Body.Close()
+						}
+						break
+					}
+
+					var orgItems []struct {
+						Name          string `json:"name"`
+						Private       bool   `json:"private"`
+						DefaultBranch string `json:"default_branch"`
+						Language      string `json:"language"`
+						Owner         struct {
+							Login string `json:"login"`
+						} `json:"owner"`
+					}
+					_ = json.NewDecoder(oResp.Body).Decode(&orgItems)
+					oResp.Body.Close()
+
+					if len(orgItems) == 0 {
+						break
+					}
+
+					for _, r := range orgItems {
+						key := strings.ToLower(fmt.Sprintf("%s/%s", r.Owner.Login, r.Name))
+						if !seen[key] {
+							seen[key] = true
+							allRepos = append(allRepos, RepositoryInfo{
+								Owner:         r.Owner.Login,
+								Repo:          r.Name,
+								DefaultBranch: r.DefaultBranch,
+								Language:      r.Language,
+								Private:       r.Private,
+							})
+						}
+					}
+
+					if len(orgItems) < 100 {
+						break
+					}
+					orgPage++
 				}
 			}
 		}
