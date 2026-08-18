@@ -36,8 +36,8 @@ export const ArchitectureSection: React.FC = () => {
     },
     {
       num: '03',
-      title: 'On-Demand AST Slicing',
-      desc: 'The engine retrieves the exact commit file and parses the AST to isolate only the enclosing *ast.FuncDecl code node.',
+      title: 'Multi-File AST Slicing',
+      desc: 'The engine parses the package AST on the fly to isolate the crash site alongside cross-file receiver structs, constructors, and package helpers.',
       badge: '< 14ms',
       icon: <Layers className="w-5 h-5 text-cyan-600" />,
     },

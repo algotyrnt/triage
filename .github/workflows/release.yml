@@ -3,7 +3,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
           TAG="${{ github.ref_name }}"
           SDK_TAG="sdk/go/${TAG}"
           echo "Processing SDK Tag: $SDK_TAG"
-          
+
           if git rev-parse "$SDK_TAG" >/dev/null 2>&1; then
             echo "Tag $SDK_TAG already exists."
           else
