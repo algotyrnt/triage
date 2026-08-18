@@ -13,8 +13,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-
-	"triage/engine/internal/session"
 )
 
 // withMiddleware wraps a handler with standard CORS, panic recovery, and logging.
@@ -97,12 +95,4 @@ func ExtractBearerOrAPIKey(r *http.Request) string {
 		return strings.TrimPrefix(authHeader, "Bearer ")
 	}
 	return ""
-}
-
-// ValidateSessionToken parses the JWT session token if provided.
-func (s *Server) ValidateSessionToken(tokenString string) (*session.Claims, error) {
-	if s.sessionSecret == "" {
-		s.sessionSecret = os.Getenv("SESSION_SECRET")
-	}
-	return session.ValidateSessionJWT(tokenString, s.sessionSecret)
 }
