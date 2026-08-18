@@ -60,7 +60,9 @@ export const Hero: React.FC = () => {
         <code className="text-indigo-800 font-mono bg-indigo-50/70 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold text-sm">
           defer + recover
         </code>
-        . Automatically isolates the crash site and surrounding multi-file package context (struct definitions, constructors, helpers), queries Gemini AI for root causes, and files GitHub issues with drop-in patches.
+        . Automatically isolates the crash site and surrounding multi-file package context (struct
+        definitions, constructors, helpers), queries Gemini AI for root causes, and files GitHub
+        issues with drop-in patches.
       </p>
 
       {/* Primary Action Buttons */}
