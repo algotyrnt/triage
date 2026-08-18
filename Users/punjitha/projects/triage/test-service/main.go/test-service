@@ -1,0 +1,13 @@
+--- a/test-service/main.go
++++ b/test-service/main.go
+@@ -40,6 +40,9 @@
+ 	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
+ 		ctx := r.Context()
+ 		database := db.FromContext(ctx)
++		if database == nil {
++			http.Error(w, "Database connection not available", http.StatusInternalServerError)
++			return
++		}
+ 		cfg := loadGitHubAppConfig(ctx, database)
+ 		if cfg == nil {
+ 			http.Error(w, "GitHub App not configured", http.StatusBadRequest)
