@@ -182,3 +182,25 @@ func TestProjectKeysRoutes(t *testing.T) {
 		t.Fatalf("expected status 200 for key revoke, got %d", revokeRec.Code)
 	}
 }
+
+func TestCreateIncidentIssueRoute(t *testing.T) {
+	// 1. Test missing incident_id
+	body, _ := json.Marshal(map[string]string{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/create-issue", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handleCreateIncidentIssueRoute(rec, req)
+
+	// Since database is nil during this test, expect service unavailable (503) or bad request (400)
+	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 400 or 503, got %d", rec.Code)
+	}
+
+	// 2. Test invalid method GET
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/incidents/create-issue", nil)
+	getRec := httptest.NewRecorder()
+	handleCreateIncidentIssueRoute(getRec, getReq)
+
+	if getRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
+	}
+}

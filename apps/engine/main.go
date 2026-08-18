@@ -49,11 +49,19 @@ type TelemetryRequest struct {
 	TraceID    string `json:"trace_id,omitempty"`
 }
 
+type GitHubIssue struct {
+	Number  int    `json:"number"`
+	HTMLURL string `json:"html_url"`
+	State   string `json:"state"`
+	Title   string `json:"title"`
+}
+
 type TelemetryResponse struct {
 	Status       string              `json:"status"`
 	TraceID      string              `json:"trace_id,omitempty"`
 	AST          string              `json:"ast,omitempty"`
 	Analysis     *llm.AnalysisResult `json:"analysis,omitempty"`
+	GitHubIssue  *GitHubIssue        `json:"github_issue,omitempty"`
 	ErrorMessage string              `json:"error,omitempty"`
 }
 
@@ -190,6 +198,7 @@ func main() {
 	http.HandleFunc("/api/v1/telemetry", corsMiddleware(handleTelemetryRoute))
 	http.HandleFunc("/api/v1/ast/index", corsMiddleware(handleASTIndexRoute))
 	http.HandleFunc("/api/v1/incidents", corsMiddleware(handleIncidentsRoute))
+	http.HandleFunc("/api/v1/incidents/create-issue", corsMiddleware(handleCreateIncidentIssueRoute))
 	http.HandleFunc("/api/v1/projects", corsMiddleware(handleProjectsRoute))
 	http.HandleFunc("/api/v1/stats", corsMiddleware(handleStatsRoute))
 	http.HandleFunc("/api/v1/repos/detect-modules", corsMiddleware(handleDetectModulesRoute))
@@ -551,9 +560,13 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 		rootDir = req.RootPath
 	}
 
+	var repoID string
+	var installationID int64
+
 	// Auto-lookup repository from DB if API key belongs to a registered project
 	if database != nil && req.APIKey != "" {
 		if repoRecord, err := database.GetRepositoryByAPIKey(r.Context(), req.APIKey); err == nil && repoRecord != nil {
+			repoID = repoRecord.ID
 			if req.Owner == "" {
 				req.Owner = repoRecord.Owner
 			}
@@ -563,6 +576,52 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 			if rootDir == "" {
 				rootDir = repoRecord.RootDir
 			}
+			if installationID == 0 {
+				installationID = repoRecord.InstallationID
+			}
+		}
+	}
+
+	// If owner/repo still empty, check if repo contains owner/repo or fallback to registered projects
+	if strings.Contains(req.Repo, "/") && req.Owner == "" {
+		parts := strings.Split(req.Repo, "/")
+		req.Owner = parts[0]
+		req.Repo = parts[1]
+	}
+	if req.Owner == "" && database != nil {
+		if projects, err := database.GetProjects(r.Context()); err == nil && len(projects) > 0 {
+			req.Owner = projects[0].Owner
+			req.Repo = projects[0].Repo
+			if rootDir == "" {
+				rootDir = projects[0].RootDir
+			}
+			if repoID == "" {
+				repoID = projects[0].ID
+			}
+			if installationID == 0 {
+				installationID = projects[0].InstallationID
+			}
+		}
+	}
+
+	// Resolve installation ID if 0 or placeholder
+	if (installationID == 0 || installationID == 1001) && database != nil && req.Owner != "" && req.Repo != "" {
+		if instID, err := database.GetInstallationForRepo(r.Context(), req.Owner, req.Repo); err == nil && instID > 0 {
+			installationID = instID
+		}
+	}
+	if (installationID == 0 || installationID == 1001) && database != nil {
+		if inst, err := database.GetInstallation(r.Context()); err == nil && inst != nil && inst.InstallationID > 0 {
+			installationID = inst.InstallationID
+		}
+	}
+
+	if githubApp == nil && database != nil {
+		loadGitHubAppConfig(r.Context())
+	}
+	if (installationID == 0 || installationID == 1001) && githubApp != nil {
+		if appInstalls, err := githubApp.ListAppInstallations(r.Context()); err == nil && len(appInstalls) > 0 {
+			installationID = appInstalls[0].ID
 		}
 	}
 
@@ -618,6 +677,76 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	log.Printf("  Suggested Fix: %s", analysis.SuggestedFix)
 	log.Printf("==================================================")
 
+	panicMsg := "Runtime panic"
+	if req.StackTrace != "" {
+		lines := strings.Split(req.StackTrace, "\n")
+		if len(lines) > 0 {
+			panicMsg = strings.TrimSpace(lines[0])
+		}
+	}
+
+	// Automatic GitHub Issue Creation
+	var githubIssueURL string
+	var githubIssueNumber int
+	var gitHubIssue *GitHubIssue
+
+	if githubApp != nil && installationID > 0 && req.Owner != "" && req.Repo != "" {
+		issueTitle := fmt.Sprintf("🚨 Panic in %s:%d: %s", req.File, req.Line, panicMsg)
+		var issueBody strings.Builder
+		issueBody.WriteString("## 🚨 Runtime Go Panic Detected\n\n")
+		issueBody.WriteString(fmt.Sprintf("A runtime panic was intercepted by **Triage** in `%s:%d`.\n\n", req.File, req.Line))
+		issueBody.WriteString("### 💥 Panic Details\n")
+		issueBody.WriteString(fmt.Sprintf("- **File**: `%s:%d`\n", req.File, req.Line))
+		if traceID != "" {
+			issueBody.WriteString(fmt.Sprintf("- **Trace ID**: `%s`\n", traceID))
+		}
+		issueBody.WriteString(fmt.Sprintf("- **Timestamp**: `%s UTC`\n\n", time.Now().UTC().Format("2006-01-02 15:04:05")))
+
+		if analysis != nil {
+			issueBody.WriteString("### 🧠 Root Cause Analysis (Gemini AI)\n")
+			issueBody.WriteString(fmt.Sprintf("%s\n\n", analysis.RootCause))
+			issueBody.WriteString("### 💡 Recommended Fix\n")
+			issueBody.WriteString(fmt.Sprintf("%s\n\n", analysis.SuggestedFix))
+		}
+
+		if astSnippet != "" {
+			issueBody.WriteString("### 🌲 AST Context\n```go\n")
+			issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", astSnippet))
+		}
+
+		if req.StackTrace != "" {
+			issueBody.WriteString("### 📋 Stack Trace\n```\n")
+			issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", req.StackTrace))
+		}
+
+		issueBody.WriteString("---\n*Automatically generated by [Triage Panic Ingestion Engine](https://github.com/algotyrnt/triage)*\n")
+
+		labels := []string{"panic", "triage", "bug"}
+
+		issueNum, issueURL, issueErr := githubApp.CreateIssue(
+			r.Context(),
+			installationID,
+			req.Owner,
+			req.Repo,
+			issueTitle,
+			issueBody.String(),
+			labels,
+		)
+		if issueErr != nil {
+			log.Printf("[WARNING] [TRACE %s] Automatic GitHub Issue creation failed: %v", traceID, issueErr)
+		} else {
+			log.Printf("[GITHUB ISSUE CREATED] [TRACE %s] Issue #%d created: %s", traceID, issueNum, issueURL)
+			githubIssueNumber = issueNum
+			githubIssueURL = issueURL
+			gitHubIssue = &GitHubIssue{
+				Number:  issueNum,
+				HTMLURL: issueURL,
+				State:   "open",
+				Title:   issueTitle,
+			}
+		}
+	}
+
 	// Save Incident to PostgreSQL database if connected
 	if database != nil && analysis != nil {
 		randID, idErr := generateIncidentID()
@@ -625,37 +754,173 @@ func handleTelemetry(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[ERROR] Failed to generate incident ID: %v", idErr)
 		} else {
 			incidentID := fmt.Sprintf("INC-%s", randID)
-			panicMsg := "Runtime panic"
-			if req.StackTrace != "" {
-				lines := strings.Split(req.StackTrace, "\n")
-				if len(lines) > 0 {
-					panicMsg = lines[0]
-				}
-			}
 
 			_ = database.SaveIncident(r.Context(), &db.Incident{
-				ID:           incidentID,
-				Title:        fmt.Sprintf("Panic in %s:%d", req.File, req.Line),
-				Status:       "CRITICAL",
-				File:         req.File,
-				Line:         req.Line,
-				PanicMessage: panicMsg,
-				StackTrace:   req.StackTrace,
-				ASTSnippet:   astSnippet,
-				RootCause:    analysis.RootCause,
-				SuggestedFix: analysis.SuggestedFix,
+				ID:                incidentID,
+				RepositoryID:      repoID,
+				Title:             fmt.Sprintf("Panic in %s:%d", req.File, req.Line),
+				Status:            "CRITICAL",
+				File:              req.File,
+				Line:              req.Line,
+				PanicMessage:      panicMsg,
+				StackTrace:        req.StackTrace,
+				ASTSnippet:        astSnippet,
+				RootCause:         analysis.RootCause,
+				SuggestedFix:      analysis.SuggestedFix,
+				GitHubIssueURL:    githubIssueURL,
+				GitHubIssueNumber: githubIssueNumber,
 			})
-			log.Printf("[ENGINE DB SAVE] Persisted Incident %s in PostgreSQL", incidentID)
+			log.Printf("[ENGINE DB SAVE] Persisted Incident %s in PostgreSQL (GitHub Issue: %d)", incidentID, githubIssueNumber)
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(TelemetryResponse{
-		Status:   "success",
-		TraceID:  traceID,
-		AST:      astSnippet,
-		Analysis: analysis,
+		Status:      "success",
+		TraceID:     traceID,
+		AST:         astSnippet,
+		Analysis:    analysis,
+		GitHubIssue: gitHubIssue,
+	})
+}
+
+func handleCreateIncidentIssueRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if database == nil {
+		http.Error(w, "Database unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		IncidentID string `json:"incident_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IncidentID == "" {
+		http.Error(w, "Missing incident_id", http.StatusBadRequest)
+		return
+	}
+
+	inc, err := database.GetIncidentByID(r.Context(), req.IncidentID)
+	if err != nil || inc == nil {
+		http.Error(w, "Incident not found", http.StatusNotFound)
+		return
+	}
+
+	if inc.GitHubIssueNumber > 0 && inc.GitHubIssueURL != "" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"github_issue": map[string]interface{}{
+				"number":   inc.GitHubIssueNumber,
+				"html_url": inc.GitHubIssueURL,
+			},
+		})
+		return
+	}
+
+	if githubApp == nil {
+		loadGitHubAppConfig(r.Context())
+	}
+	if githubApp == nil {
+		http.Error(w, "GitHub App is not configured on this Triage instance", http.StatusBadRequest)
+		return
+	}
+
+	// Resolve project repo and installation ID
+	var owner, repo string
+	var installationID int64
+
+	if inc.RepositoryID != "" {
+		if projects, err := database.GetProjects(r.Context()); err == nil {
+			for _, p := range projects {
+				if p.ID == inc.RepositoryID {
+					owner = p.Owner
+					repo = p.Repo
+					installationID = p.InstallationID
+					break
+				}
+			}
+		}
+	}
+	if owner == "" {
+		if projects, err := database.GetProjects(r.Context()); err == nil && len(projects) > 0 {
+			owner = projects[0].Owner
+			repo = projects[0].Repo
+			installationID = projects[0].InstallationID
+		}
+	}
+	if (installationID == 0 || installationID == 1001) && owner != "" && repo != "" {
+		if instID, err := database.GetInstallationForRepo(r.Context(), owner, repo); err == nil && instID > 0 {
+			installationID = instID
+		}
+	}
+	if installationID == 0 || installationID == 1001 {
+		if inst, err := database.GetInstallation(r.Context()); err == nil && inst != nil {
+			installationID = inst.InstallationID
+		}
+	}
+	if installationID == 0 || installationID == 1001 {
+		if appInstalls, err := githubApp.ListAppInstallations(r.Context()); err == nil && len(appInstalls) > 0 {
+			installationID = appInstalls[0].ID
+		}
+	}
+
+	if installationID == 0 || owner == "" || repo == "" {
+		http.Error(w, "Unable to resolve GitHub repository or App installation for this incident", http.StatusBadRequest)
+		return
+	}
+
+	panicMsg := inc.PanicMessage
+	if panicMsg == "" {
+		panicMsg = "Runtime panic"
+	}
+	issueTitle := fmt.Sprintf("🚨 Panic in %s:%d: %s", inc.File, inc.Line, panicMsg)
+	var issueBody strings.Builder
+	issueBody.WriteString("## 🚨 Runtime Go Panic Detected\n\n")
+	issueBody.WriteString(fmt.Sprintf("A runtime panic was intercepted by **Triage** in `%s:%d`.\n\n", inc.File, inc.Line))
+	issueBody.WriteString("### 💥 Panic Details\n")
+	issueBody.WriteString(fmt.Sprintf("- **Incident ID**: `%s`\n", inc.ID))
+	issueBody.WriteString(fmt.Sprintf("- **File**: `%s:%d`\n", inc.File, inc.Line))
+	issueBody.WriteString(fmt.Sprintf("- **Timestamp**: `%s UTC`\n\n", inc.CreatedAt.UTC().Format("2006-01-02 15:04:05")))
+
+	if inc.RootCause != "" {
+		issueBody.WriteString("### 🧠 Root Cause Analysis (Gemini AI)\n")
+		issueBody.WriteString(fmt.Sprintf("%s\n\n", inc.RootCause))
+	}
+	if inc.SuggestedFix != "" {
+		issueBody.WriteString("### 💡 Recommended Fix\n")
+		issueBody.WriteString(fmt.Sprintf("%s\n\n", inc.SuggestedFix))
+	}
+	if inc.ASTSnippet != "" {
+		issueBody.WriteString("### 🌲 AST Context\n```go\n")
+		issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", inc.ASTSnippet))
+	}
+	if inc.StackTrace != "" {
+		issueBody.WriteString("### 📋 Stack Trace\n```\n")
+		issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", inc.StackTrace))
+	}
+	issueBody.WriteString("---\n*Automatically generated by [Triage Panic Ingestion Engine](https://github.com/algotyrnt/triage)*\n")
+
+	labels := []string{"panic", "triage", "bug"}
+
+	issueNum, issueURL, err := githubApp.CreateIssue(r.Context(), installationID, owner, repo, issueTitle, issueBody.String(), labels)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create GitHub Issue: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	_ = database.UpdateIncidentIssue(r.Context(), inc.ID, issueURL, issueNum)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"github_issue": map[string]interface{}{
+			"number":   issueNum,
+			"html_url": issueURL,
+		},
 	})
 }
 
