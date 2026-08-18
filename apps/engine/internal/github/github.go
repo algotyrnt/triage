@@ -220,6 +220,32 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 
 	if resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
+		// If labels are restricted or failed, retry without labels once
+		if len(labels) > 0 {
+			payloadReq.Labels = nil
+			retryBytes, _ := json.Marshal(payloadReq)
+			retryReq, rErr := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(retryBytes))
+			if rErr == nil {
+				retryReq.Header.Set("Authorization", "Bearer "+token)
+				retryReq.Header.Set("Accept", "application/vnd.github+json")
+				retryReq.Header.Set("Content-Type", "application/json")
+				retryReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+				retryResp, doErr := http.DefaultClient.Do(retryReq)
+				if doErr == nil {
+					defer retryResp.Body.Close()
+					if retryResp.StatusCode == http.StatusCreated {
+						var retryPayload struct {
+							Number  int    `json:"number"`
+							HTMLURL string `json:"html_url"`
+						}
+						if err := json.NewDecoder(retryResp.Body).Decode(&retryPayload); err == nil {
+							return retryPayload.Number, retryPayload.HTMLURL, nil
+						}
+					}
+				}
+			}
+		}
 		return 0, "", fmt.Errorf("failed to create issue, status: %d, body: %s", resp.StatusCode, respBody)
 	}
 
