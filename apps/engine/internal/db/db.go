@@ -149,17 +149,42 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 		return fmt.Errorf("PostgreSQL connection pool uninitialized")
 	}
 
+	var repoID *string
+	if inc.RepositoryID != "" {
+		repoID = &inc.RepositoryID
+	}
+
 	query := `
-		INSERT INTO incidents (id, title, status, file, line, panic_message, stack_trace, ast_snippet, root_cause, suggested_fix)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO incidents (id, repository_id, title, status, file, line, panic_message, stack_trace, ast_snippet, root_cause, suggested_fix, github_issue_url, github_issue_number)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (id) DO UPDATE SET
+			repository_id = COALESCE(EXCLUDED.repository_id, incidents.repository_id),
 			title = EXCLUDED.title,
 			status = EXCLUDED.status,
 			ast_snippet = EXCLUDED.ast_snippet,
 			root_cause = EXCLUDED.root_cause,
-			suggested_fix = EXCLUDED.suggested_fix;
+			suggested_fix = EXCLUDED.suggested_fix,
+			github_issue_url = COALESCE(NULLIF(EXCLUDED.github_issue_url, ''), incidents.github_issue_url),
+			github_issue_number = CASE WHEN EXCLUDED.github_issue_number > 0 THEN EXCLUDED.github_issue_number ELSE incidents.github_issue_number END;
 	`
-	_, err := db.Pool.Exec(ctx, query, inc.ID, inc.Title, inc.Status, inc.File, inc.Line, inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix)
+	_, err := db.Pool.Exec(
+		ctx, query,
+		inc.ID, repoID, inc.Title, inc.Status, inc.File, inc.Line,
+		inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix,
+		inc.GitHubIssueURL, inc.GitHubIssueNumber,
+	)
+	return err
+}
+
+func (db *DB) UpdateIncidentIssue(ctx context.Context, incidentID, issueURL string, issueNumber int) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE incidents
+		SET github_issue_url = $2, github_issue_number = $3
+		WHERE id = $1
+	`, incidentID, issueURL, issueNumber)
 	return err
 }
 
