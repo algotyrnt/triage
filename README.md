@@ -8,7 +8,7 @@
 
 > **Work in Progress (Pre-v1.0)** — interfaces, telemetry protocols, and SDK signatures are in active development. Releases follow SemVer starting at `v0.1.0`.
 
-Zero-overhead Go panic isolation and AI-powered incident diagnostics. When a panic occurs in a Go HTTP server, triage intercepts it non-blockingly, isolates the exact `*ast.FuncDecl` surrounding the crash site, runs it through Gemini AI for root-cause analysis, and automatically files a GitHub issue — all without blocking your server's response.
+Zero-overhead Go panic isolation and AI-powered incident diagnostics. When a panic occurs in a Go HTTP server, triage intercepts it non-blockingly, isolates the exact crash site along with cross-file package context (receiver struct definitions, referenced types, constructors, and helper functions), runs it through Gemini AI for root-cause analysis, and automatically files a GitHub issue — all without blocking your server's response.
 
 ---
 
@@ -46,11 +46,11 @@ Go HTTP Server (your app)
         ▼
  Triage Engine  (:8080)
   ├── Verify API key  (PostgreSQL)
-  ├── Resolve AST snippet
-  │     1. In-memory KV cache          → hit: <2ms
-  │     2. PostgreSQL ast_nodes table  → pre-indexed lookup
-  │     3. GitHub Contents API         → on-demand fetch + parse
-  │     └── Local workspace fallback
+  ├── Resolve Multi-File Package AST Context
+  │     ├── Crash function *ast.FuncDecl
+  │     ├── Receiver struct & type definitions (cross-file)
+  │     ├── Related constructors (New<Type>) & package helpers
+  │     └── 3-tier cache (In-memory <2ms → Postgres pre-index → GitHub on-demand)
   ├── Gemini AI analysis               → root_cause + suggested_fix
   ├── Persist incident                 (PostgreSQL)
   └── Return JSON response
