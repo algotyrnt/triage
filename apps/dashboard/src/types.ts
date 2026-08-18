@@ -152,3 +152,13 @@ export interface DetectedModule {
   name: string;
   is_root: boolean;
 }
+
+export interface RepositoryItem {
+  owner: string;
+  repo: string;
+  name: string;
+  installed: boolean;
+  branch?: string;
+  lang?: string;
+  visibility?: string;
+}

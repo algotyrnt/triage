@@ -290,14 +290,38 @@ export class EngineClient {
     return await res.json();
   }
 
-  async getSetupRepos(): Promise<{ owner: string; repo: string }[]> {
+  async getSetupRepos(username?: string): Promise<import('@/types').RepositoryItem[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/setup/repos`);
+      const url = new URL(`${this.baseUrl}/setup/repos`);
+      if (username) {
+        url.searchParams.set('username', username);
+      }
+      const res = await fetch(url.toString(), {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return data.repos || [];
     } catch {
       return [];
+    }
+  }
+
+  async checkRepoInstalled(
+    owner: string,
+    repo: string,
+  ): Promise<{ installed: boolean; installation_id?: number; owner?: string; repo?: string }> {
+    try {
+      const url = new URL(`${this.baseUrl}/setup/check-repo`);
+      url.searchParams.set('owner', owner);
+      url.searchParams.set('repo', repo);
+      const res = await fetch(url.toString(), {
+        headers: this.getAuthHeaders(),
+      });
+      if (!res.ok) return { installed: false };
+      return await res.json();
+    } catch {
+      return { installed: false };
     }
   }
 
@@ -335,7 +359,7 @@ export class EngineClient {
     }
   }
 
-  async getInstalledRepos(): Promise<{ owner: string; repo: string }[]> {
+  async getInstalledRepos(): Promise<import('@/types').RepositoryItem[]> {
     try {
       const res = await fetch(`${this.baseUrl}/setup/repos`, {
         headers: this.getAuthHeaders(),

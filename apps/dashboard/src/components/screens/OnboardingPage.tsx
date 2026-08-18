@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ScreenId, DetectedModule } from '@/types';
+import { ScreenId, DetectedModule, RepositoryItem } from '@/types';
 import {
   GitBranch,
   CheckCircle2,
@@ -18,6 +18,11 @@ import {
   Sparkles,
   FolderTree,
   Folder,
+  ExternalLink,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
+  PlusCircle,
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
 
@@ -42,35 +47,40 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const [generatedKey, setGeneratedKey] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(false);
-  const [repos, setRepos] = useState<
-    { name: string; visibility: string; branch: string; lang: string }[]
-  >([]);
+  const [verifyingInstall, setVerifyingInstall] = useState(false);
+  const [repos, setRepos] = useState<RepositoryItem[]>([]);
+  const [installUrl, setInstallUrl] = useState<string>('');
   const repoRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const username = currentUser?.username || 'algotyrnt';
 
-  React.useEffect(() => {
-    async function fetchUserGitHubRepos() {
-      setLoadingRepos(true);
-      try {
-        const installedRepos = await engineClient.getSetupRepos();
-        if (Array.isArray(installedRepos) && installedRepos.length > 0) {
-          const mapped = installedRepos.map((r) => ({
-            name: `${r.owner}/${r.repo}`,
-            visibility: 'Installed',
-            branch: 'main',
-            lang: 'Go / TS',
-          }));
-          setRepos(mapped);
-          if (mapped[0]) setSelectedRepo(mapped[0].name);
+  const fetchUserGitHubRepos = async (silent = false) => {
+    if (!silent) setLoadingRepos(true);
+    try {
+      const fetchedRepos = await engineClient.getSetupRepos(username);
+      if (Array.isArray(fetchedRepos)) {
+        setRepos(fetchedRepos);
+        if (!selectedRepo && fetchedRepos.length > 0) {
+          setSelectedRepo(
+            fetchedRepos[0].name || `${fetchedRepos[0].owner}/${fetchedRepos[0].repo}`,
+          );
         }
-      } catch (e) {
-        console.warn('Failed to fetch installed repos:', e);
-      } finally {
-        setLoadingRepos(false);
       }
+    } catch (e) {
+      console.warn('Failed to fetch repositories:', e);
+    } finally {
+      if (!silent) setLoadingRepos(false);
     }
+  };
+
+  useEffect(() => {
     fetchUserGitHubRepos();
+    engineClient
+      .getInstallUrl()
+      .then((res) => {
+        if (res && res.url) setInstallUrl(res.url);
+      })
+      .catch(() => {});
   }, [username]);
 
   // Auto-detect Go modules whenever active repo changes
@@ -117,6 +127,45 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     };
   }, [selectedRepo, customRepoInput, username]);
 
+  const activeTarget = customRepoInput.trim() || selectedRepo;
+  let activeOwner = username;
+  let activeRepoName = activeTarget;
+  if (activeTarget.includes('/')) {
+    const parts = activeTarget.split('/');
+    activeOwner = parts[0];
+    activeRepoName = parts[1];
+  }
+
+  // Determine if active target repository is installed
+  const matchingRepoItem = repos.find(
+    (r) =>
+      r.name.toLowerCase() === activeTarget.toLowerCase() ||
+      `${r.owner}/${r.repo}`.toLowerCase() === activeTarget.toLowerCase(),
+  );
+  const isTargetInstalled = matchingRepoItem ? matchingRepoItem.installed : false;
+
+  const handleVerifyInstallation = async () => {
+    setVerifyingInstall(true);
+    try {
+      const res = await engineClient.checkRepoInstalled(activeOwner, activeRepoName);
+      if (res && res.installed) {
+        await fetchUserGitHubRepos(true);
+      } else {
+        await fetchUserGitHubRepos(true);
+      }
+    } catch (e) {
+      console.warn('Failed to verify install', e);
+    } finally {
+      setVerifyingInstall(false);
+    }
+  };
+
+  const handleOpenInstallApp = () => {
+    if (installUrl) {
+      window.open(installUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const generateNewKey = () => {
     const hex = Math.random().toString(36).substring(2, 12);
     const key = `tr_live_${hex}`;
@@ -124,10 +173,13 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     return key;
   };
 
-  const filteredRepos = repos.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredRepos = repos.filter(
+    (r) =>
+      (r.name && r.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      `${r.owner}/${r.repo}`.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const installedCount = repos.filter((r) => r.installed).length;
   const activeKey = generatedKey || 'tr_live_demo_key_9042';
 
   const handleCopy = async () => {
@@ -221,25 +273,62 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
       <div className="bg-white border border-slate-200 rounded-sm p-6 space-y-6">
         {currentStep === 1 && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 font-sans">
-                  Select a Go Repository from <span className="font-mono">@{username}</span>
+                  Select a Repository from <span className="font-mono">@{username}</span>
                 </h2>
                 <p className="text-xs text-slate-500 font-sans">
-                  Select one of your real GitHub repositories or enter a custom repository.
+                  Choose an installed repository or select any repository to install the GitHub App.
                 </p>
               </div>
-              <span className="text-xs font-mono text-slate-500">
-                {filteredRepos.length} repositories found
-              </span>
+
+              {/* Action Buttons: Refresh & Install GitHub App */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fetchUserGitHubRepos()}
+                  disabled={loadingRepos}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-sm text-xs font-mono border border-slate-200 transition-colors"
+                  title="Sync repositories from GitHub"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingRepos ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </button>
+
+                {installUrl && (
+                  <button
+                    type="button"
+                    onClick={handleOpenInstallApp}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-slate-800 text-white rounded-sm text-xs font-mono font-semibold transition-colors"
+                    title="Install GitHub App on more repositories or organizations"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Install on More Repos</span>
+                    <ExternalLink className="w-3 h-3 ml-0.5 opacity-70" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Custom Repo Manual Input Box */}
-            <div className="space-y-1 bg-slate-50 border border-slate-200 p-3 rounded-sm font-mono text-xs">
-              <label className="font-bold text-slate-800 text-[11px] uppercase tracking-wider block">
-                Track Custom GitHub Repository:
-              </label>
+            <div className="space-y-1.5 bg-slate-50 border border-slate-200 p-3.5 rounded-sm font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 text-[11px] uppercase tracking-wider block">
+                  Track Custom GitHub Repository:
+                </label>
+                {customRepoInput.trim() && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-sm font-bold border ${
+                      isTargetInstalled
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}
+                  >
+                    {isTargetInstalled ? '✓ App Installed' : '⚠ App Setup Required in Step 2'}
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -254,58 +343,96 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               </div>
             </div>
 
-            {/* Search Box */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search @${username}'s repositories...`}
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-sm text-xs font-mono focus:bg-white focus:outline-none focus:border-black"
-              />
+            {/* Search Box & Stats */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-mono text-slate-500 px-0.5">
+                <span>All Available Repositories</span>
+                <span>
+                  {filteredRepos.length} found ({installedCount} installed)
+                </span>
+              </div>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search @${username}'s repositories...`}
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-sm text-xs font-mono focus:bg-white focus:outline-none focus:border-black"
+                />
+              </div>
             </div>
 
             {/* Repo List */}
             {loadingRepos ? (
-              <div className="py-8 text-center text-xs font-mono text-slate-500 animate-pulse">
-                Fetching live repositories for @{username} from GitHub API...
+              <div className="py-8 text-center text-xs font-mono text-slate-500 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
+                <span>Fetching live repositories for @{username} from GitHub API...</span>
+              </div>
+            ) : filteredRepos.length === 0 ? (
+              <div className="py-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-sm p-6 space-y-3 font-mono text-xs text-slate-600">
+                <p>No repositories matched your search.</p>
+                {installUrl && (
+                  <button
+                    type="button"
+                    onClick={handleOpenInstallApp}
+                    className="inline-flex items-center gap-1.5 bg-black text-white px-3 py-1.5 rounded-sm font-semibold hover:bg-slate-800"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Install GitHub App on Organization / Repositories</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div
                 role="radiogroup"
                 aria-label="Select Repository"
-                className="space-y-2 max-h-60 overflow-y-auto"
+                className="space-y-2 max-h-64 overflow-y-auto"
               >
                 {filteredRepos.map((repo, index) => {
-                  const isSelected = selectedRepo === repo.name;
-                  const isSelectedInFiltered = filteredRepos.some((r) => r.name === selectedRepo);
+                  const repoName = repo.name || `${repo.owner}/${repo.repo}`;
+                  const isSelected = selectedRepo === repoName && !customRepoInput;
+                  const isSelectedInFiltered = filteredRepos.some(
+                    (r) => (r.name || `${r.owner}/${r.repo}`) === selectedRepo,
+                  );
                   const hasFocusEntry =
                     isSelected || (index === 0 && (!selectedRepo || !isSelectedInFiltered));
                   return (
                     <div
-                      key={repo.name}
+                      key={repoName}
                       ref={(el) => {
                         repoRefs.current[index] = el;
                       }}
                       role="radio"
                       aria-checked={isSelected}
                       tabIndex={hasFocusEntry ? 0 : -1}
-                      onClick={() => setSelectedRepo(repo.name)}
+                      onClick={() => {
+                        setSelectedRepo(repoName);
+                        setCustomRepoInput('');
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
                           e.preventDefault();
                           const nextIdx = (index + 1) % filteredRepos.length;
-                          setSelectedRepo(filteredRepos[nextIdx].name);
+                          const nextRepo =
+                            filteredRepos[nextIdx].name ||
+                            `${filteredRepos[nextIdx].owner}/${filteredRepos[nextIdx].repo}`;
+                          setSelectedRepo(nextRepo);
+                          setCustomRepoInput('');
                           repoRefs.current[nextIdx]?.focus();
                         } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
                           e.preventDefault();
                           const prevIdx = (index - 1 + filteredRepos.length) % filteredRepos.length;
-                          setSelectedRepo(filteredRepos[prevIdx].name);
+                          const prevRepo =
+                            filteredRepos[prevIdx].name ||
+                            `${filteredRepos[prevIdx].owner}/${filteredRepos[prevIdx].repo}`;
+                          setSelectedRepo(prevRepo);
+                          setCustomRepoInput('');
                           repoRefs.current[prevIdx]?.focus();
                         } else if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          setSelectedRepo(repo.name);
+                          setSelectedRepo(repoName);
+                          setCustomRepoInput('');
                         }
                       }}
                       className={`p-3 rounded-sm border cursor-pointer transition-all flex items-center justify-between font-mono text-xs focus:outline-none focus:ring-1 focus:ring-black ${
@@ -323,28 +450,55 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                           {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
                         </div>
                         <div>
-                          <span className="font-bold text-slate-900">{repo.name}</span>
-                          <span className="text-[11px] text-slate-500 ml-2">({repo.branch})</span>
+                          <span className="font-bold text-slate-900">{repoName}</span>
+                          <span className="text-[11px] text-slate-500 ml-2">
+                            ({repo.branch || 'main'})
+                          </span>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px]">
-                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-sm border border-slate-200">
-                          {repo.lang}
-                        </span>
+                        {repo.lang && (
+                          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-sm border border-slate-200">
+                            {repo.lang}
+                          </span>
+                        )}
                         <span
-                          className={`px-2 py-0.5 rounded-sm border ${
-                            repo.visibility === 'Public'
+                          className={`px-2 py-0.5 rounded-sm border font-semibold flex items-center gap-1 ${
+                            repo.installed
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
                           }`}
                         >
-                          {repo.visibility}
+                          {repo.installed ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Installed</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              <span>App Required</span>
+                            </>
+                          )}
                         </span>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Selected Repo Status Tip */}
+            {activeTarget && !isTargetInstalled && (
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-sm text-xs font-mono text-amber-800 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <span className="font-bold">
+                    GitHub App is not yet installed on {activeTarget}.
+                  </span>{' '}
+                  You can authorize and install it in Step 2 with 1 click.
+                </div>
               </div>
             )}
 
@@ -425,7 +579,8 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setCurrentStep(2)}
-                className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+                disabled={!activeTarget}
+                className="bg-black hover:bg-slate-800 disabled:bg-slate-300 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Continue to Step 2 (GitHub App Setup)</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -441,7 +596,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                 GitHub App Authorization & AST Webhook Ingress
               </h2>
               <p className="text-xs text-slate-500 font-sans mt-0.5">
-                Targeting <span className="font-mono text-slate-900 font-bold">{selectedRepo}</span>
+                Targeting <span className="font-mono text-slate-900 font-bold">{activeTarget}</span>
                 {rootDir && (
                   <span className="ml-2 font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-sm border border-slate-200 text-[11px]">
                     Subdirectory: {rootDir}/
@@ -450,23 +605,56 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               </p>
             </div>
 
-            {/* Authorization Banner */}
-            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-sm space-y-2">
-              <div className="flex items-center gap-2 text-emerald-900 font-mono text-xs font-bold">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>GitHub App Authorized for org: algotyrnt</span>
+            {/* Authorization Banner or Installation Prompt */}
+            {isTargetInstalled ? (
+              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-sm space-y-2">
+                <div className="flex items-center gap-2 text-emerald-900 font-mono text-xs font-bold">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>GitHub App Authorized for repository: {activeTarget}</span>
+                </div>
+                <p className="text-xs font-mono text-emerald-800 leading-relaxed">
+                  Triage GitHub App is active with read-only tree and issue permissions. Webhook
+                  listener ready to receive AST triggers.
+                </p>
               </div>
-              <p className="text-xs font-mono text-emerald-800 leading-relaxed">
-                Triage GitHub App installed with read-only tree permissions. Webhook listener
-                configured at:
-                <code className="block mt-1 p-1.5 bg-white border border-emerald-200 rounded-sm text-[11px] text-slate-900 font-mono">
-                  https://api.triage.dev/v1/github/webhook/wh_algotyrnt_beacon
-                </code>
-              </p>
-            </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 p-5 rounded-sm space-y-3 font-mono">
+                <div className="flex items-center gap-2 text-amber-900 text-xs font-bold">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span>GitHub App Installation Required for {activeTarget}</span>
+                </div>
+                <p className="text-xs text-amber-800 leading-relaxed font-sans">
+                  The Triage GitHub App is not yet installed on this repository or organization.
+                  Click below to grant repository permissions on GitHub, then click Verify.
+                </p>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleOpenInstallApp}
+                    className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-2 px-4 rounded-sm flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Install GitHub App on GitHub</span>
+                    <ExternalLink className="w-3 h-3 opacity-70" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleVerifyInstallation}
+                    disabled={verifyingInstall}
+                    className="bg-white hover:bg-slate-100 text-slate-800 font-mono text-xs font-semibold py-2 px-3.5 rounded-sm border border-slate-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${verifyingInstall ? 'animate-spin' : ''}`}
+                    />
+                    <span>{verifyingInstall ? 'Verifying...' : 'Verify Installation'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Scope details */}
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-sm space-y-1.5 font-mono text-xs">
+            <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-sm space-y-1.5 font-mono text-xs">
               <div className="font-bold text-slate-800">Granted Scopes & Webhook Triggers:</div>
               <div className="text-slate-600 text-[11px] space-y-1">
                 <div>

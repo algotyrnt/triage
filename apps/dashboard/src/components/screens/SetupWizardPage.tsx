@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { ScreenId } from '@/types';
+import { ScreenId, RepositoryItem } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
 import { engineClient } from '@/services/engineClient';
 import {
@@ -19,6 +19,7 @@ import {
   Server,
   Key,
   Brain,
+  PlusCircle,
 } from 'lucide-react';
 
 interface SetupWizardPageProps {
@@ -35,7 +36,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
   // Step 2: Install App
   const [appInstalled, setAppInstalled] = useState(false);
-  const [repos, setRepos] = useState<{ owner: string; repo: string }[]>([]);
+  const [repos, setRepos] = useState<RepositoryItem[]>([]);
 
   // Step 3: OAuth
   const [oauthConfigured, setOauthConfigured] = useState(false);
@@ -341,29 +342,62 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
             {appInstalled ? (
               <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-sm flex items-center gap-2 font-mono text-sm">
-                  <CheckCircle2 className="w-5 h-5" />
-                  App installed successfully
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-sm flex items-center justify-between font-mono text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>App installed successfully</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchRepos}
+                    className="flex items-center gap-1 text-xs text-emerald-800 hover:text-emerald-950 font-semibold cursor-pointer underline"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                  </button>
                 </div>
 
-                {repos.length > 0 && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-sm p-4">
-                    <h3 className="text-xs font-mono font-semibold text-slate-900 mb-2 uppercase tracking-wider">
-                      Granted Repositories
+                <div className="bg-slate-50 border border-slate-200 rounded-sm p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-mono font-semibold text-slate-900 uppercase tracking-wider">
+                      Granted Repositories ({repos.length})
                     </h3>
-                    <ul className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={handleInstallApp}
+                      className="text-xs font-mono text-slate-700 hover:text-black flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Add / Configure Repos</span>
+                    </button>
+                  </div>
+
+                  {repos.length > 0 ? (
+                    <ul className="space-y-1 max-h-48 overflow-y-auto">
                       {repos.map((repo, idx) => (
                         <li
                           key={idx}
-                          className="text-sm font-mono text-slate-700 flex items-center gap-2"
+                          className="text-sm font-mono text-slate-700 flex items-center justify-between p-1.5 hover:bg-white rounded-sm"
                         >
-                          <Github className="w-3.5 h-3.5" />
-                          {repo.owner}/{repo.repo}
+                          <div className="flex items-center gap-2">
+                            <Github className="w-3.5 h-3.5" />
+                            <span>
+                              {repo.owner}/{repo.repo}
+                            </span>
+                          </div>
+                          {repo.lang && (
+                            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm">
+                              {repo.lang}
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs font-mono text-slate-500">
+                      No repositories granted yet. Click above to grant repository access.
+                    </p>
+                  )}
+                </div>
 
                 <button
                   onClick={() => setCurrentStep(3)}
