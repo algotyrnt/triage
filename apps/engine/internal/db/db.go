@@ -40,8 +40,11 @@ type Incident struct {
 	ASTSnippet        string    `json:"ast_snippet,omitempty"`
 	RootCause         string    `json:"root_cause,omitempty"`
 	SuggestedFix      string    `json:"suggested_fix,omitempty"`
+	SuggestedPatch    string    `json:"suggested_patch,omitempty"`
 	GitHubIssueURL    string    `json:"github_issue_url,omitempty"`
 	GitHubIssueNumber int       `json:"github_issue_number,omitempty"`
+	GitHubPRURL       string    `json:"github_pr_url,omitempty"`
+	GitHubPRNumber    int       `json:"github_pr_number,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -120,6 +123,12 @@ func NewDB(ctx context.Context, databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping PostgreSQL database: %w", err)
 	}
 
+	_, _ = pool.Exec(ctx, `
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS github_pr_url TEXT;
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS github_pr_number INT;
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS suggested_patch TEXT;
+	`)
+
 	return &DB{Pool: pool}, nil
 }
 
@@ -155,8 +164,8 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 	}
 
 	query := `
-		INSERT INTO incidents (id, repository_id, title, status, file, line, panic_message, stack_trace, ast_snippet, root_cause, suggested_fix, github_issue_url, github_issue_number)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		INSERT INTO incidents (id, repository_id, title, status, file, line, panic_message, stack_trace, ast_snippet, root_cause, suggested_fix, suggested_patch, github_issue_url, github_issue_number, github_pr_url, github_pr_number)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (id) DO UPDATE SET
 			repository_id = COALESCE(EXCLUDED.repository_id, incidents.repository_id),
 			title = EXCLUDED.title,
@@ -164,14 +173,17 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 			ast_snippet = EXCLUDED.ast_snippet,
 			root_cause = EXCLUDED.root_cause,
 			suggested_fix = EXCLUDED.suggested_fix,
+			suggested_patch = COALESCE(NULLIF(EXCLUDED.suggested_patch, ''), incidents.suggested_patch),
 			github_issue_url = COALESCE(NULLIF(EXCLUDED.github_issue_url, ''), incidents.github_issue_url),
-			github_issue_number = CASE WHEN EXCLUDED.github_issue_number > 0 THEN EXCLUDED.github_issue_number ELSE incidents.github_issue_number END;
+			github_issue_number = CASE WHEN EXCLUDED.github_issue_number > 0 THEN EXCLUDED.github_issue_number ELSE incidents.github_issue_number END,
+			github_pr_url = COALESCE(NULLIF(EXCLUDED.github_pr_url, ''), incidents.github_pr_url),
+			github_pr_number = CASE WHEN EXCLUDED.github_pr_number > 0 THEN EXCLUDED.github_pr_number ELSE incidents.github_pr_number END;
 	`
 	_, err := db.Pool.Exec(
 		ctx, query,
 		inc.ID, repoID, inc.Title, inc.Status, inc.File, inc.Line,
-		inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix,
-		inc.GitHubIssueURL, inc.GitHubIssueNumber,
+		inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix, inc.SuggestedPatch,
+		inc.GitHubIssueURL, inc.GitHubIssueNumber, inc.GitHubPRURL, inc.GitHubPRNumber,
 	)
 	return err
 }
@@ -188,6 +200,20 @@ func (db *DB) UpdateIncidentIssue(ctx context.Context, incidentID, issueURL stri
 	return err
 }
 
+func (db *DB) UpdateIncidentPR(ctx context.Context, incidentID, prURL string, prNumber int, patch string) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE incidents
+		SET github_pr_url = $2,
+		    github_pr_number = $3,
+		    suggested_patch = CASE WHEN $4 != '' THEN $4 ELSE suggested_patch END
+		WHERE id = $1
+	`, incidentID, prURL, prNumber, patch)
+	return err
+}
+
 func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 	if db.Pool == nil {
 		return []Incident{}, nil
@@ -197,7 +223,7 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 	}
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), created_at
+		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at
 		FROM incidents
 		ORDER BY created_at DESC
 		LIMIT $1
@@ -212,8 +238,8 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 		var inc Incident
 		err := rows.Scan(
 			&inc.ID, &inc.RepositoryID, &inc.Title, &inc.Status, &inc.File, &inc.Line,
-			&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix,
-			&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.CreatedAt,
+			&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
+			&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -229,13 +255,13 @@ func (db *DB) GetIncidentByID(ctx context.Context, id string) (*Incident, error)
 	}
 	var inc Incident
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), created_at
+		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at
 		FROM incidents
 		WHERE id = $1
 	`, id).Scan(
 		&inc.ID, &inc.RepositoryID, &inc.Title, &inc.Status, &inc.File, &inc.Line,
-		&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix,
-		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.CreatedAt,
+		&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
+		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -507,7 +533,9 @@ func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL stri
 	err := db.Pool.QueryRow(ctx, `
 		INSERT INTO users (id, github_id, username, avatar_url, role)
 		VALUES ($1, $2, $3, $4, 'Admin')
-		ON CONFLICT (github_id) DO UPDATE SET username = EXCLUDED.username, avatar_url = EXCLUDED.avatar_url
+		ON CONFLICT (github_id) DO UPDATE SET 
+			username = EXCLUDED.username, 
+			avatar_url = EXCLUDED.avatar_url
 		RETURNING id, github_id, username, avatar_url, role, created_at
 	`, userID, githubID, username, avatarURL).Scan(&u.ID, &u.GitHubID, &u.Username, &u.AvatarURL, &u.Role, &u.CreatedAt)
 
