@@ -264,3 +264,227 @@ func (c *AppConfig) VerifyApp(ctx context.Context) error {
 
 	return nil
 }
+
+type AppInstallationInfo struct {
+	ID           int64  `json:"id"`
+	AccountType  string `json:"account_type"`
+	AccountLogin string `json:"account_login"`
+	AccountID    int64  `json:"account_id"`
+}
+
+type RepositoryInfo struct {
+	Owner         string `json:"owner"`
+	Repo          string `json:"repo"`
+	DefaultBranch string `json:"default_branch"`
+	Language      string `json:"language"`
+	Private       bool   `json:"private"`
+}
+
+func (c *AppConfig) ListAppInstallations(ctx context.Context) ([]AppInstallationInfo, error) {
+	appJWT, err := c.SignAppJWT()
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign app jwt: %w", err)
+	}
+
+	var allInstallations []AppInstallationInfo
+	page := 1
+	client := &http.Client{Timeout: 15 * time.Second}
+
+	for {
+		url := fmt.Sprintf("https://api.github.com/app/installations?per_page=100&page=%d", page)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+appJWT)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list installations: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to list installations, status: %d, body: %s", resp.StatusCode, body)
+		}
+
+		var items []struct {
+			ID      int64 `json:"id"`
+			Account struct {
+				Login string `json:"login"`
+				ID    int64  `json:"id"`
+				Type  string `json:"type"`
+			} `json:"account"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode installations: %w", err)
+		}
+		resp.Body.Close()
+
+		if len(items) == 0 {
+			break
+		}
+
+		for _, item := range items {
+			allInstallations = append(allInstallations, AppInstallationInfo{
+				ID:           item.ID,
+				AccountLogin: item.Account.Login,
+				AccountID:   item.Account.ID,
+				AccountType:  item.Account.Type,
+			})
+		}
+
+		if len(items) < 100 {
+			break
+		}
+		page++
+	}
+
+	return allInstallations, nil
+}
+
+func (c *AppConfig) ListInstallationRepositories(ctx context.Context, installationID int64) ([]RepositoryInfo, error) {
+	token, err := c.GetInstallationToken(ctx, installationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get installation token: %w", err)
+	}
+
+	var allRepos []RepositoryInfo
+	page := 1
+	client := &http.Client{Timeout: 15 * time.Second}
+
+	for {
+		url := fmt.Sprintf("https://api.github.com/installation/repositories?per_page=100&page=%d", page)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch installation repositories: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to fetch repositories, status: %d, body: %s", resp.StatusCode, body)
+		}
+
+		var payload struct {
+			TotalCount   int `json:"total_count"`
+			Repositories []struct {
+				Name          string `json:"name"`
+				FullName      string `json:"full_name"`
+				Private       bool   `json:"private"`
+				DefaultBranch string `json:"default_branch"`
+				Language      string `json:"language"`
+				Owner         struct {
+					Login string `json:"login"`
+				} `json:"owner"`
+			} `json:"repositories"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			resp.Body.Close()
+			return nil, fmt.Errorf("failed to decode repositories response: %w", err)
+		}
+		resp.Body.Close()
+
+		if len(payload.Repositories) == 0 {
+			break
+		}
+
+		for _, r := range payload.Repositories {
+			allRepos = append(allRepos, RepositoryInfo{
+				Owner:         r.Owner.Login,
+				Repo:          r.Name,
+				DefaultBranch: r.DefaultBranch,
+				Language:      r.Language,
+				Private:       r.Private,
+			})
+		}
+
+		if len(allRepos) >= payload.TotalCount || len(payload.Repositories) < 100 {
+			break
+		}
+		page++
+	}
+
+	return allRepos, nil
+}
+
+func FetchUserRepositories(ctx context.Context, username string) ([]RepositoryInfo, error) {
+	if username == "" {
+		return nil, fmt.Errorf("username cannot be empty")
+	}
+
+	var allRepos []RepositoryInfo
+	page := 1
+	client := &http.Client{Timeout: 15 * time.Second}
+
+	for page <= 3 {
+		url := fmt.Sprintf("https://api.github.com/users/%s/repos?per_page=100&page=%d&sort=updated", username, page)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch user repos: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			break
+		}
+
+		var items []struct {
+			Name          string `json:"name"`
+			Private       bool   `json:"private"`
+			DefaultBranch string `json:"default_branch"`
+			Language      string `json:"language"`
+			Owner         struct {
+				Login string `json:"login"`
+			} `json:"owner"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+			resp.Body.Close()
+			break
+		}
+		resp.Body.Close()
+
+		if len(items) == 0 {
+			break
+		}
+
+		for _, r := range items {
+			allRepos = append(allRepos, RepositoryInfo{
+				Owner:         r.Owner.Login,
+				Repo:          r.Name,
+				DefaultBranch: r.DefaultBranch,
+				Language:      r.Language,
+				Private:       r.Private,
+			})
+		}
+
+		if len(items) < 100 {
+			break
+		}
+		page++
+	}
+
+	return allRepos, nil
+}

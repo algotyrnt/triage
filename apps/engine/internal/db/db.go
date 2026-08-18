@@ -432,6 +432,7 @@ func (db *DB) GetInstallation(ctx context.Context) (*GitHubInstallation, error) 
 		SELECT id, installation_id, org_login, org_id, account_type, status, created_at
 		FROM github_installations
 		WHERE status = 'active'
+		ORDER BY created_at DESC
 		LIMIT 1
 	`).Scan(&inst.ID, &inst.InstallationID, &inst.OrgLogin, &inst.OrgID, &inst.AccountType, &inst.Status, &inst.CreatedAt)
 	if err != nil {
@@ -441,6 +442,59 @@ func (db *DB) GetInstallation(ctx context.Context) (*GitHubInstallation, error) 
 		return nil, err
 	}
 	return &inst, nil
+}
+
+func (db *DB) GetAllInstallations(ctx context.Context) ([]GitHubInstallation, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, installation_id, org_login, org_id, account_type, status, created_at
+		FROM github_installations
+		WHERE status = 'active'
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var installations []GitHubInstallation
+	for rows.Next() {
+		var inst GitHubInstallation
+		if err := rows.Scan(&inst.ID, &inst.InstallationID, &inst.OrgLogin, &inst.OrgID, &inst.AccountType, &inst.Status, &inst.CreatedAt); err != nil {
+			return nil, err
+		}
+		installations = append(installations, inst)
+	}
+	return installations, nil
+}
+
+func (db *DB) GetAllInstallationRepos(ctx context.Context) ([]InstallationRepo, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT DISTINCT ir.owner, ir.repo
+		FROM installation_repos ir
+		JOIN github_installations gi ON ir.installation_id = gi.installation_id
+		WHERE gi.status = 'active'
+		ORDER BY ir.owner, ir.repo
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var repos []InstallationRepo
+	for rows.Next() {
+		var r InstallationRepo
+		if err := rows.Scan(&r.Owner, &r.Repo); err != nil {
+			return nil, err
+		}
+		repos = append(repos, r)
+	}
+	return repos, nil
 }
 
 func (db *DB) SaveInstallationRepos(ctx context.Context, installationID int64, repos []InstallationRepo) error {

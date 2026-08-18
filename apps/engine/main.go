@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -203,6 +204,7 @@ func main() {
 	http.HandleFunc("/api/v1/setup/llm", corsMiddleware(handleSetupLLMRoute))
 	http.HandleFunc("/api/v1/setup/test", corsMiddleware(handleSetupTest))
 	http.HandleFunc("/api/v1/setup/repos", corsMiddleware(handleSetupRepos))
+	http.HandleFunc("/api/v1/setup/check-repo", corsMiddleware(handleCheckRepoRoute))
 
 	// Post-setup settings routes
 	http.HandleFunc("/api/v1/settings/llm", corsMiddleware(handleSettingsLLMRoute))
@@ -924,6 +926,10 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if githubApp == nil {
+		loadGitHubAppConfig(r.Context())
+	}
+
 	if githubApp != nil && database != nil {
 		jwt, err := githubApp.SignAppJWT()
 		if err == nil {
@@ -947,34 +953,17 @@ func handleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
 
 				database.SaveInstallation(r.Context(), installID, instData.Account.Login, instData.Account.ID, instData.Account.Type)
 
-				token, tokenErr := githubApp.GetInstallationToken(r.Context(), installID)
-				if tokenErr == nil {
-					reposURL := "https://api.github.com/installation/repositories?per_page=100"
-					repoReq, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, reposURL, nil)
-					repoReq.Header.Set("Authorization", "Bearer "+token)
-					repoReq.Header.Set("Accept", "application/vnd.github+json")
-
-					repoResp, repoErr := client.Do(repoReq)
-					if repoErr == nil && repoResp.StatusCode == http.StatusOK {
-						var repoData struct {
-							Repositories []struct {
-								FullName string `json:"full_name"`
-								Owner    struct {
-									Login string `json:"login"`
-								} `json:"owner"`
-								Name string `json:"name"`
-							} `json:"repositories"`
-						}
-						_ = json.NewDecoder(repoResp.Body).Decode(&repoData)
-						repoResp.Body.Close()
-
-						var repos []db.InstallationRepo
-						for _, repo := range repoData.Repositories {
-							repos = append(repos, db.InstallationRepo{Owner: repo.Owner.Login, Repo: repo.Name})
-						}
-						database.SaveInstallationRepos(r.Context(), installID, repos)
-						log.Printf("[SETUP] Stored %d repos for installation %d", len(repos), installID)
+				// List all installation repositories using pagination
+				repoInfos, repoErr := githubApp.ListInstallationRepositories(r.Context(), installID)
+				if repoErr == nil {
+					var repos []db.InstallationRepo
+					for _, rInfo := range repoInfos {
+						repos = append(repos, db.InstallationRepo{Owner: rInfo.Owner, Repo: rInfo.Repo})
 					}
+					database.SaveInstallationRepos(r.Context(), installID, repos)
+					log.Printf("[SETUP] Stored %d repos for installation %d (@%s)", len(repos), installID, instData.Account.Login)
+				} else {
+					log.Printf("[SETUP ERROR] Failed to list installation repos: %v", repoErr)
 				}
 
 				log.Printf("[SETUP] Installation saved: ID=%d, Account=%s", installID, instData.Account.Login)
@@ -1034,22 +1023,171 @@ func handleSetupTest(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "app_name": appName})
 }
 
+type SetupRepoItem struct {
+	Owner         string `json:"owner"`
+	Repo          string `json:"repo"`
+	Name          string `json:"name"`
+	Installed     bool   `json:"installed"`
+	DefaultBranch string `json:"branch"`
+	Language      string `json:"lang"`
+	Visibility    string `json:"visibility"`
+}
+
 func handleSetupRepos(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if database == nil {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": []db.InstallationRepo{}})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": []SetupRepoItem{}})
 		return
 	}
-	inst, err := database.GetInstallation(r.Context())
-	if err != nil || inst == nil {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": []db.InstallationRepo{}})
-		return
+
+	if githubApp == nil {
+		loadGitHubAppConfig(r.Context())
 	}
-	repos, err := database.GetInstallationRepos(r.Context(), inst.InstallationID)
+
+	// 1. Live-sync all active installations and their repositories if githubApp is configured
+	if githubApp != nil {
+		if appInstalls, err := githubApp.ListAppInstallations(r.Context()); err == nil {
+			for _, inst := range appInstalls {
+				_ = database.SaveInstallation(r.Context(), inst.ID, inst.AccountLogin, inst.AccountID, inst.AccountType)
+				if repoInfos, rErr := githubApp.ListInstallationRepositories(r.Context(), inst.ID); rErr == nil {
+					var repos []db.InstallationRepo
+					for _, rInfo := range repoInfos {
+						repos = append(repos, db.InstallationRepo{Owner: rInfo.Owner, Repo: rInfo.Repo})
+					}
+					_ = database.SaveInstallationRepos(r.Context(), inst.ID, repos)
+				}
+			}
+		}
+	}
+
+	// 2. Fetch all installed repos from database
+	installedRepos, err := database.GetAllInstallationRepos(r.Context())
 	if err != nil {
-		repos = []db.InstallationRepo{}
+		installedRepos = []db.InstallationRepo{}
 	}
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"repos": repos})
+
+	installedMap := make(map[string]bool)
+	for _, ir := range installedRepos {
+		key := strings.ToLower(fmt.Sprintf("%s/%s", ir.Owner, ir.Repo))
+		installedMap[key] = true
+	}
+
+	// 3. Extract username from query param or auth session
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		authHeader := r.Header.Get("Authorization")
+		if strings.HasPrefix(authHeader, "Bearer ") && sessionSecret != "" {
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			if claims, cErr := session.ValidateSessionJWT(tokenStr, sessionSecret); cErr == nil && claims != nil {
+				username = claims.Username
+			}
+		}
+	}
+
+	repoItemsMap := make(map[string]SetupRepoItem)
+
+	// Fetch user's repositories from GitHub if username is specified
+	if username != "" {
+		if userRepos, uErr := github.FetchUserRepositories(r.Context(), username); uErr == nil {
+			for _, ur := range userRepos {
+				key := strings.ToLower(fmt.Sprintf("%s/%s", ur.Owner, ur.Repo))
+				isInstalled := installedMap[key]
+				branch := ur.DefaultBranch
+				if branch == "" {
+					branch = "main"
+				}
+				lang := ur.Language
+				if lang == "" {
+					lang = "Go"
+				}
+				vis := "Public"
+				if ur.Private {
+					vis = "Private"
+				}
+				if isInstalled {
+					vis = "Installed"
+				}
+				repoItemsMap[key] = SetupRepoItem{
+					Owner:         ur.Owner,
+					Repo:          ur.Repo,
+					Name:          fmt.Sprintf("%s/%s", ur.Owner, ur.Repo),
+					Installed:     isInstalled,
+					DefaultBranch: branch,
+					Language:      lang,
+					Visibility:    vis,
+				}
+			}
+		}
+	}
+
+	// Add all installed repositories from database
+	for _, ir := range installedRepos {
+		key := strings.ToLower(fmt.Sprintf("%s/%s", ir.Owner, ir.Repo))
+		if existing, ok := repoItemsMap[key]; ok {
+			existing.Installed = true
+			existing.Visibility = "Installed"
+			repoItemsMap[key] = existing
+		} else {
+			repoItemsMap[key] = SetupRepoItem{
+				Owner:         ir.Owner,
+				Repo:          ir.Repo,
+				Name:          fmt.Sprintf("%s/%s", ir.Owner, ir.Repo),
+				Installed:     true,
+				DefaultBranch: "main",
+				Language:      "Go / TS",
+				Visibility:    "Installed",
+			}
+		}
+	}
+
+	// Sort repos: Installed first, then alphabetically
+	var sortedRepos []SetupRepoItem
+	for _, item := range repoItemsMap {
+		sortedRepos = append(sortedRepos, item)
+	}
+	sort.Slice(sortedRepos, func(i, j int) bool {
+		if sortedRepos[i].Installed != sortedRepos[j].Installed {
+			return sortedRepos[i].Installed
+		}
+		return sortedRepos[i].Name < sortedRepos[j].Name
+	})
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"repos": sortedRepos,
+	})
+}
+
+func handleCheckRepoRoute(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	owner := r.URL.Query().Get("owner")
+	repo := r.URL.Query().Get("repo")
+	if strings.Contains(repo, "/") {
+		parts := strings.Split(repo, "/")
+		if len(parts) == 2 {
+			owner = parts[0]
+			repo = parts[1]
+		}
+	}
+
+	if owner == "" || repo == "" {
+		http.Error(w, "owner and repo parameters are required", http.StatusBadRequest)
+		return
+	}
+
+	if database == nil {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"installed": false})
+		return
+	}
+
+	instID, err := database.GetInstallationForRepo(r.Context(), owner, repo)
+	installed := err == nil && instID > 0
+
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"installed":       installed,
+		"installation_id": instID,
+		"owner":           owner,
+		"repo":            repo,
+	})
 }
 
 func getGitHubOAuthCredentials(ctx context.Context) (clientID, clientSecret string) {
