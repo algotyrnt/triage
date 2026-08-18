@@ -324,6 +324,18 @@ func TestNormalizeMonorepoPath(t *testing.T) {
 			rootDir:  ".",
 			expected: "main.go",
 		},
+		{
+			name:     "developer absolute path with rootDir",
+			file:     "/Users/punjitha/projects/triage/test-service/main.go",
+			rootDir:  "test-service",
+			expected: "test-service/main.go",
+		},
+		{
+			name:     "developer absolute path with monorepo apps/engine",
+			file:     "/Users/punjitha/projects/triage/apps/engine/main.go",
+			rootDir:  "apps/engine",
+			expected: "apps/engine/main.go",
+		},
 	}
 
 	for _, tc := range tests {

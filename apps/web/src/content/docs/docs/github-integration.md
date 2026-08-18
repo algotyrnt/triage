@@ -42,18 +42,18 @@ If creating a GitHub App manually, ensure the following permissions are configur
 When a panic occurs, Triage opens an issue with the following format:
 
 ```markdown
-## 💥 Panic Intercepted: `payment.go:28`
+## Panic Intercepted: `payment.go:28`
 
 **Trace ID:** `tr_7f9c2d1e8a4b0c3d9a1f`  
 **Commit:** `7f8b9e1`  
 **Goroutine:** `goroutine 42 [running]`
 
-### 🔍 Gemini AI Diagnostic Summary
+### Gemini AI Diagnostic Summary
 
 > **Root Cause:** Attempted to evaluate req.Amount on an uninitialized nil pointer (*PaymentPayload) on line 28.  
 > **Suggested Fix:** Allocate memory before access: `req := &PaymentPayload{}`
 
-### 🌲 Enclosing AST Node (`ProcessTransaction`)
+### Enclosing AST Node (`ProcessTransaction`)
 
 \`\`\`go
 func ProcessTransaction(w http.ResponseWriter, r *http.Request) {

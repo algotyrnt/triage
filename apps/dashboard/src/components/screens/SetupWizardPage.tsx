@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { ScreenId } from '@/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ScreenId, RepositoryItem } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
 import { engineClient } from '@/services/engineClient';
+import { logger } from '@/services/logger';
 import {
   Settings,
   CheckCircle2,
@@ -19,6 +20,14 @@ import {
   Server,
   Key,
   Brain,
+  PlusCircle,
+  Eye,
+  EyeOff,
+  Building2,
+  User,
+  Layers,
+  Lock,
+  Globe,
 } from 'lucide-react';
 
 interface SetupWizardPageProps {
@@ -35,7 +44,30 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
   // Step 2: Install App
   const [appInstalled, setAppInstalled] = useState(false);
-  const [repos, setRepos] = useState<{ owner: string; repo: string }[]>([]);
+  const [appSlug, setAppSlug] = useState('');
+  const [repos, setRepos] = useState<RepositoryItem[]>([]);
+  const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('all');
+
+  const orgCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of repos) {
+      if (r.owner) {
+        counts[r.owner] = (counts[r.owner] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [repos]);
+
+  const availableOrgs = useMemo(() => {
+    return Object.keys(orgCounts).sort((a, b) => a.localeCompare(b));
+  }, [orgCounts]);
+
+  const filteredRepos = useMemo(() => {
+    if (selectedOwnerFilter === 'all') return repos;
+    return repos.filter(
+      (r) => r.owner && r.owner.toLowerCase() === selectedOwnerFilter.toLowerCase(),
+    );
+  }, [repos, selectedOwnerFilter]);
 
   // Step 3: OAuth
   const [oauthConfigured, setOauthConfigured] = useState(false);
@@ -46,6 +78,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   const [llmConfigured, setLlmConfigured] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
 
   // Step 5: Test
   const [connectionSuccess, setConnectionSuccess] = useState(false);
@@ -79,12 +112,19 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     try {
       const status = await engineClient.getSetupStatus();
       if (status.github_app) setAppCreated(true);
+      if ((status as any).app_slug) setAppSlug((status as any).app_slug);
       if (status.installation) {
         setAppInstalled(true);
         fetchRepos();
       }
       if (status.oauth) setOauthConfigured(true);
-      if (status.llm) setLlmConfigured(true);
+      if (status.llm) {
+        setLlmConfigured(true);
+        engineClient.getLlmConfig().then((cfg) => {
+          if (cfg.gemini_api_key) setGeminiApiKey(cfg.gemini_api_key);
+          if (cfg.gemini_model) setGeminiModel(cfg.gemini_model);
+        });
+      }
 
       if (status.github_app && status.installation && status.oauth && status.llm) {
         setCurrentStep(5);
@@ -96,7 +136,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
         setCurrentStep(2);
       }
     } catch (err) {
-      console.error('Failed to check status', err);
+      logger.error('Failed to check setup status', err);
     }
   };
 
@@ -105,7 +145,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       const installedRepos = await engineClient.getInstalledRepos();
       setRepos(installedRepos);
     } catch (err) {
-      console.error('Failed to fetch repos', err);
+      logger.error('Failed to fetch installed repositories', err);
     }
   };
 
@@ -134,14 +174,26 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     }
   };
 
-  const handleInstallApp = async () => {
+  const handleInstallApp = async (customSlug?: string) => {
     setLoading(true);
     setError(null);
     try {
+      const slugToUse = (typeof customSlug === 'string' && customSlug.trim()) || appSlug.trim();
+      if (slugToUse) {
+        window.location.href = `https://github.com/apps/${slugToUse}/installations/new`;
+        return;
+      }
       const { url } = await engineClient.getInstallUrl();
-      window.location.href = url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error('Install URL was empty. Please provide the GitHub App slug below.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to get install URL');
+      logger.error('Failed to get install URL', err);
+      setError(
+        err.message || 'Failed to get install URL. Make sure the GitHub App was created in Step 1.',
+      );
       setLoading(false);
     }
   };
@@ -341,49 +393,134 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
             {appInstalled ? (
               <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-sm flex items-center gap-2 font-mono text-sm">
-                  <CheckCircle2 className="w-5 h-5" />
-                  App installed successfully
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-4 rounded-sm flex items-center justify-between font-mono text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>App installed successfully</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchRepos}
+                    className="flex items-center gap-1 text-xs text-emerald-800 hover:text-emerald-950 font-semibold cursor-pointer underline"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                  </button>
                 </div>
 
-                {repos.length > 0 && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-sm p-4">
-                    <h3 className="text-xs font-mono font-semibold text-slate-900 mb-2 uppercase tracking-wider">
-                      Granted Repositories
+                <div className="bg-slate-50 border border-slate-200 rounded-sm p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-mono font-semibold text-slate-900 uppercase tracking-wider">
+                      Granted Repositories ({repos.length})
                     </h3>
-                    <ul className="space-y-1">
-                      {repos.map((repo, idx) => (
+                    <button
+                      type="button"
+                      onClick={() => handleInstallApp()}
+                      className="text-xs font-mono text-slate-700 hover:text-black flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Add / Configure Repos</span>
+                    </button>
+                  </div>
+
+                  {availableOrgs.length > 1 && (
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs font-mono scrollbar-thin">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOwnerFilter('all')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                          selectedOwnerFilter === 'all'
+                            ? 'bg-black text-white border-black font-bold'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <Layers className="w-3 h-3" />
+                        <span>All ({repos.length})</span>
+                      </button>
+                      {availableOrgs.map((org) => (
+                        <button
+                          key={org}
+                          type="button"
+                          onClick={() => setSelectedOwnerFilter(org)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                            selectedOwnerFilter === org
+                              ? 'bg-black text-white border-black font-bold'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          <Building2 className="w-3 h-3" />
+                          <span>
+                            {org} ({orgCounts[org]})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {filteredRepos.length > 0 ? (
+                    <ul className="space-y-1 max-h-48 overflow-y-auto">
+                      {filteredRepos.map((repo, idx) => (
                         <li
                           key={idx}
-                          className="text-sm font-mono text-slate-700 flex items-center gap-2"
+                          className="text-sm font-mono text-slate-700 flex items-center justify-between p-1.5 hover:bg-white rounded-sm"
                         >
-                          <Github className="w-3.5 h-3.5" />
-                          {repo.owner}/{repo.repo}
+                          <div className="flex items-center gap-2">
+                            <Github className="w-3.5 h-3.5" />
+                            <span>
+                              {repo.owner}/{repo.repo}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {repo.private ? (
+                              <span className="flex items-center gap-1 bg-slate-900 text-slate-200 px-1.5 py-0.5 rounded-sm border border-slate-700 font-semibold text-[10px]">
+                                <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                <span>Private</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-sm border border-slate-200 text-[10px]">
+                                <Globe className="w-2.5 h-2.5 text-slate-400" />
+                                <span>Public</span>
+                              </span>
+                            )}
+                            {repo.lang && (
+                              <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm">
+                                {repo.lang}
+                              </span>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs font-mono text-slate-500">
+                      No repositories granted yet. Click above to grant repository access.
+                    </p>
+                  )}
+
+                  <p className="text-[11px] font-mono text-slate-500 pt-1">
+                    Tip: You only need to install on a single repository to continue. You can grant
+                    access to more repositories at any time.
+                  </p>
+                </div>
 
                 <button
                   onClick={() => setCurrentStep(3)}
-                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
+                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
                 >
                   Continue to OAuth Setup <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             ) : (
               <button
-                onClick={handleInstallApp}
+                onClick={() => handleInstallApp()}
                 disabled={loading}
-                className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
+                className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <ExternalLink className="w-4 h-4" />
                 )}
-                {loading ? 'Preparing Install...' : 'Install GitHub App'}
+                {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
               </button>
             )}
           </div>
@@ -490,13 +627,23 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
                     Gemini API Key
                   </label>
-                  <input
-                    type="password"
-                    value={geminiApiKey}
-                    onChange={(e) => setGeminiApiKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none focus:border-black"
-                    placeholder="AIzaSy..."
-                  />
+                  <div className="relative">
+                    <input
+                      type={showGeminiKey ? 'text' : 'password'}
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 pr-10 text-sm font-mono focus:outline-none focus:border-black"
+                      placeholder="AIzaSy..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGeminiKey(!showGeminiKey)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 font-mono text-xs"
+                      title={showGeminiKey ? 'Hide Key' : 'Show Key'}
+                    >
+                      {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">

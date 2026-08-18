@@ -13,19 +13,26 @@ import {
   Clock,
   Code2,
   Sparkles,
-  Copy,
-  Check,
-  RefreshCw,
+  Play,
+  Terminal,
   FileCode,
+  Check,
+  Copy,
   ArrowLeft,
   ChevronRight,
   ExternalLink,
+  Loader2,
+  Plus,
+  GitPullRequest,
 } from 'lucide-react';
+import { engineClient } from '@/services/engineClient';
+import { logger } from '@/services/logger';
 
 interface IncidentDetailPageProps {
   incident: Incident;
   allIncidents: Incident[];
   onSelectIncident: (id: string) => void;
+  onIncidentUpdated?: (incident: Incident) => void;
   onNavigate: (screen: ScreenId) => void;
 }
 
@@ -33,12 +40,15 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
   incident,
   allIncidents,
   onSelectIncident,
+  onIncidentUpdated,
   onNavigate,
 }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(incident.geminiAnalysis);
   const [patchCode, setPatchCode] = useState<string | null>(incident.suggestedPatch || null);
   const [generatingPatch, setGeneratingPatch] = useState(false);
+  const [creatingIssue, setCreatingIssue] = useState(false);
+  const [creatingPr, setCreatingPr] = useState(false);
   const [copiedPatch, setCopiedPatch] = useState(false);
   const [copiedStack, setCopiedStack] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -50,33 +60,76 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     setAnalysisError(null);
   }, [incident.id, incident.geminiAnalysis, incident.suggestedPatch]);
 
+  const handleCreateIssue = async () => {
+    setCreatingIssue(true);
+    setAnalysisError(null);
+    try {
+      const res = await engineClient.createIncidentIssue(incident.id);
+      if (res.success && res.issue_number && res.issue_url) {
+        const updated: Incident = {
+          ...incident,
+          githubIssueNumber: res.issue_number,
+          githubIssueUrl: res.issue_url,
+        };
+        if (onIncidentUpdated) onIncidentUpdated(updated);
+      } else {
+        setAnalysisError(res.error || 'Failed to create GitHub Issue');
+      }
+    } catch (e: any) {
+      setAnalysisError(e?.message || 'Error creating GitHub Issue');
+    } finally {
+      setCreatingIssue(false);
+    }
+  };
+
+  const handleCreatePullRequest = async () => {
+    setCreatingPr(true);
+    setAnalysisError(null);
+    try {
+      const res = await engineClient.createPullRequest({
+        incidentId: incident.id,
+        patchCode: patchCode || undefined,
+      });
+      if (res.success && res.pr_number && res.pr_url) {
+        const updated: Incident = {
+          ...incident,
+          githubPrNumber: res.pr_number,
+          githubPrUrl: res.pr_url,
+          suggestedPatch: patchCode || incident.suggestedPatch,
+        };
+        if (onIncidentUpdated) onIncidentUpdated(updated);
+      } else {
+        setAnalysisError(res.error || 'Failed to create Pull Request');
+      }
+    } catch (e: any) {
+      setAnalysisError(e?.message || 'Error creating Pull Request');
+    } finally {
+      setCreatingPr(false);
+    }
+  };
+
   // Trigger Gemini AI Root Cause Analysis
   const handleRunAiAnalysis = async () => {
     setAnalyzing(true);
     setAnalysisError(null);
     try {
-      const res = await fetch('/api/gemini/analyze-panic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          panicMessage: incident.panicMessage,
-          rawStackTrace: incident.rawStackTrace,
-          triggeringFile: incident.triggeringFile,
-          astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
-        }),
+      const data = await engineClient.analyzePanic({
+        panicMessage: incident.panicMessage,
+        rawStackTrace: incident.rawStackTrace,
+        triggeringFile: incident.triggeringFile,
+        astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
       });
-      if (!res.ok) {
-        throw new Error(`AI Analysis API returned status ${res.status}`);
+      if (!data.success || !data.rootCause) {
+        throw new Error(data.error || 'Failed to run AI analysis');
       }
-      const data = await res.json();
       setAiAnalysis({
         rootCause: data.rootCause,
-        explanation: data.explanation,
-        severity: data.severity,
-        recommendedFix: data.recommendedFix,
+        explanation: data.explanation || data.rootCause,
+        severity: (data.severity as any) || 'CRITICAL',
+        recommendedFix: data.recommendedFix || '',
       });
     } catch (e) {
-      console.error(e);
+      logger.error('Failed to run AI analysis', e);
       setAnalysisError(e instanceof Error ? e.message : 'Failed to run AI analysis');
     } finally {
       setAnalyzing(false);
@@ -86,25 +139,22 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
   // Trigger Gemini AI Fix Patch Generator
   const handleGenerateFixPatch = async () => {
     setGeneratingPatch(true);
+    setAnalysisError(null);
     try {
-      const res = await fetch('/api/gemini/generate-fix-pr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          triggeringFile: incident.triggeringFile,
-          panicMessage: incident.panicMessage,
-          astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
-        }),
+      const data = await engineClient.generateFixPatch({
+        triggeringFile: incident.triggeringFile,
+        panicMessage: incident.panicMessage,
+        astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
+        rootCause: aiAnalysis?.rootCause,
+        stackTrace: incident.rawStackTrace,
       });
-      if (!res.ok) {
-        throw new Error(`Fix patch generation returned status ${res.status}`);
+      if (!data.success || !data.patch) {
+        throw new Error(data.error || 'Fix patch generation failed');
       }
-      const data = await res.json();
-      if (data.patch) {
-        setPatchCode(data.patch);
-      }
+      setPatchCode(data.patch);
     } catch (e) {
-      console.error(e);
+      logger.error('Failed to generate fix patch', e);
+      setAnalysisError(e instanceof Error ? e.message : 'Failed to generate fix patch');
     } finally {
       setGeneratingPatch(false);
     }
@@ -164,8 +214,20 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                 className="bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 text-xs font-mono px-2 py-0.5 rounded-sm flex items-center gap-1 font-medium transition-colors"
               >
                 <Github className="w-3 h-3 text-emerald-700" />
-                <span>GitHub Issue #{incident.githubIssueNumber} Created</span>
+                <span>GitHub Issue #{incident.githubIssueNumber}</span>
                 <ExternalLink className="w-2.5 h-2.5 ml-0.5 text-emerald-600" />
+              </a>
+            )}
+            {incident.githubPrNumber && (
+              <a
+                href={incident.githubPrUrl || '#'}
+                target="_blank"
+                rel="noreferrer"
+                className="bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200 text-xs font-mono px-2 py-0.5 rounded-sm flex items-center gap-1 font-medium transition-colors"
+              >
+                <GitPullRequest className="w-3 h-3 text-purple-700" />
+                <span>GitHub PR #{incident.githubPrNumber} Open</span>
+                <ExternalLink className="w-2.5 h-2.5 ml-0.5 text-purple-600" />
               </a>
             )}
           </div>
@@ -173,6 +235,21 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 font-mono text-xs">
+          {!incident.githubIssueNumber && (
+            <button
+              onClick={handleCreateIssue}
+              disabled={creatingIssue}
+              className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {creatingIssue ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Github className="w-3.5 h-3.5" />
+              )}
+              <span>{creatingIssue ? 'Creating Issue...' : 'Create GitHub Issue'}</span>
+            </button>
+          )}
+
           <button
             onClick={handleRunAiAnalysis}
             disabled={analyzing}
@@ -236,17 +313,45 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <button
-                  onClick={handleGenerateFixPatch}
-                  disabled={generatingPatch}
-                  className="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>
-                    {generatingPatch ? 'Generating Fix Patch...' : 'Generate Code Fix Patch Diff'}
-                  </span>
-                </button>
+              <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {!incident.githubPrNumber ? (
+                    <button
+                      onClick={handleCreatePullRequest}
+                      disabled={creatingPr}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
+                    >
+                      {creatingPr ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <GitPullRequest className="w-3.5 h-3.5" />
+                      )}
+                      <span>{creatingPr ? 'Opening Pull Request...' : 'Generate Fix (PR)'}</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={incident.githubPrUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                    >
+                      <GitPullRequest className="w-3.5 h-3.5" />
+                      <span>View Pull Request #{incident.githubPrNumber}</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5 opacity-80" />
+                    </a>
+                  )}
+
+                  <button
+                    onClick={handleGenerateFixPatch}
+                    disabled={generatingPatch}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Code2 className="w-3.5 h-3.5 text-slate-600" />
+                    <span>
+                      {generatingPatch ? 'Generating Fix Patch...' : 'Preview Patch Diff'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -262,17 +367,34 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                   </span>
                 </div>
 
-                <button
-                  onClick={handleCopyPatch}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-sm text-[11px] border border-slate-700 flex items-center gap-1 font-mono transition-colors"
-                >
-                  {copiedPatch ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
+                <div className="flex items-center gap-2">
+                  {!incident.githubPrNumber && (
+                    <button
+                      onClick={handleCreatePullRequest}
+                      disabled={creatingPr}
+                      className="bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded-sm text-[11px] font-bold flex items-center gap-1 font-mono transition-colors cursor-pointer"
+                    >
+                      {creatingPr ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <GitPullRequest className="w-3 h-3" />
+                      )}
+                      <span>{creatingPr ? 'Creating PR...' : 'Open PR with this Fix'}</span>
+                    </button>
                   )}
-                  <span>{copiedPatch ? 'Copied Patch!' : 'Copy Patch'}</span>
-                </button>
+
+                  <button
+                    onClick={handleCopyPatch}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-sm text-[11px] border border-slate-700 flex items-center gap-1 font-mono transition-colors"
+                  >
+                    {copiedPatch ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                    <span>{copiedPatch ? 'Copied Patch!' : 'Copy Patch'}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="p-4 bg-slate-950 text-slate-200 text-[11px] leading-relaxed overflow-x-auto">

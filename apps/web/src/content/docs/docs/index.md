@@ -10,32 +10,32 @@ Welcome to the **triage** technical documentation.
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
 
 <a href="/docs/overview" class="doc-card">
-  <strong>📖 Overview & Architecture</strong>
+  <strong>Overview & Architecture</strong>
   <span>Learn how Triage achieves zero-overhead panic isolation and on-demand AST slicing.</span>
 </a>
 
 <a href="/docs/quickstart" class="doc-card">
-  <strong>⚡ 5-Minute Quickstart</strong>
+  <strong>5-Minute Quickstart</strong>
   <span>Spin up a local stack and capture your first AI-diagnosed panic.</span>
 </a>
 
 <a href="/docs/sdk" class="doc-card">
-  <strong>🛠️ Go SDK Integration</strong>
+  <strong>Go SDK Integration</strong>
   <span>Integrate Triage middleware into standard net/http, Chi, Gin, Echo, or Fiber.</span>
 </a>
 
 <a href="/docs/ast-engine" class="doc-card">
-  <strong>🌲 AST Engine Internals</strong>
+  <strong>AST Engine Internals</strong>
   <span>Explore the Go parser, *ast.FuncDecl node extraction, and 3-tier caching.</span>
 </a>
 
 <a href="/docs/gemini-ai" class="doc-card">
-  <strong>🤖 Gemini AI Diagnostics</strong>
+  <strong>Gemini AI Diagnostics</strong>
   <span>Configure your preferred Gemini model for structured root-cause fixes.</span>
 </a>
 
 <a href="/docs/self-hosting" class="doc-card">
-  <strong>🐳 Self-Hosting & Docker</strong>
+  <strong>Self-Hosting & Docker</strong>
   <span>Deploy the single-container Triage engine in your private VPC or cluster.</span>
 </a>
 

@@ -9,16 +9,17 @@ This page documents all configuration options and environment variables across t
 
 The engine (`apps/engine`) supports the following environment variables:
 
-| Variable              | Type     | Default                 | Description                                                          |
-| :-------------------- | :------- | :---------------------- | :------------------------------------------------------------------- |
-| `DATABASE_URL`        | `string` | —                       | PostgreSQL connection string (**required**).                         |
-| `PORT`                | `string` | `8080`                  | Engine HTTP listen port.                                             |
-| `TRIAGE_API_KEY`      | `string` | —                       | Fallback static API key (used if PostgreSQL is temporarily offline). |
-| `GEMINI_API_KEY`      | `string` | —                       | Google AI Studio API key (overrides database setting).               |
-| `GEMINI_MODEL_NAME`   | `string` | —                       | Configured Gemini model name for diagnostic inference.               |
-| `AST_WORKSPACE_ROOT`  | `string` | `.`                     | Local fallback filesystem path for offline AST resolution.           |
-| `NEXT_PUBLIC_APP_URL` | `string` | `http://localhost:3000` | Dashboard origin for OAuth redirect URLs.                            |
-| `LOG_LEVEL`           | `string` | `info`                  | Engine logging verbosity (`debug`, `info`, `warn`, `error`).         |
+| Variable               | Type     | Default                 | Description                                                          |
+| :--------------------- | :------- | :---------------------- | :------------------------------------------------------------------- |
+| `DATABASE_URL`         | `string` | —                       | PostgreSQL connection string (**required**).                         |
+| `PORT`                 | `string` | `8080`                  | Engine HTTP listen port.                                             |
+| `TRIAGE_API_KEY`       | `string` | —                       | Fallback static API key (used if PostgreSQL is temporarily offline). |
+| `GEMINI_API_KEY`       | `string` | —                       | Google AI Studio API key (overrides database setting).               |
+| `GEMINI_MODEL_NAME`    | `string` | —                       | Configured Gemini model name for diagnostic inference.               |
+| `AST_WORKSPACE_ROOT`   | `string` | `.`                     | Local fallback filesystem path for offline AST resolution.           |
+| `TRIAGE_DASHBOARD_URL` | `string` | `http://localhost:3000` | Dashboard origin for OAuth redirect URLs and issue links.            |
+| `TRIAGE_ENGINE_URL`    | `string` | `http://localhost:8080` | Engine URL for telemetry and API calls.                              |
+| `LOG_LEVEL`            | `string` | `info`                  | Engine logging verbosity (`debug`, `info`, `warn`, `error`).         |
 
 ---
 
@@ -26,11 +27,11 @@ The engine (`apps/engine`) supports the following environment variables:
 
 The Next.js dashboard (`apps/dashboard`) supports:
 
-| Variable                 | Type     | Default                                  | Description                                      |
-| :----------------------- | :------- | :--------------------------------------- | :----------------------------------------------- |
-| `PORT`                   | `string` | `3000`                                   | Dashboard HTTP listen port.                      |
-| `NEXT_PUBLIC_ENGINE_URL` | `string` | `http://localhost:8080/api/v1/telemetry` | Gateway URL displayed in project setup snippets. |
-| `NEXT_PUBLIC_API_URL`    | `string` | `http://localhost:8080`                  | Internal engine proxy URL.                       |
+| Variable               | Type     | Default                 | Description                 |
+| :--------------------- | :------- | :---------------------- | :-------------------------- |
+| `PORT`                 | `string` | `3000`                  | Dashboard HTTP listen port. |
+| `TRIAGE_ENGINE_URL`    | `string` | `http://localhost:8080` | Engine backend URL.         |
+| `TRIAGE_DASHBOARD_URL` | `string` | `http://localhost:3000` | Public dashboard origin.    |
 
 ---
 

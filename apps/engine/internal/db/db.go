@@ -40,8 +40,11 @@ type Incident struct {
 	ASTSnippet        string    `json:"ast_snippet,omitempty"`
 	RootCause         string    `json:"root_cause,omitempty"`
 	SuggestedFix      string    `json:"suggested_fix,omitempty"`
+	SuggestedPatch    string    `json:"suggested_patch,omitempty"`
 	GitHubIssueURL    string    `json:"github_issue_url,omitempty"`
 	GitHubIssueNumber int       `json:"github_issue_number,omitempty"`
+	GitHubPRURL       string    `json:"github_pr_url,omitempty"`
+	GitHubPRNumber    int       `json:"github_pr_number,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -60,7 +63,20 @@ type Repository struct {
 	Repo           string    `json:"repo"`
 	RootDir        string    `json:"root_dir,omitempty"`
 	InstallationID int64     `json:"installation_id"`
+	APIKeyMasked   string    `json:"api_key_masked,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+type APIKeyRecord struct {
+	ID           string     `json:"id"`
+	RepositoryID string     `json:"repository_id"`
+	Name         string     `json:"name"`
+	KeyMasked    string     `json:"key_masked"`
+	RawKey       string     `json:"raw_key,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	Status       string     `json:"status"`
 }
 
 type GitHubInstallation struct {
@@ -107,6 +123,12 @@ func NewDB(ctx context.Context, databaseURL string) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping PostgreSQL database: %w", err)
 	}
 
+	_, _ = pool.Exec(ctx, `
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS github_pr_url TEXT;
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS github_pr_number INT;
+		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS suggested_patch TEXT;
+	`)
+
 	return &DB{Pool: pool}, nil
 }
 
@@ -136,17 +158,59 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 		return fmt.Errorf("PostgreSQL connection pool uninitialized")
 	}
 
+	var repoID *string
+	if inc.RepositoryID != "" {
+		repoID = &inc.RepositoryID
+	}
+
 	query := `
-		INSERT INTO incidents (id, title, status, file, line, panic_message, stack_trace, ast_snippet, root_cause, suggested_fix)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO incidents (id, repository_id, title, status, file, line, panic_message, stack_trace, ast_snippet, root_cause, suggested_fix, suggested_patch, github_issue_url, github_issue_number, github_pr_url, github_pr_number)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		ON CONFLICT (id) DO UPDATE SET
+			repository_id = COALESCE(EXCLUDED.repository_id, incidents.repository_id),
 			title = EXCLUDED.title,
 			status = EXCLUDED.status,
 			ast_snippet = EXCLUDED.ast_snippet,
 			root_cause = EXCLUDED.root_cause,
-			suggested_fix = EXCLUDED.suggested_fix;
+			suggested_fix = EXCLUDED.suggested_fix,
+			suggested_patch = COALESCE(NULLIF(EXCLUDED.suggested_patch, ''), incidents.suggested_patch),
+			github_issue_url = COALESCE(NULLIF(EXCLUDED.github_issue_url, ''), incidents.github_issue_url),
+			github_issue_number = CASE WHEN EXCLUDED.github_issue_number > 0 THEN EXCLUDED.github_issue_number ELSE incidents.github_issue_number END,
+			github_pr_url = COALESCE(NULLIF(EXCLUDED.github_pr_url, ''), incidents.github_pr_url),
+			github_pr_number = CASE WHEN EXCLUDED.github_pr_number > 0 THEN EXCLUDED.github_pr_number ELSE incidents.github_pr_number END;
 	`
-	_, err := db.Pool.Exec(ctx, query, inc.ID, inc.Title, inc.Status, inc.File, inc.Line, inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix)
+	_, err := db.Pool.Exec(
+		ctx, query,
+		inc.ID, repoID, inc.Title, inc.Status, inc.File, inc.Line,
+		inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix, inc.SuggestedPatch,
+		inc.GitHubIssueURL, inc.GitHubIssueNumber, inc.GitHubPRURL, inc.GitHubPRNumber,
+	)
+	return err
+}
+
+func (db *DB) UpdateIncidentIssue(ctx context.Context, incidentID, issueURL string, issueNumber int) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE incidents
+		SET github_issue_url = $2, github_issue_number = $3
+		WHERE id = $1
+	`, incidentID, issueURL, issueNumber)
+	return err
+}
+
+func (db *DB) UpdateIncidentPR(ctx context.Context, incidentID, prURL string, prNumber int, patch string) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE incidents
+		SET github_pr_url = $2,
+		    github_pr_number = $3,
+		    suggested_patch = CASE WHEN $4 != '' THEN $4 ELSE suggested_patch END
+		WHERE id = $1
+	`, incidentID, prURL, prNumber, patch)
 	return err
 }
 
@@ -159,7 +223,7 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 	}
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), created_at
+		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at
 		FROM incidents
 		ORDER BY created_at DESC
 		LIMIT $1
@@ -174,8 +238,8 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 		var inc Incident
 		err := rows.Scan(
 			&inc.ID, &inc.RepositoryID, &inc.Title, &inc.Status, &inc.File, &inc.Line,
-			&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix,
-			&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.CreatedAt,
+			&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
+			&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -191,13 +255,13 @@ func (db *DB) GetIncidentByID(ctx context.Context, id string) (*Incident, error)
 	}
 	var inc Incident
 	err := db.Pool.QueryRow(ctx, `
-		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), created_at
+		SELECT id, COALESCE(repository_id, ''), title, status, file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at
 		FROM incidents
 		WHERE id = $1
 	`, id).Scan(
 		&inc.ID, &inc.RepositoryID, &inc.Title, &inc.Status, &inc.File, &inc.Line,
-		&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix,
-		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.CreatedAt,
+		&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
+		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -254,7 +318,21 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	if db.Pool == nil {
 		return []Repository{}, nil
 	}
-	rows, err := db.Pool.Query(ctx, `SELECT id, owner, repo, COALESCE(root_dir, ''), installation_id, created_at FROM repositories ORDER BY created_at DESC`)
+	query := `
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id,
+		       COALESCE((
+		           SELECT k.key_masked
+		           FROM api_keys k
+		           WHERE k.repository_id = r.id
+		             AND (k.revoked_at IS NULL OR k.revoked_at > NOW())
+		           ORDER BY k.created_at DESC
+		           LIMIT 1
+		       ), ''),
+		       r.created_at
+		FROM repositories r
+		ORDER BY r.created_at DESC
+	`
+	rows, err := db.Pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -263,12 +341,165 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	var repos []Repository
 	for rows.Next() {
 		var r Repository
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.APIKeyMasked, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
 	}
 	return repos, nil
+}
+
+func (db *DB) GetProjectByOwnerRepo(ctx context.Context, owner, repo, rootDir string) (*Repository, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+	var r Repository
+	err := db.Pool.QueryRow(ctx, `
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id,
+		       COALESCE((
+		           SELECT k.key_masked
+		           FROM api_keys k
+		           WHERE k.repository_id = r.id
+		             AND (k.revoked_at IS NULL OR k.revoked_at > NOW())
+		           ORDER BY k.created_at DESC
+		           LIMIT 1
+		       ), ''),
+		       r.created_at
+		FROM repositories r
+		WHERE r.owner = $1 AND r.repo = $2 AND COALESCE(r.root_dir, '') = $3
+		LIMIT 1
+	`, owner, repo, cleanRootDir).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.APIKeyMasked, &r.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (db *DB) GetAPIKeys(ctx context.Context, owner, repo, rootDir string) ([]APIKeyRecord, error) {
+	if db.Pool == nil {
+		return []APIKeyRecord{}, nil
+	}
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+
+	var rows pgx.Rows
+	var err error
+
+	if owner != "" && repo != "" {
+		rows, err = db.Pool.Query(ctx, `
+			SELECT k.id, k.repository_id, k.name, k.key_masked, k.created_at, k.revoked_at, k.expires_at,
+			       CASE
+			           WHEN k.revoked_at IS NOT NULL AND k.revoked_at <= NOW() THEN 'REVOKED'
+			           WHEN k.expires_at IS NOT NULL AND k.expires_at <= NOW() THEN 'EXPIRED'
+			           ELSE 'ACTIVE'
+			       END as status
+			FROM api_keys k
+			JOIN repositories r ON k.repository_id = r.id
+			WHERE r.owner = $1 AND r.repo = $2 AND COALESCE(r.root_dir, '') = $3
+			ORDER BY k.created_at DESC
+		`, owner, repo, cleanRootDir)
+	} else {
+		rows, err = db.Pool.Query(ctx, `
+			SELECT k.id, k.repository_id, k.name, k.key_masked, k.created_at, k.revoked_at, k.expires_at,
+			       CASE
+			           WHEN k.revoked_at IS NOT NULL AND k.revoked_at <= NOW() THEN 'REVOKED'
+			           WHEN k.expires_at IS NOT NULL AND k.expires_at <= NOW() THEN 'EXPIRED'
+			           ELSE 'ACTIVE'
+			       END as status
+			FROM api_keys k
+			ORDER BY k.created_at DESC
+		`)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []APIKeyRecord
+	for rows.Next() {
+		var k APIKeyRecord
+		if err := rows.Scan(&k.ID, &k.RepositoryID, &k.Name, &k.KeyMasked, &k.CreatedAt, &k.RevokedAt, &k.ExpiresAt, &k.Status); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
+func (db *DB) CreateAPIKey(ctx context.Context, owner, repo, rootDir, keyName string) (*APIKeyRecord, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+	tupleStr := fmt.Sprintf("%s/%s:%s", owner, repo, cleanRootDir)
+	tupleHash := sha256.Sum256([]byte(tupleStr))
+	repoID := fmt.Sprintf("repo_%s", hex.EncodeToString(tupleHash[:16]))
+
+	// Ensure repository exists
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO repositories (id, owner, repo, root_dir, installation_id)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (owner, repo, root_dir) DO NOTHING
+	`, repoID, owner, repo, cleanRootDir, 1001)
+	if err != nil {
+		return nil, err
+	}
+
+	keySuffix := repo
+	if cleanRootDir != "" {
+		keySuffix = fmt.Sprintf("%s_%s", repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
+	}
+	rawKey := fmt.Sprintf("tr_live_%s_%d", keySuffix, time.Now().UnixNano())
+	hash := sha256.Sum256([]byte(rawKey))
+	keyHash := hex.EncodeToString(hash[:])
+	keyMasked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
+	keyID := fmt.Sprintf("key_%d", time.Now().UnixNano())
+
+	if keyName == "" {
+		keyName = fmt.Sprintf("Key for %s/%s", owner, repo)
+		if cleanRootDir != "" {
+			keyName = fmt.Sprintf("Key for %s/%s (%s)", owner, repo, cleanRootDir)
+		}
+	}
+
+	now := time.Now().UTC()
+	_, err = db.Pool.Exec(ctx, `
+		INSERT INTO api_keys (id, repository_id, name, key_hash, key_masked, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, keyID, repoID, keyName, keyHash, keyMasked, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &APIKeyRecord{
+		ID:           keyID,
+		RepositoryID: repoID,
+		Name:         keyName,
+		KeyMasked:    keyMasked,
+		RawKey:       rawKey,
+		CreatedAt:    now,
+		Status:       "ACTIVE",
+	}, nil
+}
+
+func (db *DB) RevokeAPIKey(ctx context.Context, keyID string) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	res, err := db.Pool.Exec(ctx, `
+		UPDATE api_keys
+		SET revoked_at = NOW()
+		WHERE id = $1 AND (revoked_at IS NULL OR revoked_at > NOW())
+	`, keyID)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return fmt.Errorf("key not found or already revoked")
+	}
+	return nil
 }
 
 func (db *DB) GetRepositoryByAPIKey(ctx context.Context, key string) (*Repository, error) {
@@ -302,7 +533,9 @@ func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL stri
 	err := db.Pool.QueryRow(ctx, `
 		INSERT INTO users (id, github_id, username, avatar_url, role)
 		VALUES ($1, $2, $3, $4, 'Admin')
-		ON CONFLICT (github_id) DO UPDATE SET username = EXCLUDED.username, avatar_url = EXCLUDED.avatar_url
+		ON CONFLICT (github_id) DO UPDATE SET 
+			username = EXCLUDED.username, 
+			avatar_url = EXCLUDED.avatar_url
 		RETURNING id, github_id, username, avatar_url, role, created_at
 	`, userID, githubID, username, avatarURL).Scan(&u.ID, &u.GitHubID, &u.Username, &u.AvatarURL, &u.Role, &u.CreatedAt)
 
@@ -312,12 +545,7 @@ func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL stri
 	return &u, nil
 }
 
-func (db *DB) GetStats(ctx context.Context, version ...string) (map[string]interface{}, error) {
-	v := "v0.1.0-dev"
-	if len(version) > 0 && version[0] != "" {
-		v = version[0]
-	}
-
+func (db *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	if db.Pool == nil {
 		return map[string]interface{}{
 			"status":          "healthy",
@@ -325,7 +553,6 @@ func (db *DB) GetStats(ctx context.Context, version ...string) (map[string]inter
 			"total_incidents": 0,
 			"total_projects":  1,
 			"funcs_indexed":   1420,
-			"engine_version":  v,
 			"uptime_seconds":  120,
 		}, nil
 	}
@@ -340,7 +567,6 @@ func (db *DB) GetStats(ctx context.Context, version ...string) (map[string]inter
 		"total_incidents": incCount,
 		"total_projects":  repoCount,
 		"funcs_indexed":   1420,
-		"engine_version":  v,
 		"uptime_seconds":  3600,
 	}, nil
 }
@@ -432,6 +658,7 @@ func (db *DB) GetInstallation(ctx context.Context) (*GitHubInstallation, error) 
 		SELECT id, installation_id, org_login, org_id, account_type, status, created_at
 		FROM github_installations
 		WHERE status = 'active'
+		ORDER BY created_at DESC
 		LIMIT 1
 	`).Scan(&inst.ID, &inst.InstallationID, &inst.OrgLogin, &inst.OrgID, &inst.AccountType, &inst.Status, &inst.CreatedAt)
 	if err != nil {
@@ -441,6 +668,59 @@ func (db *DB) GetInstallation(ctx context.Context) (*GitHubInstallation, error) 
 		return nil, err
 	}
 	return &inst, nil
+}
+
+func (db *DB) GetAllInstallations(ctx context.Context) ([]GitHubInstallation, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, installation_id, org_login, org_id, account_type, status, created_at
+		FROM github_installations
+		WHERE status = 'active'
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var installations []GitHubInstallation
+	for rows.Next() {
+		var inst GitHubInstallation
+		if err := rows.Scan(&inst.ID, &inst.InstallationID, &inst.OrgLogin, &inst.OrgID, &inst.AccountType, &inst.Status, &inst.CreatedAt); err != nil {
+			return nil, err
+		}
+		installations = append(installations, inst)
+	}
+	return installations, nil
+}
+
+func (db *DB) GetAllInstallationRepos(ctx context.Context) ([]InstallationRepo, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT DISTINCT ir.owner, ir.repo
+		FROM installation_repos ir
+		JOIN github_installations gi ON ir.installation_id = gi.installation_id
+		WHERE gi.status = 'active'
+		ORDER BY ir.owner, ir.repo
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var repos []InstallationRepo
+	for rows.Next() {
+		var r InstallationRepo
+		if err := rows.Scan(&r.Owner, &r.Repo); err != nil {
+			return nil, err
+		}
+		repos = append(repos, r)
+	}
+	return repos, nil
 }
 
 func (db *DB) SaveInstallationRepos(ctx context.Context, installationID int64, repos []InstallationRepo) error {

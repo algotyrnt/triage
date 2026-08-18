@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"go/parser"
 	"go/token"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,7 +153,7 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 	pkgDirs := make(map[string]bool)
 	err := filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Printf("[AST INDEX] Walk error for path %s: %v", path, err)
+			slog.Warn("filepath walk error encountered", "path", path, "error", err)
 			return nil
 		}
 		if info.IsDir() {
@@ -237,7 +237,7 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 					firstErr = closeErr
 				}
 				if firstErr != nil {
-					log.Printf("[AST INDEX] Batch execution error for dir %s: %v", dir, firstErr)
+					slog.Error("AST batch execution error", "dir", dir, "error", firstErr)
 				} else {
 					count += len(pkgCtx.Functions)
 				}

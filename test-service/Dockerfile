@@ -3,13 +3,12 @@ FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-# Copy root monorepo files
-COPY go.mod go.sum ./
+# Copy SDK and test-service modules
 COPY sdk/go ./sdk/go
 COPY test-service ./test-service
 
 WORKDIR /app/test-service
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o test-service main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o test-service main.go
 
 # Stage 2: Minimal Production Image
 FROM alpine:3.20

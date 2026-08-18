@@ -4,6 +4,7 @@
  */
 
 export type ScreenId =
+  | 'projects'
   | 'setup'
   | 'login'
   | 'new'
@@ -19,6 +20,8 @@ export type IncidentStatus = 'CRITICAL' | 'INVESTIGATING' | 'RESOLVED';
 
 export interface Incident {
   id: string; // e.g. "INC-8094"
+  repositoryId?: string;
+  repositoryName?: string;
   title: string; // e.g. "nil pointer dereference in GetProfile()"
   status: IncidentStatus;
   triggeringFile: string; // e.g. "pkg/handler/user.go:42"
@@ -32,6 +35,8 @@ export interface Incident {
   rawStackTrace: string;
   githubIssueUrl?: string;
   githubIssueNumber?: number; // e.g. 104
+  githubPrUrl?: string;
+  githubPrNumber?: number; // e.g. 12
   astSnippet: {
     functionName: string; // e.g. "GetProfile"
     file: string;
@@ -117,10 +122,10 @@ export interface ApiKey {
   id: string;
   name: string;
   keyMasked: string;
-  fullKey: string;
+  fullKey?: string;
   createdAt: string;
-  lastUsed: string;
-  status: 'ACTIVE' | 'REVOKED';
+  lastUsed?: string;
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
 }
 
 export interface MetricHourly {
@@ -144,6 +149,7 @@ export interface Project {
   repo: string;
   root_dir?: string;
   installation_id?: number;
+  api_key_masked?: string;
   created_at?: string;
 }
 
@@ -151,4 +157,15 @@ export interface DetectedModule {
   path: string;
   name: string;
   is_root: boolean;
+}
+
+export interface RepositoryItem {
+  owner: string;
+  repo: string;
+  name: string;
+  installed: boolean;
+  branch?: string;
+  lang?: string;
+  visibility?: string;
+  private?: boolean;
 }

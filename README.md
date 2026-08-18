@@ -201,8 +201,8 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet 
 | `TRIAGE_API_KEY`      | —                       | Fallback static API key (used when DB is unreachable)    |
 | `GEMINI_API_KEY`      | —                       | Overrides the Gemini key stored in DB                    |
 | `GEMINI_MODEL_NAME`   | —                       | Overrides the model name stored in DB                    |
-| `AST_WORKSPACE_ROOT`  | `.`                     | Local path used as fallback for on-demand AST resolution |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Dashboard origin (used for OAuth redirect URLs)          |
+| `TRIAGE_DASHBOARD_URL` | `http://localhost:3000` | Dashboard origin (used for OAuth redirect URLs, issue links) |
+| `TRIAGE_ENGINE_URL`    | `http://localhost:8080` | Engine URL                                                   |
 
 ### Test Service (`test-service/.env.example`)
 
