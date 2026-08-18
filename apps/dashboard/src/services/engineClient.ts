@@ -40,7 +40,10 @@ export interface EngineStatus {
 }
 
 const rawEngineUrl = process.env.TRIAGE_ENGINE_URL || 'http://localhost:8080';
-const cleanEngineUrl = rawEngineUrl.replace(/\/telemetry\/?$/, '').replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+const cleanEngineUrl = rawEngineUrl
+  .replace(/\/telemetry\/?$/, '')
+  .replace(/\/api\/v1\/?$/, '')
+  .replace(/\/$/, '');
 const DEFAULT_BASE_URL = `${cleanEngineUrl}/api/v1`;
 
 export class EngineClient {
@@ -59,10 +62,6 @@ export class EngineClient {
 
   getTelemetryUrl(): string {
     return this.telemetryUrl;
-  }
-
-  getAuthGitHubUrl(): string {
-    return `${this.baseUrl}/auth/github`;
   }
 
   setAuthToken(token: string | null) {
@@ -316,6 +315,19 @@ export class EngineClient {
     }
   }
 
+  async getInstalledRepoSlugs(): Promise<string[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/setup/installed-repos`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.installed_repos || [];
+    } catch {
+      return [];
+    }
+  }
+
   async checkRepoInstalled(
     owner: string,
     repo: string,
@@ -345,27 +357,6 @@ export class EngineClient {
       return { success: false, error: data.error || 'Connection test failed' };
     }
     return await res.json();
-  }
-
-  async verifySession(token: string): Promise<{
-    valid: boolean;
-    user?: {
-      id: string;
-      username: string;
-      avatar_url: string;
-      github_id: string;
-    };
-  }> {
-    try {
-      const res = await fetch(`${this.baseUrl}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return { valid: false };
-      const data = await res.json();
-      return { valid: true, user: data };
-    } catch {
-      return { valid: false };
-    }
   }
 
   async getInstalledRepos(): Promise<import('@/types').RepositoryItem[]> {
@@ -563,10 +554,13 @@ export class EngineClient {
     }
   }
 
-  async createPullRequest(params: {
-    incidentId: string;
-    patchCode?: string;
-  }): Promise<{ success: boolean; pr_number?: number; pr_url?: string; branch?: string; error?: string }> {
+  async createPullRequest(params: { incidentId: string; patchCode?: string }): Promise<{
+    success: boolean;
+    pr_number?: number;
+    pr_url?: string;
+    branch?: string;
+    error?: string;
+  }> {
     try {
       const res = await fetch(`${this.baseUrl}/incidents/create-pr`, {
         method: 'POST',
@@ -585,7 +579,10 @@ export class EngineClient {
           branch: data.pull_request.branch,
         };
       }
-      return { success: false, error: data.error || `Failed to create Pull Request (${res.status})` };
+      return {
+        success: false,
+        error: data.error || `Failed to create Pull Request (${res.status})`,
+      };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to connect to AI engine' };
     }
