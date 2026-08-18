@@ -26,9 +26,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Version is the build version of the Triage Engine.
-var Version = "v0.1.0-dev"
-
 func loadEnvLocal() {
 	_ = godotenv.Load(".env.local", ".env")
 }
@@ -127,13 +124,11 @@ func main() {
 	}
 
 	server := api.NewServer(api.Config{
-		DB:            database,
-		GitHubApp:     githubApp,
-		ASTManager:    astManager,
-		SessionSecret: sessionSecret,
-		AppURL:        dashboardURL,
-		EngineURL:     engineURL,
-		Version:       Version,
+		DB:         database,
+		GitHubApp:  githubApp,
+		ASTManager: astManager,
+		AppURL:     dashboardURL,
+		EngineURL:  engineURL,
 	})
 
 	mux := http.NewServeMux()
@@ -152,7 +147,7 @@ func main() {
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		slog.Info("triage engine server starting", "version", Version, "port", port, "engine_url", engineURL, "dashboard_url", dashboardURL)
+		slog.Info("triage engine server starting", "port", port, "engine_url", engineURL, "dashboard_url", dashboardURL)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("HTTP server failed", "error", err)
 			os.Exit(1)
