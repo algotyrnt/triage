@@ -219,6 +219,8 @@ func main() {
 	http.HandleFunc("/api/v1/settings/llm", corsMiddleware(handleSettingsLLMRoute))
 	http.HandleFunc("/api/v1/projects/keys", corsMiddleware(handleProjectKeysRoute))
 	http.HandleFunc("/api/v1/projects/keys/revoke", corsMiddleware(handleRevokeProjectKeyRoute))
+	http.HandleFunc("/api/v1/gemini/analyze-panic", corsMiddleware(handleGeminiAnalyzePanicRoute))
+	http.HandleFunc("/api/v1/gemini/generate-patch", corsMiddleware(handleGeminiGeneratePatchRoute))
 
 	// GitHub OAuth authentication routes
 	http.HandleFunc("/api/v1/auth/github", corsMiddleware(handleGitHubAuthRoute))
@@ -1795,6 +1797,132 @@ func handleSetupLLMRoute(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+func handleGeminiAnalyzePanicRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PanicMessage   string `json:"panicMessage"`
+		RawStackTrace  string `json:"rawStackTrace"`
+		TriggeringFile string `json:"triggeringFile"`
+		ASTCode        string `json:"astCode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	llmAPIKey := ""
+	llmModelName := ""
+	if database != nil {
+		llmAPIKey, _ = database.GetInstanceConfig(r.Context(), "gemini_api_key")
+		llmModelName, _ = database.GetInstanceConfig(r.Context(), "gemini_model")
+	}
+	if llmAPIKey == "" {
+		llmAPIKey = os.Getenv("GEMINI_API_KEY")
+	}
+	if llmModelName == "" {
+		llmModelName = os.Getenv("GEMINI_MODEL_NAME")
+	}
+	if llmModelName == "" {
+		llmModelName = "gemini-1.5-flash"
+	}
+
+	if llmAPIKey == "" {
+		http.Error(w, "Gemini API key is not configured. Please configure it in Project Settings or Setup Wizard.", http.StatusBadRequest)
+		return
+	}
+
+	analysisCtx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+
+	delimitedSnippet := req.ASTCode
+	if !strings.HasPrefix(delimitedSnippet, "```") {
+		delimitedSnippet = fmt.Sprintf("```go\n%s\n```", delimitedSnippet)
+	}
+
+	analysis, err := llm.AnalyzeCrash(analysisCtx, req.RawStackTrace, delimitedSnippet, llmAPIKey, llmModelName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("AI Analysis failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":        true,
+		"rootCause":      analysis.RootCause,
+		"explanation":    analysis.RootCause,
+		"severity":       "CRITICAL",
+		"recommendedFix": analysis.SuggestedFix,
+	})
+}
+
+func handleGeminiGeneratePatchRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		TriggeringFile string `json:"triggeringFile"`
+		PanicMessage   string `json:"panicMessage"`
+		ASTCode        string `json:"astCode"`
+		RootCause      string `json:"rootCause,omitempty"`
+		StackTrace     string `json:"stackTrace,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	llmAPIKey := ""
+	llmModelName := ""
+	if database != nil {
+		llmAPIKey, _ = database.GetInstanceConfig(r.Context(), "gemini_api_key")
+		llmModelName, _ = database.GetInstanceConfig(r.Context(), "gemini_model")
+	}
+	if llmAPIKey == "" {
+		llmAPIKey = os.Getenv("GEMINI_API_KEY")
+	}
+	if llmModelName == "" {
+		llmModelName = os.Getenv("GEMINI_MODEL_NAME")
+	}
+	if llmModelName == "" {
+		llmModelName = "gemini-1.5-flash"
+	}
+
+	if llmAPIKey == "" {
+		http.Error(w, "Gemini API key is not configured. Please configure it in Project Settings or Setup Wizard.", http.StatusBadRequest)
+		return
+	}
+
+	patchCtx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	patch, err := llm.GeneratePatch(
+		patchCtx,
+		req.TriggeringFile,
+		req.PanicMessage,
+		req.ASTCode,
+		req.StackTrace,
+		req.RootCause,
+		llmAPIKey,
+		llmModelName,
+	)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Patch generation failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"patch":   patch,
+	})
 }
 
 type DetectedModule struct {

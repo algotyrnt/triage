@@ -204,3 +204,41 @@ func TestCreateIncidentIssueRoute(t *testing.T) {
 		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
 	}
 }
+
+func TestGeminiRoutes(t *testing.T) {
+	// 1. Test POST /api/v1/gemini/analyze-panic missing api key
+	_ = os.Unsetenv("GEMINI_API_KEY")
+	body, _ := json.Marshal(map[string]string{
+		"panicMessage": "nil pointer dereference",
+		"triggeringFile": "main.go",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/analyze-panic", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handleGeminiAnalyzePanicRoute(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", rec.Code)
+	}
+
+	// 2. Test POST /api/v1/gemini/generate-patch missing api key
+	patchBody, _ := json.Marshal(map[string]string{
+		"triggeringFile": "main.go",
+		"panicMessage":   "nil pointer dereference",
+	})
+	patchReq := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/generate-patch", bytes.NewBuffer(patchBody))
+	patchRec := httptest.NewRecorder()
+	handleGeminiGeneratePatchRoute(patchRec, patchReq)
+
+	if patchRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", patchRec.Code)
+	}
+
+	// 3. Test method not allowed
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/gemini/generate-patch", nil)
+	getRec := httptest.NewRecorder()
+	handleGeminiGeneratePatchRoute(getRec, getReq)
+
+	if getRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
+	}
+}
