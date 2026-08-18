@@ -16,7 +16,6 @@ import (
 
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
-	"triage/engine/internal/session"
 )
 
 type SetupRepoItem struct {
@@ -31,31 +30,42 @@ type SetupRepoItem struct {
 }
 
 func (s *Server) HandleSetupStatus(w http.ResponseWriter, r *http.Request) {
-	result := map[string]interface{}{
-		"configured":   false,
-		"github_app":   false,
-		"installation": false,
-		"oauth":        false,
-		"llm":          false,
-	}
+	appID := ""
+	slug := s.appSlug
+	oauthID := ""
+	apiKey := ""
+	var hasInstallation bool
 
 	if s.db != nil {
-		appID, _ := s.db.GetInstanceConfig(r.Context(), "github_app_id")
-		result["github_app"] = appID != ""
-
-		inst, _ := s.db.GetInstallation(r.Context())
-		result["installation"] = inst != nil
-
-		oauthID, _ := s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
-		result["oauth"] = oauthID != ""
-
-		apiKey, _ := s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
-		modelName, _ := s.db.GetInstanceConfig(r.Context(), "gemini_model")
-		result["llm"] = apiKey != "" && modelName != ""
-
-		if appID != "" && inst != nil && oauthID != "" && apiKey != "" && modelName != "" {
-			result["configured"] = true
+		appID, _ = s.db.GetInstanceConfig(r.Context(), "github_app_id")
+		if slug == "" {
+			slug, _ = s.db.GetInstanceConfig(r.Context(), "github_app_slug")
 		}
+		inst, _ := s.db.GetInstallation(r.Context())
+		hasInstallation = inst != nil
+
+		oauthID, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
+		if oauthID == "" {
+			oauthID, _ = s.db.GetInstanceConfig(r.Context(), "github_client_id")
+		}
+		apiKey, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
+	}
+
+	if appID == "" && s.githubApp != nil {
+		appID = "configured"
+	}
+
+	hasApp := appID != "" || s.githubApp != nil || slug != ""
+	hasOauth := oauthID != ""
+	hasLLM := apiKey != ""
+
+	result := map[string]interface{}{
+		"configured":   hasApp && hasInstallation && hasOauth && hasLLM,
+		"github_app":   hasApp,
+		"app_slug":     slug,
+		"installation": hasInstallation,
+		"oauth":        hasOauth,
+		"llm":          hasLLM,
 	}
 
 	writeJSON(w, http.StatusOK, result)
@@ -70,8 +80,13 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 		InstanceURL string `json:"instance_url"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	if req.InstanceURL == "" {
-		req.InstanceURL = s.appURL
+	if req.InstanceURL != "" {
+		s.appURL = strings.TrimRight(req.InstanceURL, "/")
+		if s.db != nil {
+			_ = s.db.SaveInstanceConfig(r.Context(), "instance_url", req.InstanceURL)
+		}
+	} else {
+		req.InstanceURL = s.ResolveAppURL(r.Context(), r)
 	}
 
 	manifest := map[string]interface{}{
@@ -80,7 +95,7 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 		"redirect_url": s.engineURL + "/api/v1/setup/callback",
 		"setup_url":    s.engineURL + "/api/v1/setup/install/callback",
 		"callback_urls": []string{
-			s.engineURL + "/api/v1/auth/github/callback",
+			req.InstanceURL + "/api/auth/github/callback",
 		},
 		"public": false,
 		"default_permissions": map[string]string{
@@ -105,21 +120,23 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HandleSetupCallback(w http.ResponseWriter, r *http.Request) {
+	targetAppURL := s.ResolveAppURL(r.Context(), r)
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "Missing code parameter", http.StatusBadRequest)
+		http.Redirect(w, r, targetAppURL+"?setup_error=missing_code", http.StatusFound)
 		return
 	}
 
 	convURL := fmt.Sprintf("https://api.github.com/app-manifests/%s/conversions", code)
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, convURL, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	github.SetDefaultHeaders(req)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("manifest conversion request failed", "error", err)
-		http.Redirect(w, r, s.appURL+"?setup_error=conversion_failed", http.StatusFound)
+		http.Redirect(w, r, targetAppURL+"?setup_error=conversion_failed", http.StatusFound)
 		return
 	}
 	defer resp.Body.Close()
@@ -127,7 +144,7 @@ func (s *Server) HandleSetupCallback(w http.ResponseWriter, r *http.Request) {
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		slog.Error("manifest conversion returned non-201 status", "status_code", resp.StatusCode, "body", string(body))
-		http.Redirect(w, r, s.appURL+"?setup_error=conversion_failed", http.StatusFound)
+		http.Redirect(w, r, targetAppURL+"?setup_error=conversion_failed", http.StatusFound)
 		return
 	}
 
@@ -141,9 +158,11 @@ func (s *Server) HandleSetupCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		slog.Error("failed to decode manifest response JSON", "error", err)
-		http.Redirect(w, r, s.appURL+"?setup_error=decode_failed", http.StatusFound)
+		http.Redirect(w, r, targetAppURL+"?setup_error=decode_failed", http.StatusFound)
 		return
 	}
+
+	s.appSlug = result.Slug
 
 	if s.db != nil {
 		s.db.SaveInstanceConfig(r.Context(), "github_app_id", strconv.FormatInt(result.ID, 10))
@@ -156,18 +175,58 @@ func (s *Server) HandleSetupCallback(w http.ResponseWriter, r *http.Request) {
 		s.db.SaveInstanceConfig(r.Context(), "github_oauth_client_secret", result.ClientSecret)
 	}
 
+	if result.ID > 0 && result.PEM != "" {
+		if cfg, cfgErr := github.LoadAppConfig(result.ID, []byte(result.PEM), result.WebhookSecret, result.ClientID, result.ClientSecret); cfgErr == nil {
+			s.githubApp = cfg
+		}
+	}
+
 	s.LoadGitHubAppConfig(r.Context())
 
 	slog.Info("GitHub App created successfully", "app_id", result.ID, "slug", result.Slug)
-	http.Redirect(w, r, s.appURL+"?setup_step=2&app_created=true", http.StatusFound)
+	http.Redirect(w, r, targetAppURL+"?setup_step=2&app_created=true", http.StatusFound)
 }
 
 func (s *Server) HandleSetupInstall(w http.ResponseWriter, r *http.Request) {
-	slug := ""
-	if s.db != nil {
+	slug := s.appSlug
+	if slug == "" && s.db != nil {
 		slug, _ = s.db.GetInstanceConfig(r.Context(), "github_app_slug")
 	}
 	if slug == "" {
+		s.LoadGitHubAppConfig(r.Context())
+		if s.appSlug != "" {
+			slug = s.appSlug
+		}
+	}
+	if slug == "" && s.githubApp != nil {
+		jwt, err := s.githubApp.SignAppJWT()
+		if err == nil {
+			client := &http.Client{Timeout: 10 * time.Second}
+			req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://api.github.com/app", nil)
+			req.Header.Set("Authorization", "Bearer "+jwt)
+			req.Header.Set("Accept", "application/vnd.github+json")
+			github.SetDefaultHeaders(req)
+
+			resp, err := client.Do(req)
+			if err == nil && resp.StatusCode == http.StatusOK {
+				var appData struct {
+					Slug string `json:"slug"`
+				}
+				_ = json.NewDecoder(resp.Body).Decode(&appData)
+				resp.Body.Close()
+				if appData.Slug != "" {
+					slug = appData.Slug
+					s.appSlug = slug
+					if s.db != nil {
+						_ = s.db.SaveInstanceConfig(r.Context(), "github_app_slug", slug)
+					}
+				}
+			}
+		}
+	}
+
+	if slug == "" {
+		slog.Warn("HandleSetupInstall: GitHub App slug not found")
 		http.Error(w, "GitHub App not configured yet", http.StatusBadRequest)
 		return
 	}
@@ -177,15 +236,16 @@ func (s *Server) HandleSetupInstall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) HandleSetupInstallCallback(w http.ResponseWriter, r *http.Request) {
+	targetAppURL := s.ResolveAppURL(r.Context(), r)
 	installIDStr := r.URL.Query().Get("installation_id")
 	if installIDStr == "" {
-		http.Redirect(w, r, s.appURL+"?setup_error=missing_installation_id", http.StatusFound)
+		http.Redirect(w, r, targetAppURL+"?setup_error=missing_installation_id", http.StatusFound)
 		return
 	}
 
 	installID, err := strconv.ParseInt(installIDStr, 10, 64)
 	if err != nil {
-		http.Redirect(w, r, s.appURL+"?setup_error=invalid_installation_id", http.StatusFound)
+		http.Redirect(w, r, targetAppURL+"?setup_error=invalid_installation_id", http.StatusFound)
 		return
 	}
 
@@ -193,7 +253,7 @@ func (s *Server) HandleSetupInstallCallback(w http.ResponseWriter, r *http.Reque
 		s.LoadGitHubAppConfig(r.Context())
 	}
 
-	if s.githubApp != nil && s.db != nil {
+	if s.githubApp != nil {
 		jwt, err := s.githubApp.SignAppJWT()
 		if err == nil {
 			client := &http.Client{Timeout: 15 * time.Second}
@@ -201,6 +261,7 @@ func (s *Server) HandleSetupInstallCallback(w http.ResponseWriter, r *http.Reque
 			req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, reqURL, nil)
 			req.Header.Set("Authorization", "Bearer "+jwt)
 			req.Header.Set("Accept", "application/vnd.github+json")
+			github.SetDefaultHeaders(req)
 
 			resp, err := client.Do(req)
 			if err == nil && resp.StatusCode == http.StatusOK {
@@ -214,7 +275,9 @@ func (s *Server) HandleSetupInstallCallback(w http.ResponseWriter, r *http.Reque
 				_ = json.NewDecoder(resp.Body).Decode(&instData)
 				resp.Body.Close()
 
-				s.db.SaveInstallation(r.Context(), installID, instData.Account.Login, instData.Account.ID, instData.Account.Type)
+				if s.db != nil {
+					_ = s.db.SaveInstallation(r.Context(), installID, instData.Account.Login, instData.Account.ID, instData.Account.Type)
+				}
 
 				repoInfos, repoErr := s.githubApp.ListInstallationRepositories(r.Context(), installID)
 				if repoErr == nil {
@@ -222,17 +285,32 @@ func (s *Server) HandleSetupInstallCallback(w http.ResponseWriter, r *http.Reque
 					for _, rInfo := range repoInfos {
 						repos = append(repos, db.InstallationRepo{Owner: rInfo.Owner, Repo: rInfo.Repo})
 					}
-					s.db.SaveInstallationRepos(r.Context(), installID, repos)
+					if s.db != nil {
+						_ = s.db.SaveInstallationRepos(r.Context(), installID, repos)
+					}
 					slog.Info("stored installation repositories", "count", len(repos), "installation_id", installID, "org", instData.Account.Login)
 				}
 			}
 		}
 	}
 
-	http.Redirect(w, r, s.appURL+"?setup_step=3&installed=true", http.StatusFound)
+	http.Redirect(w, r, targetAppURL+"?setup_step=3&installed=true", http.StatusFound)
 }
 
 func (s *Server) HandleSetupOAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		var clientID, clientSecret string
+		if s.db != nil {
+			clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
+			clientSecret, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_secret")
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"client_id":     clientID,
+			"client_secret": clientSecret,
+		})
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -275,6 +353,9 @@ func (s *Server) HandleSetupTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "app_name": appName})
 }
 
+// HandleSetupRepos returns repositories that have the GitHub App installed.
+// Uses only the GitHub App token — never the user's OAuth token.
+// Used by the Setup Wizard (Step 2) to show which repos have the App installed.
 func (s *Server) HandleSetupRepos(w http.ResponseWriter, r *http.Request) {
 	if s.githubApp == nil {
 		s.LoadGitHubAppConfig(r.Context())
@@ -282,6 +363,7 @@ func (s *Server) HandleSetupRepos(w http.ResponseWriter, r *http.Request) {
 
 	repoItemsMap := make(map[string]SetupRepoItem)
 
+	// Fetch installed repos via GitHub App token only
 	if s.githubApp != nil {
 		if appInstalls, err := s.githubApp.ListAppInstallations(r.Context()); err == nil {
 			for _, inst := range appInstalls {
@@ -289,9 +371,9 @@ func (s *Server) HandleSetupRepos(w http.ResponseWriter, r *http.Request) {
 					_ = s.db.SaveInstallation(r.Context(), inst.ID, inst.AccountLogin, inst.AccountID, inst.AccountType)
 				}
 				if repoInfos, rErr := s.githubApp.ListInstallationRepositories(r.Context(), inst.ID); rErr == nil {
-					var repos []db.InstallationRepo
+					var dbRepos []db.InstallationRepo
 					for _, rInfo := range repoInfos {
-						repos = append(repos, db.InstallationRepo{Owner: rInfo.Owner, Repo: rInfo.Repo})
+						dbRepos = append(dbRepos, db.InstallationRepo{Owner: rInfo.Owner, Repo: rInfo.Repo})
 						key := strings.ToLower(fmt.Sprintf("%s/%s", rInfo.Owner, rInfo.Repo))
 						branch := rInfo.DefaultBranch
 						if branch == "" {
@@ -317,87 +399,30 @@ func (s *Server) HandleSetupRepos(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 					if s.db != nil {
-						_ = s.db.SaveInstallationRepos(r.Context(), inst.ID, repos)
+						_ = s.db.SaveInstallationRepos(r.Context(), inst.ID, dbRepos)
 					}
 				}
 			}
 		}
 	}
 
-	var installedRepos []db.InstallationRepo
+	// Merge with DB records (covers repos that may have been de-listed from App but are still in DB)
 	if s.db != nil {
 		if list, err := s.db.GetAllInstallationRepos(r.Context()); err == nil {
-			installedRepos = list
-		}
-	}
-
-	installedMap := make(map[string]bool)
-	for _, ir := range installedRepos {
-		key := strings.ToLower(fmt.Sprintf("%s/%s", ir.Owner, ir.Repo))
-		installedMap[key] = true
-	}
-
-	username := r.URL.Query().Get("username")
-	var userAccessToken string
-	authHeader := r.Header.Get("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") && s.sessionSecret != "" {
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		if claims, cErr := session.ValidateSessionJWT(tokenStr, s.sessionSecret); cErr == nil && claims != nil {
-			if username == "" {
-				username = claims.Username
-			}
-			userAccessToken = claims.GitHubToken
-		}
-	}
-
-	if username != "" || userAccessToken != "" {
-		if userRepos, uErr := github.FetchUserRepositories(r.Context(), username, userAccessToken); uErr == nil {
-			for _, ur := range userRepos {
-				key := strings.ToLower(fmt.Sprintf("%s/%s", ur.Owner, ur.Repo))
-				isInstalled := installedMap[key]
-				branch := ur.DefaultBranch
-				if branch == "" {
-					branch = "main"
+			for _, ir := range list {
+				key := strings.ToLower(fmt.Sprintf("%s/%s", ir.Owner, ir.Repo))
+				if _, ok := repoItemsMap[key]; !ok {
+					repoItemsMap[key] = SetupRepoItem{
+						Owner:         ir.Owner,
+						Repo:          ir.Repo,
+						Name:          fmt.Sprintf("%s/%s", ir.Owner, ir.Repo),
+						Installed:     true,
+						DefaultBranch: "main",
+						Language:      "Go",
+						Visibility:    "Private",
+						Private:       false,
+					}
 				}
-				lang := ur.Language
-				if lang == "" {
-					lang = "Go"
-				}
-				vis := "Public"
-				if ur.Private {
-					vis = "Private"
-				}
-				repoItemsMap[key] = SetupRepoItem{
-					Owner:         ur.Owner,
-					Repo:          ur.Repo,
-					Name:          fmt.Sprintf("%s/%s", ur.Owner, ur.Repo),
-					Installed:     isInstalled,
-					DefaultBranch: branch,
-					Language:      lang,
-					Visibility:    vis,
-					Private:       ur.Private,
-				}
-			}
-		} else {
-			slog.Warn("failed to fetch user repositories from GitHub", "username", username, "error", uErr)
-		}
-	}
-
-	for _, ir := range installedRepos {
-		key := strings.ToLower(fmt.Sprintf("%s/%s", ir.Owner, ir.Repo))
-		if existing, ok := repoItemsMap[key]; ok {
-			existing.Installed = true
-			repoItemsMap[key] = existing
-		} else {
-			repoItemsMap[key] = SetupRepoItem{
-				Owner:         ir.Owner,
-				Repo:          ir.Repo,
-				Name:          fmt.Sprintf("%s/%s", ir.Owner, ir.Repo),
-				Installed:     true,
-				DefaultBranch: "main",
-				Language:      "Go",
-				Visibility:    "Installed",
-				Private:       false,
 			}
 		}
 	}
@@ -407,14 +432,58 @@ func (s *Server) HandleSetupRepos(w http.ResponseWriter, r *http.Request) {
 		sortedRepos = append(sortedRepos, item)
 	}
 	sort.Slice(sortedRepos, func(i, j int) bool {
-		if sortedRepos[i].Installed != sortedRepos[j].Installed {
-			return sortedRepos[i].Installed
-		}
 		return sortedRepos[i].Name < sortedRepos[j].Name
 	})
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"repos": sortedRepos,
+	})
+}
+
+// HandleInstalledRepos returns a lightweight list of installed repo slugs ("owner/repo").
+// Used by the dashboard's Setup Project repo picker to mark which repos have the App installed.
+// Refreshes from GitHub App, writes to DB, then returns DB records.
+// Engine uses only GitHub App token — never the user's OAuth token.
+func (s *Server) HandleInstalledRepos(w http.ResponseWriter, r *http.Request) {
+	if s.githubApp == nil {
+		s.LoadGitHubAppConfig(r.Context())
+	}
+
+	// Refresh from GitHub App installations
+	if s.githubApp != nil {
+		if appInstalls, err := s.githubApp.ListAppInstallations(r.Context()); err == nil {
+			for _, inst := range appInstalls {
+				if s.db != nil {
+					_ = s.db.SaveInstallation(r.Context(), inst.ID, inst.AccountLogin, inst.AccountID, inst.AccountType)
+				}
+				if repoInfos, rErr := s.githubApp.ListInstallationRepositories(r.Context(), inst.ID); rErr == nil {
+					var dbRepos []db.InstallationRepo
+					for _, rInfo := range repoInfos {
+						dbRepos = append(dbRepos, db.InstallationRepo{Owner: rInfo.Owner, Repo: rInfo.Repo})
+					}
+					if s.db != nil {
+						_ = s.db.SaveInstallationRepos(r.Context(), inst.ID, dbRepos)
+					}
+				}
+			}
+		}
+	}
+
+	// Return slug list from DB
+	var installedSlugs []string
+	if s.db != nil {
+		if list, err := s.db.GetAllInstallationRepos(r.Context()); err == nil {
+			for _, ir := range list {
+				installedSlugs = append(installedSlugs, strings.ToLower(fmt.Sprintf("%s/%s", ir.Owner, ir.Repo)))
+			}
+		}
+	}
+	if installedSlugs == nil {
+		installedSlugs = []string{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"installed_repos": installedSlugs,
 	})
 }
 
