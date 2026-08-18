@@ -334,7 +334,7 @@ func (c *AppConfig) ListAppInstallations(ctx context.Context) ([]AppInstallation
 			allInstallations = append(allInstallations, AppInstallationInfo{
 				ID:           item.ID,
 				AccountLogin: item.Account.Login,
-				AccountID:   item.Account.ID,
+				AccountID:    item.Account.ID,
 				AccountType:  item.Account.Type,
 			})
 		}
