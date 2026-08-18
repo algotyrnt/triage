@@ -485,6 +485,64 @@ export class EngineClient {
       return { success: false, error: e?.message || 'Network error' };
     }
   }
+
+  async analyzePanic(params: {
+    panicMessage: string;
+    rawStackTrace: string;
+    triggeringFile: string;
+    astCode: string;
+  }): Promise<{
+    success: boolean;
+    rootCause?: string;
+    explanation?: string;
+    severity?: string;
+    recommendedFix?: string;
+    error?: string;
+  }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/gemini/analyze-panic`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return {
+          success: true,
+          rootCause: data.rootCause,
+          explanation: data.explanation,
+          severity: data.severity || 'CRITICAL',
+          recommendedFix: data.recommendedFix,
+        };
+      }
+      return { success: false, error: data.error || `Server error (${res.status})` };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to connect to AI engine' };
+    }
+  }
+
+  async generateFixPatch(params: {
+    triggeringFile: string;
+    panicMessage: string;
+    astCode: string;
+    rootCause?: string;
+    stackTrace?: string;
+  }): Promise<{ success: boolean; patch?: string; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/gemini/generate-patch`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.patch) {
+        return { success: true, patch: data.patch };
+      }
+      return { success: false, error: data.error || `Server error (${res.status})` };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to connect to AI engine' };
+    }
+  }
 }
 
 export const engineClient = new EngineClient();
