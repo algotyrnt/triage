@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,17 +23,27 @@ type FileFetcher interface {
 }
 
 // NormalizeMonorepoPath combines rootDir and filePath if rootDir is specified
-// and filePath does not already contain rootDir as a prefix.
+// and filePath does not already contain rootDir as a prefix. It also strips any
+// developer host absolute paths leading up to rootDir.
 func NormalizeMonorepoPath(filePath, rootDir string) string {
 	cleanFile := strings.TrimPrefix(filepath.ToSlash(filePath), "/")
 	cleanRoot := strings.Trim(strings.TrimSpace(filepath.ToSlash(rootDir)), "/")
-	if cleanRoot == "" || cleanRoot == "." {
-		return cleanFile
+
+	if cleanRoot != "" && cleanRoot != "." {
+		// If cleanFile contains cleanRoot/ somewhere in an absolute path, extract from cleanRoot
+		if idx := strings.Index(cleanFile, cleanRoot+"/"); idx != -1 {
+			return cleanFile[idx:]
+		}
+		if cleanFile == cleanRoot {
+			return cleanFile
+		}
+		if strings.HasPrefix(cleanFile, cleanRoot+"/") {
+			return cleanFile
+		}
+		return cleanRoot + "/" + cleanFile
 	}
-	if strings.HasPrefix(cleanFile, cleanRoot+"/") || cleanFile == cleanRoot {
-		return cleanFile
-	}
-	return cleanRoot + "/" + cleanFile
+
+	return cleanFile
 }
 
 // OnDemandFetcher fetches source files on-demand from GitHub (via installation tokens)
@@ -94,7 +104,7 @@ func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, co
 			}
 			if err != nil {
 				lastErr = err
-				log.Printf("[AST FETCH] GitHub App fetch failed for %s/%s@%s %s: %v", owner, repo, commit, candidate, err)
+				slog.Debug("GitHub App fetch attempt failed", "owner", owner, "repo", repo, "commit", commit, "candidate", candidate, "error", err)
 			}
 		}
 
