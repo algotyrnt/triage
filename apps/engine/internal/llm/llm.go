@@ -7,7 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"go/format"
+	"log/slog"
 	"strings"
 
 	"google.golang.org/genai"
@@ -70,7 +71,7 @@ Respond ONLY with a valid JSON object with the following schema:
 
 	var analysis AnalysisResult
 	if err := json.Unmarshal([]byte(rawText), &analysis); err != nil {
-		log.Printf("[GEMINI UNMARSHAL ERROR] Raw response: %s", rawText)
+		slog.Error("failed to unmarshal Gemini response JSON", "error", err, "raw_response", rawText)
 		return nil, fmt.Errorf("failed to parse Gemini JSON response: %w", err)
 	}
 
@@ -133,6 +134,76 @@ Instructions:
 		rawText = strings.TrimSuffix(rawText, "```")
 	}
 	rawText = strings.TrimSpace(rawText)
+
+	return rawText, nil
+}
+
+// ApplyFixToFile merges the suggested patch / panic fix into the complete source file and returns the full updated file content.
+func ApplyFixToFile(ctx context.Context, file, currentContent, panicMessage, astSnippet, stackTrace, rootCause, suggestedFix, patch, apiKey, modelName string) (string, error) {
+	if apiKey == "" {
+		return "", fmt.Errorf("GEMINI_API_KEY is missing or empty")
+	}
+	if modelName == "" {
+		return "", fmt.Errorf("GEMINI_MODEL_NAME is missing or empty")
+	}
+
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey: apiKey,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize Gemini client: %w", err)
+	}
+
+	prompt := fmt.Sprintf(`You are an expert Go systems engineer.
+You are tasked with applying a bugfix for a Go panic into the full source code file.
+
+### File Path:
+%s
+
+### Panic Message:
+%s
+
+### Root Cause:
+%s
+
+### Recommended Solution:
+%s
+
+### Suggested Patch / Fix:
+%s
+
+### Existing Full File Content:
+%s
+
+Instructions:
+1. Apply the bugfix to the file accurately and cleanly.
+2. Ensure valid Go syntax, correct imports, and proper formatting.
+3. Return ONLY the complete, updated Go file source code. Do NOT wrap in markdown backticks and do NOT add conversational explanations.`, file, panicMessage, rootCause, suggestedFix, patch, currentContent)
+
+	resp, err := client.Models.GenerateContent(ctx, modelName, genai.Text(prompt), nil)
+	if err != nil {
+		return "", fmt.Errorf("gemini apply fix failed: %w", err)
+	}
+
+	rawText := strings.TrimSpace(resp.Text())
+	if strings.HasPrefix(rawText, "```go") {
+		rawText = strings.TrimPrefix(rawText, "```go")
+		rawText = strings.TrimSuffix(rawText, "```")
+	} else if strings.HasPrefix(rawText, "```") {
+		rawText = strings.TrimPrefix(rawText, "```")
+		rawText = strings.TrimSuffix(rawText, "```")
+	}
+	rawText = strings.TrimSpace(rawText)
+
+	// Format code using standard gofmt conventions (which includes POSIX trailing newline)
+	if formatted, err := format.Source([]byte(rawText)); err == nil {
+		return string(formatted), nil
+	}
+
+	// Fallback guarantee: ensure file ends with standard newline
+	if !strings.HasSuffix(rawText, "\n") {
+		rawText += "\n"
+	}
 
 	return rawText, nil
 }
