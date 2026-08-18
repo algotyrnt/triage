@@ -13,19 +13,24 @@ import {
   Clock,
   Code2,
   Sparkles,
-  Copy,
-  Check,
-  RefreshCw,
+  Play,
+  Terminal,
   FileCode,
+  Check,
+  Copy,
   ArrowLeft,
   ChevronRight,
   ExternalLink,
+  Loader2,
+  Plus,
 } from 'lucide-react';
+import { engineClient } from '@/services/engineClient';
 
 interface IncidentDetailPageProps {
   incident: Incident;
   allIncidents: Incident[];
   onSelectIncident: (id: string) => void;
+  onIncidentUpdated?: (incident: Incident) => void;
   onNavigate: (screen: ScreenId) => void;
 }
 
@@ -33,12 +38,14 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
   incident,
   allIncidents,
   onSelectIncident,
+  onIncidentUpdated,
   onNavigate,
 }) => {
   const [analyzing, setAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(incident.geminiAnalysis);
   const [patchCode, setPatchCode] = useState<string | null>(incident.suggestedPatch || null);
   const [generatingPatch, setGeneratingPatch] = useState(false);
+  const [creatingIssue, setCreatingIssue] = useState(false);
   const [copiedPatch, setCopiedPatch] = useState(false);
   const [copiedStack, setCopiedStack] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -49,6 +56,28 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     setPatchCode(incident.suggestedPatch || null);
     setAnalysisError(null);
   }, [incident.id, incident.geminiAnalysis, incident.suggestedPatch]);
+
+  const handleCreateIssue = async () => {
+    setCreatingIssue(true);
+    setAnalysisError(null);
+    try {
+      const res = await engineClient.createIncidentIssue(incident.id);
+      if (res.success && res.issue_number && res.issue_url) {
+        const updated: Incident = {
+          ...incident,
+          githubIssueNumber: res.issue_number,
+          githubIssueUrl: res.issue_url,
+        };
+        if (onIncidentUpdated) onIncidentUpdated(updated);
+      } else {
+        setAnalysisError(res.error || 'Failed to create GitHub Issue');
+      }
+    } catch (e: any) {
+      setAnalysisError(e?.message || 'Error creating GitHub Issue');
+    } finally {
+      setCreatingIssue(false);
+    }
+  };
 
   // Trigger Gemini AI Root Cause Analysis
   const handleRunAiAnalysis = async () => {
@@ -173,6 +202,21 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 font-mono text-xs">
+          {!incident.githubIssueNumber && (
+            <button
+              onClick={handleCreateIssue}
+              disabled={creatingIssue}
+              className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {creatingIssue ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Github className="w-3.5 h-3.5" />
+              )}
+              <span>{creatingIssue ? 'Creating Issue...' : 'Create GitHub Issue'}</span>
+            </button>
+          )}
+
           <button
             onClick={handleRunAiAnalysis}
             disabled={analyzing}

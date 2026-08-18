@@ -130,6 +130,8 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
               goroutineId: 'goroutine [running]',
               panicMessage: item.panic_message,
               rawStackTrace: item.stack_trace,
+              githubIssueUrl: item.github_issue_url || undefined,
+              githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
               astSnippet: {
                 functionName: 'main',
                 file: item.file,
@@ -307,6 +309,9 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
               incident={selectedIncident}
               allIncidents={incidents}
               onSelectIncident={(id) => setSelectedIncidentId(id)}
+              onIncidentUpdated={(updated) =>
+                setIncidents((prev) => prev.map((inc) => (inc.id === updated.id ? updated : inc)))
+              }
               onNavigate={(screen) => setCurrentScreen(screen)}
             />
           ) : (

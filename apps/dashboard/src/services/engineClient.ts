@@ -462,6 +462,29 @@ export class EngineClient {
       return false;
     }
   }
+
+  async createIncidentIssue(
+    incidentId: string,
+  ): Promise<{ success: boolean; issue_number?: number; issue_url?: string; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/incidents/create-issue`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ incident_id: incidentId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.github_issue) {
+        return {
+          success: true,
+          issue_number: data.github_issue.number,
+          issue_url: data.github_issue.html_url,
+        };
+      }
+      return { success: false, error: data.error || 'Failed to create GitHub issue' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
 }
 
 export const engineClient = new EngineClient();
