@@ -34,13 +34,14 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Test Service running. Call /crash to trigger panic.")
+		fmt.Fprintln(w, "Test Service running.")
 	})
 
 	mux.HandleFunc("/crash", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Triggering nil pointer dereference panic...")
-		var ptr *int
-		*ptr = 42 // Nil pointer dereference panic
+		log.Println("Handling /crash endpoint safely...")
+		ptr := new(int)
+		*ptr = 42
+		fmt.Fprintf(w, "Handled safely with pointer value: %d\n", *ptr)
 	})
 
 	wrappedHandler := triage.Middleware(apiKey, engineURL)(mux)
