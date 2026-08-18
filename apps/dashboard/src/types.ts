@@ -32,6 +32,8 @@ export interface Incident {
   rawStackTrace: string;
   githubIssueUrl?: string;
   githubIssueNumber?: number; // e.g. 104
+  githubPrUrl?: string;
+  githubPrNumber?: number; // e.g. 12
   astSnippet: {
     functionName: string; // e.g. "GetProfile"
     file: string;
@@ -162,4 +164,5 @@ export interface RepositoryItem {
   branch?: string;
   lang?: string;
   visibility?: string;
+  private?: boolean;
 }
