@@ -44,6 +44,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
   // Step 2: Install App
   const [appInstalled, setAppInstalled] = useState(false);
+  const [appSlug, setAppSlug] = useState('');
   const [repos, setRepos] = useState<RepositoryItem[]>([]);
   const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('all');
 
@@ -63,7 +64,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
   const filteredRepos = useMemo(() => {
     if (selectedOwnerFilter === 'all') return repos;
-    return repos.filter((r) => r.owner && r.owner.toLowerCase() === selectedOwnerFilter.toLowerCase());
+    return repos.filter(
+      (r) => r.owner && r.owner.toLowerCase() === selectedOwnerFilter.toLowerCase(),
+    );
   }, [repos, selectedOwnerFilter]);
 
   // Step 3: OAuth
@@ -109,6 +112,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     try {
       const status = await engineClient.getSetupStatus();
       if (status.github_app) setAppCreated(true);
+      if ((status as any).app_slug) setAppSlug((status as any).app_slug);
       if (status.installation) {
         setAppInstalled(true);
         fetchRepos();
@@ -170,14 +174,26 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     }
   };
 
-  const handleInstallApp = async () => {
+  const handleInstallApp = async (customSlug?: string) => {
     setLoading(true);
     setError(null);
     try {
+      const slugToUse = (typeof customSlug === 'string' && customSlug.trim()) || appSlug.trim();
+      if (slugToUse) {
+        window.location.href = `https://github.com/apps/${slugToUse}/installations/new`;
+        return;
+      }
       const { url } = await engineClient.getInstallUrl();
-      window.location.href = url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        throw new Error('Install URL was empty. Please provide the GitHub App slug below.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to get install URL');
+      logger.error('Failed to get install URL', err);
+      setError(
+        err.message || 'Failed to get install URL. Make sure the GitHub App was created in Step 1.',
+      );
       setLoading(false);
     }
   };
@@ -398,7 +414,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                     </h3>
                     <button
                       type="button"
-                      onClick={handleInstallApp}
+                      onClick={() => handleInstallApp()}
                       className="text-xs font-mono text-slate-700 hover:text-black flex items-center gap-1 cursor-pointer font-medium"
                     >
                       <PlusCircle className="w-3.5 h-3.5" />
@@ -432,7 +448,9 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                           }`}
                         >
                           <Building2 className="w-3 h-3" />
-                          <span>{org} ({orgCounts[org]})</span>
+                          <span>
+                            {org} ({orgCounts[org]})
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -477,27 +495,32 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                       No repositories granted yet. Click above to grant repository access.
                     </p>
                   )}
+
+                  <p className="text-[11px] font-mono text-slate-500 pt-1">
+                    Tip: You only need to install on a single repository to continue. You can grant
+                    access to more repositories at any time.
+                  </p>
                 </div>
 
                 <button
                   onClick={() => setCurrentStep(3)}
-                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
+                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
                 >
                   Continue to OAuth Setup <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             ) : (
               <button
-                onClick={handleInstallApp}
+                onClick={() => handleInstallApp()}
                 disabled={loading}
-                className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
+                className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <ExternalLink className="w-4 h-4" />
                 )}
-                {loading ? 'Preparing Install...' : 'Install GitHub App'}
+                {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
               </button>
             )}
           </div>
