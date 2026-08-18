@@ -19,6 +19,7 @@ import { SettingsPage } from '@/components/screens/SettingsPage';
 import { SetupWizardPage } from '@/components/screens/SetupWizardPage';
 
 import { engineClient } from '@/services/engineClient';
+import { logger } from '@/services/logger';
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 type ToastVariant = 'success' | 'error';
@@ -44,7 +45,37 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
   React.useEffect(() => {
     async function bootstrap() {
       try {
-        // Step 1: Check if instance is configured
+        // Step 1: Immediately extract and persist OAuth callback token from URL
+        const params = new URLSearchParams(window.location.search);
+        const urlToken = params.get('token');
+        const setupStep = params.get('setup_step');
+
+        if (urlToken) {
+          localStorage.setItem('triage_session', urlToken);
+          engineClient.setAuthToken(urlToken);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+
+        const storedToken = urlToken || localStorage.getItem('triage_session');
+
+        // Step 2: If we have a stored token, verify the user session
+        let authenticatedUser: any = null;
+        if (storedToken) {
+          const sessionResult = await engineClient.verifySession(storedToken);
+          if (sessionResult.valid && sessionResult.user) {
+            authenticatedUser = sessionResult.user;
+            engineClient.setAuthToken(storedToken);
+            setCurrentUser({
+              username: authenticatedUser.username,
+              avatarUrl: authenticatedUser.avatar_url,
+            });
+          } else {
+            localStorage.removeItem('triage_session');
+            engineClient.setAuthToken(null);
+          }
+        }
+
+        // Step 3: Check setup status
         const setupStatus = await engineClient.getSetupStatus();
         if (!setupStatus.configured) {
           setCurrentScreen('setup');
@@ -52,50 +83,20 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
           return;
         }
 
-        // Step 2: Check for OAuth callback token in URL
-        const params = new URLSearchParams(window.location.search);
-        const urlToken = params.get('token');
-        const authStatus = params.get('auth');
-
-        if (urlToken && authStatus === 'success') {
-          // Store token from OAuth callback
-          localStorage.setItem('triage_session', urlToken);
-          // Clean URL
-          window.history.replaceState({}, '', window.location.pathname);
-        }
-
-        // Step 3: Check for setup wizard redirect params
-        const setupStep = params.get('setup_step');
         if (setupStep) {
           setCurrentScreen('setup');
           setIsBootstrapping(false);
           return;
         }
 
-        // Step 4: Validate existing session
-        const storedToken = urlToken || localStorage.getItem('triage_session');
-        if (!storedToken) {
+        // Step 4: If not authenticated, go to login page
+        if (!authenticatedUser) {
           setCurrentScreen('login');
           setIsBootstrapping(false);
           return;
         }
 
-        const sessionResult = await engineClient.verifySession(storedToken);
-        if (!sessionResult.valid || !sessionResult.user) {
-          localStorage.removeItem('triage_session');
-          setCurrentScreen('login');
-          setIsBootstrapping(false);
-          return;
-        }
-
-        // Session is valid — set user
-        engineClient.setAuthToken(storedToken);
-        setCurrentUser({
-          username: sessionResult.user.username,
-          avatarUrl: sessionResult.user.avatar_url,
-        });
-
-        // Step 5: Load projects
+        // Step 5: Authenticated — Load projects & incidents
         const projects = await engineClient.getProjects();
         if (projects && projects.length > 0) {
           const firstProject = projects[0];
@@ -132,6 +133,9 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
               rawStackTrace: item.stack_trace,
               githubIssueUrl: item.github_issue_url || undefined,
               githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
+              githubPrUrl: item.github_pr_url || undefined,
+              githubPrNumber: item.github_pr_number ? Number(item.github_pr_number) : undefined,
+              suggestedPatch: item.suggested_patch || undefined,
               astSnippet: {
                 functionName: 'main',
                 file: item.file,
@@ -154,15 +158,23 @@ export default function App({ initialScreen = 'dashboard' }: { initialScreen?: S
                 : undefined,
             }));
             setIncidents(mapped);
-            if (mapped[0]) setSelectedIncidentId(mapped[0].id);
+            const targetIncidentId = params.get('incident') || params.get('incident_id');
+            if (targetIncidentId && mapped.some((i) => i.id === targetIncidentId)) {
+              setSelectedIncidentId(targetIncidentId);
+              setCurrentScreen('incident_detail');
+            } else {
+              if (mapped[0]) setSelectedIncidentId(mapped[0].id);
+              setCurrentScreen('dashboard');
+            }
+          } else {
+            setCurrentScreen('dashboard');
           }
-          setCurrentScreen('dashboard');
         } else {
           // No projects — go to onboarding
           setCurrentScreen('new');
         }
       } catch (e) {
-        console.warn('Bootstrap error:', e);
+        logger.warn('Bootstrap error:', e);
         setCurrentScreen('login');
       } finally {
         setIsBootstrapping(false);
