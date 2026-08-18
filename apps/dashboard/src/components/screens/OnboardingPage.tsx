@@ -51,7 +51,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const [loadingModules, setLoadingModules] = useState(false);
   const [generatedKey, setGeneratedKey] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
-  const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('personal');
+  const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('all');
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [verifyingInstall, setVerifyingInstall] = useState(false);
   const [repos, setRepos] = useState<RepositoryItem[]>([]);
@@ -103,27 +103,43 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     });
   }, [repos, selectedOwnerFilter, searchQuery, username]);
 
-  const fetchUserGitHubRepos = async (silent = false) => {
-    if (!silent) setLoadingRepos(true);
+  const loadRepos = async () => {
+    setLoadingRepos(true);
     try {
-      const fetchedRepos = await engineClient.getSetupRepos(username);
-      if (Array.isArray(fetchedRepos)) {
-        setRepos(fetchedRepos);
-        if (!selectedRepo && fetchedRepos.length > 0) {
-          setSelectedRepo(
-            fetchedRepos[0].name || `${fetchedRepos[0].owner}/${fetchedRepos[0].repo}`,
-          );
-        }
+      // 1. Fetch which repos have the GitHub App installed from the engine DB
+      const installedRepos = await engineClient.getInstalledRepos();
+
+      // 2. Map engine format to UI format
+      const mergedRepos: RepositoryItem[] = installedRepos.map((r: any) => ({
+        owner: r.owner,
+        repo: r.repo,
+        name: r.name,
+        branch: r.branch || 'main',
+        lang: r.lang || 'Unknown',
+        visibility: r.visibility || 'Private',
+        private: r.private || false,
+        installed: true,
+      }));
+
+      // Sort alphabetically
+      mergedRepos.sort((a, b) => {
+        return (a.name || '').localeCompare(b.name || '');
+      });
+
+      setRepos(mergedRepos);
+
+      if (!selectedRepo && mergedRepos.length > 0) {
+        setSelectedRepo(mergedRepos[0].name || `${mergedRepos[0].owner}/${mergedRepos[0].repo}`);
       }
     } catch (e) {
-      logger.warn('Failed to fetch repositories', e);
+      console.error('Failed to load repositories', e);
     } finally {
-      if (!silent) setLoadingRepos(false);
+      setLoadingRepos(false);
     }
   };
 
   useEffect(() => {
-    fetchUserGitHubRepos();
+    loadRepos();
     engineClient
       .getInstallUrl()
       .then((res) => {
@@ -139,7 +155,9 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
         (r) => (r.name || `${r.owner}/${r.repo}`) === selectedRepo,
       );
       if (!isSelectedPresent) {
-        setSelectedRepo(filteredRepos[0].name || `${filteredRepos[0].owner}/${filteredRepos[0].repo}`);
+        setSelectedRepo(
+          filteredRepos[0].name || `${filteredRepos[0].owner}/${filteredRepos[0].repo}`,
+        );
       }
     }
   }, [filteredRepos, customRepoInput, selectedRepo]);
@@ -210,9 +228,9 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     try {
       const res = await engineClient.checkRepoInstalled(activeOwner, activeRepoName);
       if (res && res.installed) {
-        await fetchUserGitHubRepos(true);
+        await loadRepos();
       } else {
-        await fetchUserGitHubRepos(true);
+        await loadRepos();
       }
     } catch (e) {
       logger.warn('Failed to verify install', e);
@@ -296,6 +314,12 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
       onNavigate('dashboard');
     }
   };
+
+  const appSlugMatch = installUrl?.match(/\/apps\/([^/]+)\/installations/);
+  const appSlug = appSlugMatch ? appSlugMatch[1] : '';
+  const newOrgInstallUrl = appSlug
+    ? `https://github.com/settings/apps/${appSlug}/installations`
+    : installUrl || '';
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
@@ -388,7 +412,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => fetchUserGitHubRepos()}
+                  onClick={() => loadRepos()}
                   disabled={loadingRepos}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-sm text-xs font-mono border border-slate-200 transition-colors"
                   title="Sync repositories from GitHub"
@@ -447,12 +471,28 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
             {/* Account & Organization Filter Tabs */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 px-0.5">
-                <span className="font-bold uppercase tracking-wider text-slate-700">Filter by Account / Organization:</span>
+                <span className="font-bold uppercase tracking-wider text-slate-700">
+                  Filter by Account / Organization:
+                </span>
                 <span>
                   {filteredRepos.length} shown ({installedCount} installed)
                 </span>
               </div>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-mono scrollbar-thin">
+                {/* All Repos */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedOwnerFilter('all')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                    selectedOwnerFilter === 'all'
+                      ? 'bg-black text-white border-black font-bold shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>All ({repos.length})</span>
+                </button>
+
                 {/* Default: User's personal repos */}
                 <button
                   type="button"
@@ -501,20 +541,6 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                     </span>
                   </button>
                 ))}
-
-                {/* All Repos */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedOwnerFilter('all')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all shrink-0 cursor-pointer ${
-                    selectedOwnerFilter === 'all'
-                      ? 'bg-black text-white border-black font-bold shadow-xs'
-                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>All ({repos.length})</span>
-                </button>
               </div>
 
               {/* Search Box */}
@@ -546,14 +572,24 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               <div className="py-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-sm p-6 space-y-3 font-mono text-xs text-slate-600">
                 <p>No repositories matched your search.</p>
                 {installUrl && (
-                  <button
-                    type="button"
-                    onClick={handleOpenInstallApp}
-                    className="inline-flex items-center gap-1.5 bg-black text-white px-3 py-1.5 rounded-sm font-semibold hover:bg-slate-800"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>Install GitHub App on Organization / Repositories</span>
-                  </button>
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleOpenInstallApp}
+                      className="inline-flex items-center gap-1.5 bg-black text-white px-3 py-1.5 rounded-sm font-semibold hover:bg-slate-800"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      <span>Grant Access</span>
+                    </button>
+                    <a
+                      href={newOrgInstallUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-slate-500 hover:text-black font-semibold hover:underline"
+                    >
+                      Install on New Org
+                    </a>
+                  </div>
                 )}
               </div>
             ) : (
@@ -670,6 +706,32 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {installUrl && filteredRepos.length > 0 && (
+              <div className="mt-2 border border-slate-200 flex justify-between items-center bg-white p-2 px-3 rounded-sm shadow-sm">
+                <span className="text-[11px] text-slate-500 font-mono">
+                  Don't see your repository?
+                </span>
+                <div className="flex items-center gap-4">
+                  <a
+                    href={newOrgInstallUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-slate-500 hover:text-black font-semibold hover:underline"
+                  >
+                    Install on New Org
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleOpenInstallApp}
+                    className="inline-flex items-center gap-1.5 text-[11px] text-black font-semibold hover:underline"
+                  >
+                    <PlusCircle className="w-3 h-3" />
+                    <span>Grant Access</span>
+                  </button>
+                </div>
               </div>
             )}
 
