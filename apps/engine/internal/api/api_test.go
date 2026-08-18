@@ -14,10 +14,8 @@ import (
 
 func newTestAPIServer() *Server {
 	return NewServer(Config{
-		SessionSecret: "test-secret-key",
-		AppURL:        "http://localhost:3000",
-		EngineURL:     "http://localhost:8080",
-		Version:       "v0.1.0-test",
+		AppURL:    "http://localhost:3000",
+		EngineURL: "http://localhost:8080",
 	})
 }
 
@@ -34,8 +32,7 @@ func TestServerHealthAndStats(t *testing.T) {
 	}
 
 	var healthRes struct {
-		Status  string `json:"status"`
-		Version string `json:"version"`
+		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&healthRes); err != nil {
 		t.Fatalf("failed to decode health response: %v", err)
@@ -134,25 +131,6 @@ func TestServerDetectModules(t *testing.T) {
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 		t.Fatalf("failed to decode detect modules response: %v", err)
-	}
-}
-
-func TestServerAuthMe(t *testing.T) {
-	s := newTestAPIServer()
-
-	// 1. Missing Authorization header -> 401
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	rec := httptest.NewRecorder()
-	s.HandleAuthMe(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401 without auth header, got %d", rec.Code)
-	}
-
-	// 2. Valid JWT -> 200 with user data
-	token, err := s.ValidateSessionToken("invalid-token")
-	if err == nil || token != nil {
-		t.Fatalf("expected error for invalid token")
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"triage/engine/internal/ast"
@@ -21,28 +22,25 @@ var githubNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_\.\-]+$`)
 
 // Config holds runtime dependencies and configurations for the API server.
 type Config struct {
-	DB            *db.DB
-	GitHubApp     *github.AppConfig
-	ASTManager    *ast.Manager
-	ASTCache      *ast.ASTCache
-	ASTFetcher    *ast.OnDemandFetcher
-	SessionSecret string
-	AppURL        string
-	EngineURL     string
-	Version       string
+	DB         *db.DB
+	GitHubApp  *github.AppConfig
+	ASTManager *ast.Manager
+	ASTCache   *ast.ASTCache
+	ASTFetcher *ast.OnDemandFetcher
+	AppURL     string
+	EngineURL  string
 }
 
 // Server encapsulates HTTP routes and middleware for the Triage Engine.
 type Server struct {
-	db            *db.DB
-	githubApp     *github.AppConfig
-	astManager    *ast.Manager
-	astCache      *ast.ASTCache
-	astFetcher    *ast.OnDemandFetcher
-	sessionSecret string
-	appURL        string
-	engineURL     string
-	version       string
+	db         *db.DB
+	githubApp  *github.AppConfig
+	astManager *ast.Manager
+	astCache   *ast.ASTCache
+	astFetcher *ast.OnDemandFetcher
+	appURL     string
+	engineURL  string
+	appSlug    string
 }
 
 // NewServer initializes a new API server with the provided dependencies.
@@ -59,20 +57,15 @@ func NewServer(cfg Config) *Server {
 	if cfg.EngineURL == "" {
 		cfg.EngineURL = "http://localhost:8080"
 	}
-	if cfg.Version == "" {
-		cfg.Version = "v0.1.0-dev"
-	}
 
 	return &Server{
-		db:            cfg.DB,
-		githubApp:     cfg.GitHubApp,
-		astManager:    cfg.ASTManager,
-		astCache:      cfg.ASTCache,
-		astFetcher:    cfg.ASTFetcher,
-		sessionSecret: cfg.SessionSecret,
-		appURL:        cfg.AppURL,
-		engineURL:     cfg.EngineURL,
-		version:       cfg.Version,
+		db:         cfg.DB,
+		githubApp:  cfg.GitHubApp,
+		astManager: cfg.ASTManager,
+		astCache:   cfg.ASTCache,
+		astFetcher: cfg.ASTFetcher,
+		appURL:     cfg.AppURL,
+		engineURL:  cfg.EngineURL,
 	}
 }
 
@@ -99,6 +92,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/setup/llm", s.withMiddleware(s.HandleSetupLLM))
 	mux.HandleFunc("/api/v1/setup/test", s.withMiddleware(s.HandleSetupTest))
 	mux.HandleFunc("/api/v1/setup/repos", s.withMiddleware(s.HandleSetupRepos))
+	mux.HandleFunc("/api/v1/setup/installed-repos", s.withMiddleware(s.HandleInstalledRepos))
 	mux.HandleFunc("/api/v1/setup/check-repo", s.withMiddleware(s.HandleCheckRepo))
 
 	// Settings & Key management routes
@@ -108,31 +102,48 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/gemini/analyze-panic", s.withMiddleware(s.HandleGeminiAnalyzePanic))
 	mux.HandleFunc("/api/v1/gemini/generate-patch", s.withMiddleware(s.HandleGeminiGeneratePatch))
 
-	// GitHub OAuth authentication routes
-	mux.HandleFunc("/api/v1/auth/github", s.withMiddleware(s.HandleGitHubAuth))
-	mux.HandleFunc("/api/v1/auth/github/callback", s.withMiddleware(s.HandleGitHubCallback))
-	mux.HandleFunc("/api/v1/auth/me", s.withMiddleware(s.HandleAuthMe))
+	// Root handler: seamlessly redirect visitors/setup queries from engine to dashboard
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		dashboardURL := s.ResolveAppURL(r.Context(), r)
+		target := dashboardURL
+		if r.URL.RawQuery != "" {
+			target = fmt.Sprintf("%s?%s", dashboardURL, r.URL.RawQuery)
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+	})
 }
 
-// LoadGitHubAppConfig refreshes the GitHub App credentials from PostgreSQL instance configuration.
+// LoadGitHubAppConfig refreshes the GitHub App credentials and client details from the instance configuration database.
 func (s *Server) LoadGitHubAppConfig(ctx context.Context) {
-	if s.db == nil {
+	if s.db == nil || ctx == nil {
 		return
 	}
+
 	appIDStr, _ := s.db.GetInstanceConfig(ctx, "github_app_id")
 	privateKey, _ := s.db.GetInstanceConfig(ctx, "github_app_private_key")
-	clientID, _ := s.db.GetInstanceConfig(ctx, "github_client_id")
-	clientSecret, _ := s.db.GetInstanceConfig(ctx, "github_client_secret")
-	webhookSecret, _ := s.db.GetInstanceConfig(ctx, "github_webhook_secret")
+	clientID, _ := s.db.GetInstanceConfig(ctx, "github_app_client_id")
+	if clientID == "" {
+		clientID, _ = s.db.GetInstanceConfig(ctx, "github_client_id")
+	}
+	clientSecret, _ := s.db.GetInstanceConfig(ctx, "github_app_client_secret")
+	if clientSecret == "" {
+		clientSecret, _ = s.db.GetInstanceConfig(ctx, "github_client_secret")
+	}
+	webhookSecret, _ := s.db.GetInstanceConfig(ctx, "github_app_webhook_secret")
+	if webhookSecret == "" {
+		webhookSecret, _ = s.db.GetInstanceConfig(ctx, "github_webhook_secret")
+	}
+	if dbSlug, _ := s.db.GetInstanceConfig(ctx, "github_app_slug"); dbSlug != "" {
+		s.appSlug = dbSlug
+	}
 
 	if appIDStr != "" && privateKey != "" {
-		var appID int64
-		for _, c := range appIDStr {
-			if c >= '0' && c <= '9' {
-				appID = appID*10 + int64(c-'0')
-			}
-		}
-		if appID > 0 {
+		appID, err := strconv.ParseInt(strings.TrimSpace(appIDStr), 10, 64)
+		if err == nil && appID > 0 {
 			cfg, err := github.LoadAppConfig(appID, []byte(privateKey), webhookSecret, clientID, clientSecret)
 			if err == nil {
 				s.githubApp = cfg
@@ -141,43 +152,23 @@ func (s *Server) LoadGitHubAppConfig(ctx context.Context) {
 	}
 }
 
-// ResolveAppURL dynamically determines the public self-hosted Dashboard/App URL.
 // ResolveAppURL dynamically determines the public self-hosted Dashboard URL.
 // Priority:
-// 1. Stored DB configuration ("instance_url", "app_url")
-// 2. TRIAGE_DASHBOARD_URL environment variable
+// 1. TRIAGE_DASHBOARD_URL environment variable
+// 2. Stored DB configuration ("instance_url", "app_url")
 // 3. Server configured appURL
-// 4. Request Host header (if r != nil)
-// 5. Default "http://localhost:3000"
+// 4. Default "http://localhost:3000"
 func (s *Server) ResolveAppURL(ctx context.Context, r ...*http.Request) string {
+	if envURL := os.Getenv("TRIAGE_DASHBOARD_URL"); envURL != "" {
+		return strings.TrimRight(envURL, "/")
+	}
+
 	if s.db != nil && ctx != nil {
 		if u, _ := s.db.GetInstanceConfig(ctx, "instance_url"); u != "" {
 			return strings.TrimRight(u, "/")
 		}
 		if u, _ := s.db.GetInstanceConfig(ctx, "app_url"); u != "" {
 			return strings.TrimRight(u, "/")
-		}
-	}
-
-	if envURL := os.Getenv("TRIAGE_DASHBOARD_URL"); envURL != "" {
-		return strings.TrimRight(envURL, "/")
-	}
-
-	if s.appURL != "" && s.appURL != "http://localhost:3000" {
-		return strings.TrimRight(s.appURL, "/")
-	}
-
-	if len(r) > 0 && r[0] != nil {
-		proto := "https"
-		if r[0].TLS == nil && r[0].Header.Get("X-Forwarded-Proto") != "https" {
-			proto = "http"
-		}
-		host := r[0].Header.Get("X-Forwarded-Host")
-		if host == "" {
-			host = r[0].Host
-		}
-		if host != "" {
-			return fmt.Sprintf("%s://%s", proto, host)
 		}
 	}
 
