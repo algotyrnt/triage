@@ -4,9 +4,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,5 +114,71 @@ func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
 	}
 	if resolved2 != expectedPath {
 		t.Errorf("expected resolved path %s, got %s", expectedPath, resolved2)
+	}
+}
+
+func TestProjectKeysRoutes(t *testing.T) {
+	// 1. Test GET /api/v1/projects/keys (empty fallback)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/keys?owner=algotyrnt&repo=triage", nil)
+	rec := httptest.NewRecorder()
+	handleProjectKeysRoute(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var getRes struct {
+		Keys []interface{} `json:"keys"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&getRes); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// 2. Test POST /api/v1/projects/keys (create key)
+	createPayload := map[string]string{
+		"owner": "algotyrnt",
+		"repo":  "test-repo",
+		"name":  "Test Ingestion Key",
+	}
+	body, _ := json.Marshal(createPayload)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/keys", bytes.NewBuffer(body))
+	createRec := httptest.NewRecorder()
+	handleProjectKeysRoute(createRec, createReq)
+
+	if createRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for key creation, got %d", createRec.Code)
+	}
+
+	var createRes struct {
+		Success bool `json:"success"`
+		Key     struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			RawKey    string `json:"raw_key"`
+			KeyMasked string `json:"key_masked"`
+			Status    string `json:"status"`
+		} `json:"key"`
+	}
+	if err := json.NewDecoder(createRec.Body).Decode(&createRes); err != nil {
+		t.Fatalf("failed to decode create key response: %v", err)
+	}
+	if !createRes.Success {
+		t.Errorf("expected success=true in create key response")
+	}
+	if !strings.HasPrefix(createRes.Key.RawKey, "tr_live_") {
+		t.Errorf("expected raw_key to have prefix 'tr_live_', got: %s", createRes.Key.RawKey)
+	}
+
+	// 3. Test POST /api/v1/projects/keys/revoke
+	revokePayload := map[string]string{
+		"key_id": createRes.Key.ID,
+	}
+	revokeBody, _ := json.Marshal(revokePayload)
+	revokeReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/keys/revoke", bytes.NewBuffer(revokeBody))
+	revokeRec := httptest.NewRecorder()
+	handleRevokeProjectKeyRoute(revokeRec, revokeReq)
+
+	if revokeRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for key revoke, got %d", revokeRec.Code)
 	}
 }

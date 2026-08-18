@@ -206,8 +206,10 @@ func main() {
 	http.HandleFunc("/api/v1/setup/repos", corsMiddleware(handleSetupRepos))
 	http.HandleFunc("/api/v1/setup/check-repo", corsMiddleware(handleCheckRepoRoute))
 
-	// Post-setup settings routes
+	// Post-setup settings & key management routes
 	http.HandleFunc("/api/v1/settings/llm", corsMiddleware(handleSettingsLLMRoute))
+	http.HandleFunc("/api/v1/projects/keys", corsMiddleware(handleProjectKeysRoute))
+	http.HandleFunc("/api/v1/projects/keys/revoke", corsMiddleware(handleRevokeProjectKeyRoute))
 
 	// GitHub OAuth authentication routes
 	http.HandleFunc("/api/v1/auth/github", corsMiddleware(handleGitHubAuthRoute))
@@ -713,19 +715,24 @@ func handleProjectsRoute(w http.ResponseWriter, r *http.Request) {
 		rootDir = strings.Trim(strings.TrimSpace(rootDir), "/")
 
 		apiKey := fmt.Sprintf("tr_live_%s_%d", repoName, time.Now().UnixNano())
+		keyMasked := fmt.Sprintf("tr_live_...%s", apiKey[len(apiKey)-4:])
 		if database != nil {
 			k, _, err := database.CreateProject(r.Context(), owner, repoName, rootDir, req.OwnerUsername)
 			if err == nil && k != "" {
 				apiKey = k
+				if len(k) >= 4 {
+					keyMasked = fmt.Sprintf("tr_live_...%s", k[len(k)-4:])
+				}
 			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":  true,
-			"repo":     fmt.Sprintf("%s/%s", owner, repoName),
-			"root_dir": rootDir,
-			"api_key":  apiKey,
+			"success":    true,
+			"repo":       fmt.Sprintf("%s/%s", owner, repoName),
+			"root_dir":   rootDir,
+			"api_key":    apiKey,
+			"key_masked": keyMasked,
 		})
 		return
 	}
@@ -743,6 +750,129 @@ func handleProjectsRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"projects": projects})
+}
+
+func handleProjectKeysRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		owner := r.URL.Query().Get("owner")
+		repo := r.URL.Query().Get("repo")
+		rootDir := r.URL.Query().Get("root_dir")
+
+		if strings.Contains(repo, "/") {
+			parts := strings.Split(repo, "/")
+			owner = parts[0]
+			repo = parts[1]
+		}
+
+		if database == nil {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"keys": []db.APIKeyRecord{}})
+			return
+		}
+
+		keys, err := database.GetAPIKeys(r.Context(), owner, repo, rootDir)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to fetch API keys: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if keys == nil {
+			keys = []db.APIKeyRecord{}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"keys": keys})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var req struct {
+			Repo    string `json:"repo"`
+			Owner   string `json:"owner"`
+			RootDir string `json:"root_dir"`
+			Name    string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON request body", http.StatusBadRequest)
+			return
+		}
+		owner := req.Owner
+		repoName := req.Repo
+		if strings.Contains(req.Repo, "/") {
+			parts := strings.Split(req.Repo, "/")
+			owner = parts[0]
+			repoName = parts[1]
+		}
+		if owner == "" {
+			owner = "algotyrnt"
+		}
+		if repoName == "" {
+			repoName = "triage"
+		}
+
+		if database == nil {
+			rawKey := fmt.Sprintf("tr_live_%s_%d", repoName, time.Now().UnixNano())
+			masked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": true,
+				"key": map[string]interface{}{
+					"id":         fmt.Sprintf("key_%d", time.Now().UnixNano()),
+					"name":       req.Name,
+					"raw_key":    rawKey,
+					"key_masked": masked,
+					"created_at": time.Now().UTC().Format(time.RFC3339),
+					"status":     "ACTIVE",
+				},
+			})
+			return
+		}
+
+		keyRecord, err := database.CreateAPIKey(r.Context(), owner, repoName, req.RootDir, req.Name)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create API key: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"key":     keyRecord,
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func handleRevokeProjectKeyRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		KeyID string `json:"key_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.KeyID == "" {
+		req.KeyID = r.URL.Query().Get("key_id")
+	}
+
+	if req.KeyID == "" {
+		http.Error(w, "Field 'key_id' is required", http.StatusBadRequest)
+		return
+	}
+
+	if database != nil {
+		if err := database.RevokeAPIKey(r.Context(), req.KeyID); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to revoke API key: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+	})
 }
 
 func handleStatsRoute(w http.ResponseWriter, r *http.Request) {
