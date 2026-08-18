@@ -21,8 +21,8 @@ export const FeaturesGrid: React.FC = () => {
   const features = [
     {
       icon: <Code2 className="w-6 h-6 text-indigo-600" />,
-      title: 'AST Node Isolation',
-      desc: 'Extracts only the surrounding *ast.FuncDecl code block enclosing the panicking line using Go’s standard go/parser. Eliminates 94% of irrelevant source code.',
+      title: 'Multi-File Package AST Slicing',
+      desc: 'Extracts the crashing function alongside cross-file receiver structs, referenced types, constructors, and package helpers using Go’s standard go/parser. Eliminates >90% of irrelevant code while preserving full type context.',
       badge: 'go/ast & go/parser',
       tagColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     },
