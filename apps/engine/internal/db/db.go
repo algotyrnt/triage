@@ -60,7 +60,20 @@ type Repository struct {
 	Repo           string    `json:"repo"`
 	RootDir        string    `json:"root_dir,omitempty"`
 	InstallationID int64     `json:"installation_id"`
+	APIKeyMasked   string    `json:"api_key_masked,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+type APIKeyRecord struct {
+	ID           string     `json:"id"`
+	RepositoryID string     `json:"repository_id"`
+	Name         string     `json:"name"`
+	KeyMasked    string     `json:"key_masked"`
+	RawKey       string     `json:"raw_key,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	Status       string     `json:"status"`
 }
 
 type GitHubInstallation struct {
@@ -254,7 +267,21 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	if db.Pool == nil {
 		return []Repository{}, nil
 	}
-	rows, err := db.Pool.Query(ctx, `SELECT id, owner, repo, COALESCE(root_dir, ''), installation_id, created_at FROM repositories ORDER BY created_at DESC`)
+	query := `
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id,
+		       COALESCE((
+		           SELECT k.key_masked
+		           FROM api_keys k
+		           WHERE k.repository_id = r.id
+		             AND (k.revoked_at IS NULL OR k.revoked_at > NOW())
+		           ORDER BY k.created_at DESC
+		           LIMIT 1
+		       ), ''),
+		       r.created_at
+		FROM repositories r
+		ORDER BY r.created_at DESC
+	`
+	rows, err := db.Pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -263,12 +290,165 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	var repos []Repository
 	for rows.Next() {
 		var r Repository
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.APIKeyMasked, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
 	}
 	return repos, nil
+}
+
+func (db *DB) GetProjectByOwnerRepo(ctx context.Context, owner, repo, rootDir string) (*Repository, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+	var r Repository
+	err := db.Pool.QueryRow(ctx, `
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id,
+		       COALESCE((
+		           SELECT k.key_masked
+		           FROM api_keys k
+		           WHERE k.repository_id = r.id
+		             AND (k.revoked_at IS NULL OR k.revoked_at > NOW())
+		           ORDER BY k.created_at DESC
+		           LIMIT 1
+		       ), ''),
+		       r.created_at
+		FROM repositories r
+		WHERE r.owner = $1 AND r.repo = $2 AND COALESCE(r.root_dir, '') = $3
+		LIMIT 1
+	`, owner, repo, cleanRootDir).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.APIKeyMasked, &r.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (db *DB) GetAPIKeys(ctx context.Context, owner, repo, rootDir string) ([]APIKeyRecord, error) {
+	if db.Pool == nil {
+		return []APIKeyRecord{}, nil
+	}
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+
+	var rows pgx.Rows
+	var err error
+
+	if owner != "" && repo != "" {
+		rows, err = db.Pool.Query(ctx, `
+			SELECT k.id, k.repository_id, k.name, k.key_masked, k.created_at, k.revoked_at, k.expires_at,
+			       CASE
+			           WHEN k.revoked_at IS NOT NULL AND k.revoked_at <= NOW() THEN 'REVOKED'
+			           WHEN k.expires_at IS NOT NULL AND k.expires_at <= NOW() THEN 'EXPIRED'
+			           ELSE 'ACTIVE'
+			       END as status
+			FROM api_keys k
+			JOIN repositories r ON k.repository_id = r.id
+			WHERE r.owner = $1 AND r.repo = $2 AND COALESCE(r.root_dir, '') = $3
+			ORDER BY k.created_at DESC
+		`, owner, repo, cleanRootDir)
+	} else {
+		rows, err = db.Pool.Query(ctx, `
+			SELECT k.id, k.repository_id, k.name, k.key_masked, k.created_at, k.revoked_at, k.expires_at,
+			       CASE
+			           WHEN k.revoked_at IS NOT NULL AND k.revoked_at <= NOW() THEN 'REVOKED'
+			           WHEN k.expires_at IS NOT NULL AND k.expires_at <= NOW() THEN 'EXPIRED'
+			           ELSE 'ACTIVE'
+			       END as status
+			FROM api_keys k
+			ORDER BY k.created_at DESC
+		`)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []APIKeyRecord
+	for rows.Next() {
+		var k APIKeyRecord
+		if err := rows.Scan(&k.ID, &k.RepositoryID, &k.Name, &k.KeyMasked, &k.CreatedAt, &k.RevokedAt, &k.ExpiresAt, &k.Status); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
+func (db *DB) CreateAPIKey(ctx context.Context, owner, repo, rootDir, keyName string) (*APIKeyRecord, error) {
+	if db.Pool == nil {
+		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+	tupleStr := fmt.Sprintf("%s/%s:%s", owner, repo, cleanRootDir)
+	tupleHash := sha256.Sum256([]byte(tupleStr))
+	repoID := fmt.Sprintf("repo_%s", hex.EncodeToString(tupleHash[:16]))
+
+	// Ensure repository exists
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO repositories (id, owner, repo, root_dir, installation_id)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (owner, repo, root_dir) DO NOTHING
+	`, repoID, owner, repo, cleanRootDir, 1001)
+	if err != nil {
+		return nil, err
+	}
+
+	keySuffix := repo
+	if cleanRootDir != "" {
+		keySuffix = fmt.Sprintf("%s_%s", repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
+	}
+	rawKey := fmt.Sprintf("tr_live_%s_%d", keySuffix, time.Now().UnixNano())
+	hash := sha256.Sum256([]byte(rawKey))
+	keyHash := hex.EncodeToString(hash[:])
+	keyMasked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
+	keyID := fmt.Sprintf("key_%d", time.Now().UnixNano())
+
+	if keyName == "" {
+		keyName = fmt.Sprintf("Key for %s/%s", owner, repo)
+		if cleanRootDir != "" {
+			keyName = fmt.Sprintf("Key for %s/%s (%s)", owner, repo, cleanRootDir)
+		}
+	}
+
+	now := time.Now().UTC()
+	_, err = db.Pool.Exec(ctx, `
+		INSERT INTO api_keys (id, repository_id, name, key_hash, key_masked, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, keyID, repoID, keyName, keyHash, keyMasked, now)
+	if err != nil {
+		return nil, err
+	}
+
+	return &APIKeyRecord{
+		ID:           keyID,
+		RepositoryID: repoID,
+		Name:         keyName,
+		KeyMasked:    keyMasked,
+		RawKey:       rawKey,
+		CreatedAt:    now,
+		Status:       "ACTIVE",
+	}, nil
+}
+
+func (db *DB) RevokeAPIKey(ctx context.Context, keyID string) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	res, err := db.Pool.Exec(ctx, `
+		UPDATE api_keys
+		SET revoked_at = NOW()
+		WHERE id = $1 AND (revoked_at IS NULL OR revoked_at > NOW())
+	`, keyID)
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return fmt.Errorf("key not found or already revoked")
+	}
+	return nil
 }
 
 func (db *DB) GetRepositoryByAPIKey(ctx context.Context, key string) (*Repository, error) {
