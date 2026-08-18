@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { ScreenId, DetectedModule, RepositoryItem } from '@/types';
 import {
   GitBranch,
@@ -23,8 +23,13 @@ import {
   AlertTriangle,
   Loader2,
   PlusCircle,
+  User,
+  Building2,
+  Lock,
+  Globe,
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
+import { logger } from '@/services/logger';
 
 interface OnboardingPageProps {
   onNavigate: (screen: ScreenId) => void;
@@ -46,6 +51,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const [loadingModules, setLoadingModules] = useState(false);
   const [generatedKey, setGeneratedKey] = useState('');
   const [copiedKey, setCopiedKey] = useState(false);
+  const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('personal');
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [verifyingInstall, setVerifyingInstall] = useState(false);
   const [repos, setRepos] = useState<RepositoryItem[]>([]);
@@ -53,6 +59,49 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const repoRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const username = currentUser?.username || 'algotyrnt';
+
+  const personalReposCount = useMemo(() => {
+    return repos.filter((r) => r.owner && r.owner.toLowerCase() === username.toLowerCase()).length;
+  }, [repos, username]);
+
+  const orgCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of repos) {
+      if (r.owner && r.owner.toLowerCase() !== username.toLowerCase()) {
+        counts[r.owner] = (counts[r.owner] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [repos, username]);
+
+  const availableOrgs = useMemo(() => {
+    return Object.keys(orgCounts).sort((a, b) => a.localeCompare(b));
+  }, [orgCounts]);
+
+  const filteredRepos = useMemo(() => {
+    return repos.filter((r) => {
+      // 1. Account / Org Filter (default: personal user repos)
+      if (selectedOwnerFilter === 'personal') {
+        if (!r.owner || r.owner.toLowerCase() !== username.toLowerCase()) {
+          return false;
+        }
+      } else if (selectedOwnerFilter !== 'all') {
+        if (!r.owner || r.owner.toLowerCase() !== selectedOwnerFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 2. Search Query Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = r.name && r.name.toLowerCase().includes(q);
+        const matchFull = `${r.owner}/${r.repo}`.toLowerCase().includes(q);
+        return matchName || matchFull;
+      }
+
+      return true;
+    });
+  }, [repos, selectedOwnerFilter, searchQuery, username]);
 
   const fetchUserGitHubRepos = async (silent = false) => {
     if (!silent) setLoadingRepos(true);
@@ -67,7 +116,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
         }
       }
     } catch (e) {
-      console.warn('Failed to fetch repositories:', e);
+      logger.warn('Failed to fetch repositories', e);
     } finally {
       if (!silent) setLoadingRepos(false);
     }
@@ -82,6 +131,18 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
       })
       .catch(() => {});
   }, [username]);
+
+  // Sync selected repo when filtered list changes
+  useEffect(() => {
+    if (!customRepoInput && filteredRepos.length > 0) {
+      const isSelectedPresent = filteredRepos.some(
+        (r) => (r.name || `${r.owner}/${r.repo}`) === selectedRepo,
+      );
+      if (!isSelectedPresent) {
+        setSelectedRepo(filteredRepos[0].name || `${filteredRepos[0].owner}/${filteredRepos[0].repo}`);
+      }
+    }
+  }, [filteredRepos, customRepoInput, selectedRepo]);
 
   // Auto-detect Go modules whenever active repo changes
   useEffect(() => {
@@ -114,7 +175,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
           });
         })
         .catch((e) => {
-          if (!cancelled) console.warn('Failed to detect Go modules:', e);
+          if (!cancelled) logger.warn('Failed to detect Go modules:', e);
         })
         .finally(() => {
           if (!cancelled) setLoadingModules(false);
@@ -154,7 +215,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
         await fetchUserGitHubRepos(true);
       }
     } catch (e) {
-      console.warn('Failed to verify install', e);
+      logger.warn('Failed to verify install', e);
     } finally {
       setVerifyingInstall(false);
     }
@@ -198,7 +259,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
         }
       }
     } catch (e) {
-      console.warn('Project registration warning:', e);
+      logger.warn('Project registration warning:', e);
       const storageKey = `triage_key_${activeOwner}_${activeRepoName}_${rootDir}`;
       const existingStoredKey = localStorage.getItem(storageKey);
       if (existingStoredKey) {
@@ -213,13 +274,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     }
   };
 
-  const filteredRepos = repos.filter(
-    (r) =>
-      (r.name && r.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      `${r.owner}/${r.repo}`.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
-
-  const installedCount = repos.filter((r) => r.installed).length;
+  const installedCount = filteredRepos.filter((r) => r.installed).length;
   const activeKey = generatedKey || 'tr_live_fetching_key';
 
   const handleCopy = async () => {
@@ -228,7 +283,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
       setCopiedKey(true);
       setTimeout(() => setCopiedKey(false), 2000);
     } catch (e) {
-      console.error('Failed to copy API key', e);
+      logger.error('Failed to copy API key to clipboard', e);
     }
   };
 
@@ -371,7 +426,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                         : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}
                   >
-                    {isTargetInstalled ? '✓ App Installed' : '⚠ App Setup Required in Step 2'}
+                    {isTargetInstalled ? 'App Installed' : 'App Setup Required in Step 2'}
                   </span>
                 )}
               </div>
@@ -389,21 +444,93 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               </div>
             </div>
 
-            {/* Search Box & Stats */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-mono text-slate-500 px-0.5">
-                <span>All Available Repositories</span>
+            {/* Account & Organization Filter Tabs */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 px-0.5">
+                <span className="font-bold uppercase tracking-wider text-slate-700">Filter by Account / Organization:</span>
                 <span>
-                  {filteredRepos.length} found ({installedCount} installed)
+                  {filteredRepos.length} shown ({installedCount} installed)
                 </span>
               </div>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-mono scrollbar-thin">
+                {/* Default: User's personal repos */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedOwnerFilter('personal')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                    selectedOwnerFilter === 'personal'
+                      ? 'bg-black text-white border-black font-bold shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>@{username} (Personal)</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-sm ${
+                      selectedOwnerFilter === 'personal'
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {personalReposCount}
+                  </span>
+                </button>
+
+                {/* Dynamic Orgs */}
+                {availableOrgs.map((org) => (
+                  <button
+                    key={org}
+                    type="button"
+                    onClick={() => setSelectedOwnerFilter(org)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                      selectedOwnerFilter === org
+                        ? 'bg-black text-white border-black font-bold shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>{org}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-sm ${
+                        selectedOwnerFilter === org
+                          ? 'bg-slate-800 text-white'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {orgCounts[org]}
+                    </span>
+                  </button>
+                ))}
+
+                {/* All Repos */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedOwnerFilter('all')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm border transition-all shrink-0 cursor-pointer ${
+                    selectedOwnerFilter === 'all'
+                      ? 'bg-black text-white border-black font-bold shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>All ({repos.length})</span>
+                </button>
+              </div>
+
+              {/* Search Box */}
+              <div className="relative pt-1">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-3.5 text-slate-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search @${username}'s repositories...`}
+                  placeholder={
+                    selectedOwnerFilter === 'personal'
+                      ? `Search @${username}'s repositories...`
+                      : selectedOwnerFilter === 'all'
+                        ? 'Search all repositories...'
+                        : `Search ${selectedOwnerFilter} repositories...`
+                  }
                   className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-sm text-xs font-mono focus:bg-white focus:outline-none focus:border-black"
                 />
               </div>
@@ -504,6 +631,17 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 text-[11px]">
+                        {repo.private ? (
+                          <span className="flex items-center gap-1 bg-slate-900 text-slate-200 px-2 py-0.5 rounded-sm border border-slate-700 font-semibold text-[10px]">
+                            <Lock className="w-2.5 h-2.5 text-amber-400" />
+                            <span>Private</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-sm border border-slate-200 text-[10px]">
+                            <Globe className="w-2.5 h-2.5 text-slate-400" />
+                            <span>Public</span>
+                          </span>
+                        )}
                         {repo.lang && (
                           <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-sm border border-slate-200">
                             {repo.lang}
