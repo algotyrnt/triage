@@ -13,37 +13,50 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"triage/engine/internal/api"
 )
 
+func newTestServer() *api.Server {
+	return api.NewServer(api.Config{
+		SessionSecret: "test-secret",
+		AppURL:        "http://localhost:3000",
+		EngineURL:     "http://localhost:8080",
+		Version:       "v0.1.0-test",
+	})
+}
+
 func TestIsValidAPIKey(t *testing.T) {
+	s := newTestServer()
 	ctx := context.Background()
 
 	// 1. Unset TRIAGE_API_KEY should fail closed
 	_ = os.Unsetenv("TRIAGE_API_KEY")
-	if isValidAPIKey(ctx, "any_key") {
-		t.Errorf("expected isValidAPIKey to fail closed when TRIAGE_API_KEY is unset")
+	if s.IsValidAPIKey(ctx, "any_key") {
+		t.Errorf("expected IsValidAPIKey to fail closed when TRIAGE_API_KEY is unset")
 	}
 
 	// 2. Empty input key should return false
 	_ = os.Setenv("TRIAGE_API_KEY", "tr_valid_key")
 	defer os.Unsetenv("TRIAGE_API_KEY")
 
-	if isValidAPIKey(ctx, "") {
-		t.Errorf("expected isValidAPIKey to return false for empty key")
+	if s.IsValidAPIKey(ctx, "") {
+		t.Errorf("expected IsValidAPIKey to return false for empty key")
 	}
 
 	// 3. Valid matching key should return true
-	if !isValidAPIKey(ctx, "tr_valid_key") {
-		t.Errorf("expected isValidAPIKey to return true for matching key")
+	if !s.IsValidAPIKey(ctx, "tr_valid_key") {
+		t.Errorf("expected IsValidAPIKey to return true for matching key")
 	}
 
 	// 4. Mismatched key should return false
-	if isValidAPIKey(ctx, "tr_wrong_key") {
-		t.Errorf("expected isValidAPIKey to return false for wrong key")
+	if s.IsValidAPIKey(ctx, "tr_wrong_key") {
+		t.Errorf("expected IsValidAPIKey to return false for wrong key")
 	}
 }
 
 func TestValidateAndResolveFilePath_Symlink(t *testing.T) {
+	s := newTestServer()
 	tmpDir := t.TempDir()
 
 	workspaceDir := filepath.Join(tmpDir, "workspace")
@@ -67,17 +80,18 @@ func TestValidateAndResolveFilePath_Symlink(t *testing.T) {
 		t.Skipf("symlinks not supported on this platform: %v", err)
 	}
 
-	_ = os.Setenv("AST_WORKSPACE_ROOT", workspaceDir)
-	defer os.Unsetenv("AST_WORKSPACE_ROOT")
+	_ = os.Setenv("TRIAGE_WORKSPACE_ROOT", workspaceDir)
+	defer os.Unsetenv("TRIAGE_WORKSPACE_ROOT")
 
 	// Expect validation to reject target because its resolved symlink path lies outside workspace root
-	_, err := validateAndResolveFilePath("symlink.go")
+	_, err := s.ValidateAndResolveFilePath("symlink.go")
 	if err == nil {
 		t.Errorf("expected error for symlink pointing outside workspace root, got nil")
 	}
 }
 
 func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
+	s := newTestServer()
 	tmpDir := t.TempDir()
 	workspaceDir := filepath.Join(tmpDir, "monorepo")
 	backendDir := filepath.Join(workspaceDir, "backend", "pkg", "handler")
@@ -95,11 +109,11 @@ func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
 		expectedPath = evalExpected
 	}
 
-	_ = os.Setenv("AST_WORKSPACE_ROOT", workspaceDir)
-	defer os.Unsetenv("AST_WORKSPACE_ROOT")
+	_ = os.Setenv("TRIAGE_WORKSPACE_ROOT", workspaceDir)
+	defer os.Unsetenv("TRIAGE_WORKSPACE_ROOT")
 
 	// 1. Resolve relative file "pkg/handler/user.go" with rootDir "backend"
-	resolved, err := validateAndResolveFilePath("pkg/handler/user.go", "backend")
+	resolved, err := s.ValidateAndResolveFilePath("pkg/handler/user.go", "backend")
 	if err != nil {
 		t.Fatalf("expected no error resolving monorepo path, got: %v", err)
 	}
@@ -108,7 +122,7 @@ func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
 	}
 
 	// 2. Resolve already prefixed file "backend/pkg/handler/user.go" with rootDir "backend"
-	resolved2, err := validateAndResolveFilePath("backend/pkg/handler/user.go", "backend")
+	resolved2, err := s.ValidateAndResolveFilePath("backend/pkg/handler/user.go", "backend")
 	if err != nil {
 		t.Fatalf("expected no error resolving already-prefixed path, got: %v", err)
 	}
@@ -117,11 +131,46 @@ func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
 	}
 }
 
+func TestValidateAndResolveFilePath_AbsoluteServicePath(t *testing.T) {
+	s := newTestServer()
+	tmpDir := t.TempDir()
+
+	serviceDir := filepath.Join(tmpDir, "test-service")
+	engineDir := filepath.Join(tmpDir, "apps", "engine")
+	if err := os.MkdirAll(serviceDir, 0755); err != nil {
+		t.Fatalf("failed to create test-service dir: %v", err)
+	}
+	if err := os.MkdirAll(engineDir, 0755); err != nil {
+		t.Fatalf("failed to create apps/engine dir: %v", err)
+	}
+
+	serviceMain := filepath.Join(serviceDir, "main.go")
+	engineMain := filepath.Join(engineDir, "main.go")
+	_ = os.WriteFile(serviceMain, []byte("package main\nfunc testService() {}\n"), 0644)
+	_ = os.WriteFile(engineMain, []byte("package main\nfunc engineMain() {}\n"), 0644)
+
+	_ = os.Setenv("TRIAGE_WORKSPACE_ROOT", tmpDir)
+	defer os.Unsetenv("TRIAGE_WORKSPACE_ROOT")
+
+	// Resolving absolute path to test-service/main.go must return test-service/main.go, never apps/engine/main.go
+	resolved, err := s.ValidateAndResolveFilePath(serviceMain)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	evalServiceMain, _ := filepath.EvalSymlinks(serviceMain)
+	if resolved != evalServiceMain {
+		t.Errorf("expected %s, got %s (did it incorrectly resolve to engine main?)", evalServiceMain, resolved)
+	}
+}
+
 func TestProjectKeysRoutes(t *testing.T) {
+	s := newTestServer()
+
 	// 1. Test GET /api/v1/projects/keys (empty fallback)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/keys?owner=algotyrnt&repo=triage", nil)
 	rec := httptest.NewRecorder()
-	handleProjectKeysRoute(rec, req)
+	s.HandleProjectKeys(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
@@ -143,7 +192,7 @@ func TestProjectKeysRoutes(t *testing.T) {
 	body, _ := json.Marshal(createPayload)
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/keys", bytes.NewBuffer(body))
 	createRec := httptest.NewRecorder()
-	handleProjectKeysRoute(createRec, createReq)
+	s.HandleProjectKeys(createRec, createReq)
 
 	if createRec.Code != http.StatusOK {
 		t.Fatalf("expected status 200 for key creation, got %d", createRec.Code)
@@ -176,7 +225,7 @@ func TestProjectKeysRoutes(t *testing.T) {
 	revokeBody, _ := json.Marshal(revokePayload)
 	revokeReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/keys/revoke", bytes.NewBuffer(revokeBody))
 	revokeRec := httptest.NewRecorder()
-	handleRevokeProjectKeyRoute(revokeRec, revokeReq)
+	s.HandleRevokeProjectKey(revokeRec, revokeReq)
 
 	if revokeRec.Code != http.StatusOK {
 		t.Fatalf("expected status 200 for key revoke, got %d", revokeRec.Code)
@@ -184,13 +233,14 @@ func TestProjectKeysRoutes(t *testing.T) {
 }
 
 func TestCreateIncidentIssueRoute(t *testing.T) {
+	s := newTestServer()
+
 	// 1. Test missing incident_id
 	body, _ := json.Marshal(map[string]string{})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/create-issue", bytes.NewBuffer(body))
 	rec := httptest.NewRecorder()
-	handleCreateIncidentIssueRoute(rec, req)
+	s.HandleCreateIncidentIssue(rec, req)
 
-	// Since database is nil during this test, expect service unavailable (503) or bad request (400)
 	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status 400 or 503, got %d", rec.Code)
 	}
@@ -198,7 +248,7 @@ func TestCreateIncidentIssueRoute(t *testing.T) {
 	// 2. Test invalid method GET
 	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/incidents/create-issue", nil)
 	getRec := httptest.NewRecorder()
-	handleCreateIncidentIssueRoute(getRec, getReq)
+	s.HandleCreateIncidentIssue(getRec, getReq)
 
 	if getRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
@@ -206,15 +256,17 @@ func TestCreateIncidentIssueRoute(t *testing.T) {
 }
 
 func TestGeminiRoutes(t *testing.T) {
+	s := newTestServer()
+
 	// 1. Test POST /api/v1/gemini/analyze-panic missing api key
 	_ = os.Unsetenv("GEMINI_API_KEY")
 	body, _ := json.Marshal(map[string]string{
-		"panicMessage": "nil pointer dereference",
+		"panicMessage":   "nil pointer dereference",
 		"triggeringFile": "main.go",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/analyze-panic", bytes.NewBuffer(body))
 	rec := httptest.NewRecorder()
-	handleGeminiAnalyzePanicRoute(rec, req)
+	s.HandleGeminiAnalyzePanic(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", rec.Code)
@@ -227,7 +279,7 @@ func TestGeminiRoutes(t *testing.T) {
 	})
 	patchReq := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/generate-patch", bytes.NewBuffer(patchBody))
 	patchRec := httptest.NewRecorder()
-	handleGeminiGeneratePatchRoute(patchRec, patchReq)
+	s.HandleGeminiGeneratePatch(patchRec, patchReq)
 
 	if patchRec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", patchRec.Code)
@@ -236,7 +288,30 @@ func TestGeminiRoutes(t *testing.T) {
 	// 3. Test method not allowed
 	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/gemini/generate-patch", nil)
 	getRec := httptest.NewRecorder()
-	handleGeminiGeneratePatchRoute(getRec, getReq)
+	s.HandleGeminiGeneratePatch(getRec, getReq)
+
+	if getRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
+	}
+}
+
+func TestCreateIncidentPRRoute(t *testing.T) {
+	s := newTestServer()
+
+	// 1. Test missing incident_id
+	body, _ := json.Marshal(map[string]string{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/create-pr", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	s.HandleCreateIncidentPR(rec, req)
+
+	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 400 or 503, got %d", rec.Code)
+	}
+
+	// 2. Test invalid method GET
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/incidents/create-pr", nil)
+	getRec := httptest.NewRecorder()
+	s.HandleCreateIncidentPR(getRec, getReq)
 
 	if getRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
