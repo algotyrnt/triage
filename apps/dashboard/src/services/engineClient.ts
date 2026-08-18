@@ -39,9 +39,9 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
-const DEFAULT_BASE_URL = (
-  process.env.NEXT_PUBLIC_ENGINE_URL || 'http://localhost:8080/api/v1'
-).replace(/\/telemetry$/, '');
+const rawEngineUrl = process.env.TRIAGE_ENGINE_URL || 'http://localhost:8080';
+const cleanEngineUrl = rawEngineUrl.replace(/\/telemetry\/?$/, '').replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+const DEFAULT_BASE_URL = `${cleanEngineUrl}/api/v1`;
 
 export class EngineClient {
   private baseUrl: string;
@@ -73,8 +73,11 @@ export class EngineClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
+    const token =
+      this.authToken ||
+      (typeof window !== 'undefined' ? localStorage.getItem('triage_session') : null);
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
   }
@@ -472,7 +475,7 @@ export class EngineClient {
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ incident_id: incidentId }),
       });
-      const data = await res.json();
+      const data = await this.safeParseJSON(res);
       if (res.ok && data.success && data.github_issue) {
         return {
           success: true,
@@ -483,6 +486,22 @@ export class EngineClient {
       return { success: false, error: data.error || 'Failed to create GitHub issue' };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  private async safeParseJSON(res: Response): Promise<any> {
+    try {
+      const text = await res.text();
+      if (!text || !text.trim()) {
+        return {};
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { error: text };
+      }
+    } catch (e: any) {
+      return { error: e?.message || 'Failed to read response' };
     }
   }
 
@@ -505,7 +524,7 @@ export class EngineClient {
         headers: this.getAuthHeaders(),
         body: JSON.stringify(params),
       });
-      const data = await res.json();
+      const data = await this.safeParseJSON(res);
       if (res.ok && data.success) {
         return {
           success: true,
@@ -534,11 +553,39 @@ export class EngineClient {
         headers: this.getAuthHeaders(),
         body: JSON.stringify(params),
       });
-      const data = await res.json();
+      const data = await this.safeParseJSON(res);
       if (res.ok && data.success && data.patch) {
         return { success: true, patch: data.patch };
       }
       return { success: false, error: data.error || `Server error (${res.status})` };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to connect to AI engine' };
+    }
+  }
+
+  async createPullRequest(params: {
+    incidentId: string;
+    patchCode?: string;
+  }): Promise<{ success: boolean; pr_number?: number; pr_url?: string; branch?: string; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/incidents/create-pr`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          incident_id: params.incidentId,
+          patch_code: params.patchCode,
+        }),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.success && data.pull_request) {
+        return {
+          success: true,
+          pr_number: data.pull_request.number,
+          pr_url: data.pull_request.html_url,
+          branch: data.pull_request.branch,
+        };
+      }
+      return { success: false, error: data.error || `Failed to create Pull Request (${res.status})` };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to connect to AI engine' };
     }
