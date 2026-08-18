@@ -1,0 +1,10 @@
+--- a/test-service/main.go
++++ b/test-service/main.go
+@@ -40,4 +40,5 @@
+ 		log.Println("Triggering nil pointer dereference panic...")
+-		var ptr *int
+-		*ptr = 42
++		val := 42
++		ptr := &val
++		_ = *ptr
+ 	})
