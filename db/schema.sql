@@ -76,8 +76,11 @@ CREATE TABLE IF NOT EXISTS incidents (
   ast_snippet         TEXT,
   root_cause          TEXT,
   suggested_fix       TEXT,
+  suggested_patch     TEXT,
   github_issue_url    TEXT,
   github_issue_number INT,
+  github_pr_url       TEXT,
+  github_pr_number    INT,
   created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -143,3 +146,15 @@ CREATE TABLE IF NOT EXISTS installation_repos (
   created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT unique_install_repo UNIQUE (installation_id, owner, repo)
 );
+
+-- ---------------------------------------------------------------------------
+-- 9. Performance Indexes
+-- ---------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_repository_id ON incidents (repository_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents (status);
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys (key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_repository_id ON api_keys (repository_id);
+CREATE INDEX IF NOT EXISTS idx_repositories_owner_repo ON repositories (owner, repo);
+CREATE INDEX IF NOT EXISTS idx_installation_repos_inst ON installation_repos (installation_id);
+CREATE INDEX IF NOT EXISTS idx_installation_repos_owner_repo ON installation_repos (owner, repo);
