@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
+import { logger } from '@/services/logger';
 
 interface SettingsPageProps {
   apiKeys?: ApiKey[];
@@ -109,7 +110,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       });
       setKeysList(merged);
     } catch (e) {
-      console.warn('Failed to load project keys', e);
+      logger.warn('Failed to load project keys', e);
     } finally {
       setLoadingKeys(false);
     }
@@ -690,7 +691,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         setGeneralSaved(true);
                         setTimeout(() => setGeneralSaved(false), 2500);
                       } catch (err) {
-                        console.error('Failed to save project attributes:', err);
+                        logger.error('Failed to save project attributes', err);
                       } finally {
                         setSavingGeneral(false);
                       }
@@ -700,7 +701,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     {savingGeneral
                       ? 'Saving...'
                       : generalSaved
-                        ? '✓ Saved'
+                        ? 'Saved'
                         : 'Save Project Attributes'}
                   </button>
                 </div>
