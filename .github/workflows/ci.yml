@@ -4,9 +4,16 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  format-check:
-    name: Code Formatting & Lint Checks
+  engine:
+    name: apps/engine
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -15,70 +22,23 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: "1.26"
           check-latest: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Check Go Formatting
-        run: |
-          UNFORMATTED=$(gofmt -l .)
-          if [ -n "$UNFORMATTED" ]; then
-            echo "Unformatted Go files detected:"
-            echo "$UNFORMATTED"
-            exit 1
-          fi
-
-      - name: Check Web Formatting
-        working-directory: apps/web
-        run: |
-          bun install --frozen-lockfile
-          bun run format:check
-
-      - name: Check Dashboard Formatting
-        working-directory: apps/dashboard
-        run: |
-          bun install --frozen-lockfile
-          bun run format:check
-
-  test-go:
-    name: Go Engine, SDK & Services
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-          check-latest: true
+      - name: Check Go Formatting & Vet
+        run: make lint-go
 
       - name: Verify Engine
-        working-directory: apps/engine
-        run: |
-          go vet ./...
-          go build ./...
-          go test -v ./...
+        run: make test-engine
 
       - name: Verify SDK
-        working-directory: sdk/go
-        run: |
-          go vet ./...
-          go build ./...
-          go test -v ./...
+        run: make test-sdk
 
       - name: Verify Test Service
-        working-directory: test-service
-        run: |
-          go vet ./...
-          go build ./...
+        run: make test-service-build
 
-  build-apps:
-    name: Frontend Applications Build
+  web:
+    name: apps/web
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -89,14 +49,34 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Build Web (Astro)
+      - name: Install Dependencies
         working-directory: apps/web
-        run: |
-          bun install --frozen-lockfile
-          bun run build
+        run: bun install --frozen-lockfile
 
-      - name: Build Dashboard (Next.js)
+      - name: Check Formatting
+        run: make lint-web
+
+      - name: Build Web
+        run: make build-web
+
+  dashboard:
+    name: apps/dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
         working-directory: apps/dashboard
-        run: |
-          bun install --frozen-lockfile
-          bun run build
+        run: bun install --frozen-lockfile
+
+      - name: Check Formatting
+        run: make lint-dashboard
+
+      - name: Build Dashboard
+        run: make build-dashboard
