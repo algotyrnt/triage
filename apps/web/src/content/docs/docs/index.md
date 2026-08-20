@@ -24,6 +24,16 @@ Welcome to the **triage** technical documentation.
   <span>Integrate Triage middleware into standard net/http, Chi, Gin, Echo, or Fiber.</span>
 </a>
 
+<a href="/docs/github-integration" class="doc-card">
+  <strong>GitHub App & PR Automation</strong>
+  <span>Set up automated GitHub issues and 1-click bugfix Pull Request generation.</span>
+</a>
+
+<a href="/docs/api-reference" class="doc-card">
+  <strong>Engine REST API Reference</strong>
+  <span>Complete REST API specifications for telemetry, projects, and Gemini AI.</span>
+</a>
+
 <a href="/docs/ast-engine" class="doc-card">
   <strong>AST Engine Internals</strong>
   <span>Explore the Go parser, *ast.FuncDecl node extraction, and 3-tier caching.</span>
@@ -37,6 +47,11 @@ Welcome to the **triage** technical documentation.
 <a href="/docs/self-hosting" class="doc-card">
   <strong>Self-Hosting & Docker</strong>
   <span>Deploy the single-container Triage engine in your private VPC or cluster.</span>
+</a>
+
+<a href="/docs/development" class="doc-card">
+  <strong>Development & Releases</strong>
+  <span>Makefile commands, testing matrix, and automated SemVer release pipeline.</span>
 </a>
 
 </div>
