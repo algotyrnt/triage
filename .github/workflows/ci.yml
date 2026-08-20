@@ -4,10 +4,32 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  format-check:
-    name: Code Formatting & Lint Checks
+  go:
+    name: ${{ matrix.component.name }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component:
+          - name: engine
+            lint: make lint-engine
+            test: make test-engine
+            build: make build-engine
+          - name: sdk
+            lint: make lint-sdk
+            test: make test-sdk
+            build: make build-sdk
+          - name: test-service
+            lint: make lint-test-service
+            test: ''
+            build: make build-test-service
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -18,68 +40,22 @@ jobs:
           go-version: '1.26'
           check-latest: true
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - name: Check Formatting & Vet
+        run: ${{ matrix.component.lint }}
 
-      - name: Check Go Formatting
-        run: |
-          UNFORMATTED=$(gofmt -l .)
-          if [ -n "$UNFORMATTED" ]; then
-            echo "Unformatted Go files detected:"
-            echo "$UNFORMATTED"
-            exit 1
-          fi
+      - name: Run Tests
+        if: matrix.component.test != ''
+        run: ${{ matrix.component.test }}
 
-      - name: Check Web Formatting
-        working-directory: apps/web
-        run: |
-          bun install --frozen-lockfile
-          bun run format:check
+      - name: Build Binary
+        run: ${{ matrix.component.build }}
 
-      - name: Check Dashboard Formatting
-        working-directory: apps/dashboard
-        run: |
-          bun install --frozen-lockfile
-          bun run format:check
-
-  test-go:
-    name: Go Engine, SDK & Services
+  frontend:
+    name: ${{ matrix.app }}
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-          check-latest: true
-
-      - name: Verify Engine
-        working-directory: apps/engine
-        run: |
-          go vet ./...
-          go build ./...
-          go test -v ./...
-
-      - name: Verify SDK
-        working-directory: sdk/go
-        run: |
-          go vet ./...
-          go build ./...
-          go test -v ./...
-
-      - name: Verify Test Service
-        working-directory: test-service
-        run: |
-          go vet ./...
-          go build ./...
-
-  build-apps:
-    name: Frontend Applications Build
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [web, dashboard]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -89,14 +65,12 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Build Web (Astro)
-        working-directory: apps/web
-        run: |
-          bun install --frozen-lockfile
-          bun run build
+      - name: Install Dependencies
+        working-directory: apps/${{ matrix.app }}
+        run: bun install --frozen-lockfile
 
-      - name: Build Dashboard (Next.js)
-        working-directory: apps/dashboard
-        run: |
-          bun install --frozen-lockfile
-          bun run build
+      - name: Check Formatting
+        run: make lint-${{ matrix.app }}
+
+      - name: Build Application
+        run: make build-${{ matrix.app }}

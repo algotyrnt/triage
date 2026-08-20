@@ -1,4 +1,12 @@
+.git
+.github
+.vscode
+.gemini
 node_modules
 .next
-.git
-.env.local
+.astro
+dist
+.env*
+!.env.example
+.DS_Store
+*.tsbuildinfo

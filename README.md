@@ -230,6 +230,37 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet,
 
 ---
 
+## Development & Release Toolkit
+
+Triage provides a unified `Makefile` for local service development, testing, linting, Docker workflows, and automated SemVer releases.
+
+```bash
+# View all available targets
+make help
+
+# Run full pre-flight verification gate (lint + test + build)
+make check
+
+# Start local services with hot-reloading
+make dev-engine       # Engine on :8080
+make dev-dashboard    # Dashboard on :3000
+make dev-web          # Docs & Landing on :4321
+make dev-test-service # Panic simulation harness on :8081
+
+# Docker stack management
+make up               # Start Docker Compose cluster
+make logs             # Tail container logs
+make down             # Stop containers
+
+# Release automation (checks git, tags vX.Y.Z & sdk/go/vX.Y.Z, pushes to trigger CI)
+make release-dry-run VERSION=v0.1.1  # Preview release without pushing
+make release-patch                   # Bump patch (e.g. v0.1.0 -> v0.1.1)
+make release-minor                   # Bump minor (e.g. v0.1.0 -> v0.2.0)
+make release-major                   # Bump major (e.g. v0.1.0 -> v1.0.0)
+```
+
+---
+
 ## Repository Structure
 
 ```
@@ -267,43 +298,8 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet,
 
 ---
 
-## Engine API
-
-All routes are served by the engine on `:8080`.
-
-| Method            | Route                            | Description                                                      |
-| ----------------- | -------------------------------- | ---------------------------------------------------------------- |
-| `GET`             | `/health`                        | Health check & database connection status                        |
-| `POST`            | `/api/v1/telemetry`              | Receive SDK panic telemetry payloads                             |
-| `POST`            | `/api/v1/ast/index`              | Pre-index a repository's AST into PostgreSQL                     |
-| `GET`             | `/api/v1/incidents`              | List recent incidents (supports `repository_id` & `repo` filter) |
-| `POST`            | `/api/v1/incidents/create-issue` | Create a GitHub Issue for an incident                            |
-| `POST`            | `/api/v1/incidents/create-pr`    | Generate and open a bugfix Pull Request on GitHub                |
-| `GET/POST`        | `/api/v1/projects`               | List / create tracked repositories & projects                    |
-| `GET/POST`        | `/api/v1/projects/keys`          | List / create project-scoped API keys                            |
-| `POST/DELETE`     | `/api/v1/projects/keys/revoke`   | Revoke a project API key                                         |
-| `GET`             | `/api/v1/repos/detect-modules`   | Auto-detect Go modules (`go.mod`) in repository                  |
-| `POST`            | `/api/v1/gemini/analyze-panic`   | On-demand Gemini AI panic root-cause analysis                    |
-| `POST`            | `/api/v1/gemini/generate-patch`  | On-demand Gemini AI unified git diff patch generation            |
-| `GET/POST`        | `/api/v1/settings/llm`           | View / update Gemini AI configuration                            |
-| `GET`             | `/api/v1/stats`                  | Engine runtime metrics & incident counts                         |
-| `GET`             | `/api/v1/setup/status`           | Setup wizard completion status                                   |
-| `POST`            | `/api/v1/setup/manifest`         | Generate GitHub App manifest                                     |
-| `GET`             | `/api/v1/setup/callback`         | GitHub App manifest conversion callback                          |
-| `GET`             | `/api/v1/setup/install`          | Get GitHub App installation URL                                  |
-| `GET`             | `/api/v1/setup/install/callback` | GitHub App installation callback                                 |
-| `POST`            | `/api/v1/setup/oauth`            | Save GitHub OAuth credentials                                    |
-| `POST`            | `/api/v1/setup/llm`              | Save Gemini AI configuration                                     |
-| `POST`            | `/api/v1/setup/test`             | Verify GitHub App connectivity                                   |
-| `GET`             | `/api/v1/setup/repos`            | List installed GitHub repositories                              |
-| `GET`             | `/api/v1/setup/installed-repos`  | List installed repository slugs                                  |
-| `GET`             | `/api/v1/setup/check-repo`       | Check repository installation status                             |
-
----
-
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
 
 Created by [Punjitha Bandara](https://algotyrnt.com).
-

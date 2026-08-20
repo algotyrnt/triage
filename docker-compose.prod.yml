@@ -1,8 +1,6 @@
 # Production Docker Compose for Triage Stack
 # Usage:
 #   POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
-#
-version: '3.8'
 
 services:
   postgres:
@@ -17,7 +15,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-triage} -d ${POSTGRES_DB:-triage_db}']
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-triage} -d ${POSTGRES_DB:-triage_db}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,13 +30,13 @@ services:
     container_name: triage-engine
     restart: always
     ports:
-      - '${ENGINE_PORT:-8080}:8080'
+      - "${ENGINE_PORT:-8080}:8080"
     environment:
-      PORT: '8080'
-      DATABASE_URL: 'postgres://${POSTGRES_USER:-triage}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-triage_db}?sslmode=disable'
-      GEMINI_API_KEY: '${GEMINI_API_KEY:-}'
-      TRIAGE_DASHBOARD_URL: '${TRIAGE_DASHBOARD_URL:-http://localhost:3000}'
-      TRIAGE_ENGINE_URL: '${TRIAGE_ENGINE_URL:-http://localhost:8080}'
+      PORT: "8080"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-triage}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-triage_db}?sslmode=disable"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      TRIAGE_DASHBOARD_URL: "${TRIAGE_DASHBOARD_URL:-http://localhost:3000}"
+      TRIAGE_ENGINE_URL: "${TRIAGE_ENGINE_URL:-http://localhost:8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,13 +47,14 @@ services:
     container_name: triage-dashboard
     restart: always
     ports:
-      - '${DASHBOARD_PORT:-3000}:3000'
+      - "${DASHBOARD_PORT:-3000}:3000"
     environment:
-      PORT: '3000'
-      TRIAGE_DASHBOARD_URL: '${TRIAGE_DASHBOARD_URL:-http://localhost:3000}'
-      TRIAGE_ENGINE_URL: '${TRIAGE_ENGINE_URL:-http://localhost:8080}'
+      PORT: "3000"
+      TRIAGE_DASHBOARD_URL: "${TRIAGE_DASHBOARD_URL:-http://localhost:3000}"
+      TRIAGE_ENGINE_URL: "${TRIAGE_ENGINE_URL:-http://localhost:8080}"
     depends_on:
-      - engine
+      engine:
+        condition: service_started
 
 volumes:
   postgres_data:

@@ -2,6 +2,10 @@
 .github
 .vscode
 .gemini
+node_modules
+.next
+.astro
+dist
 bin
 *.tar.gz
 coverage.out

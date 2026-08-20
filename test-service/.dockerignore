@@ -3,9 +3,6 @@
 .vscode
 .gemini
 bin
-*.tar.gz
-coverage.out
-coverage.html
 .env*
 !.env.example
 .DS_Store

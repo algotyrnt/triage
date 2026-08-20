@@ -49,6 +49,7 @@ export default defineConfig({
           items: [
             { label: 'Self-Hosting & Docker', link: '/docs/self-hosting/' },
             { label: 'Environment & Configuration', link: '/docs/configuration/' },
+            { label: 'Development & Releases', link: '/docs/development/' },
             { label: 'Engine REST API', link: '/docs/api-reference/' },
           ],
         },
