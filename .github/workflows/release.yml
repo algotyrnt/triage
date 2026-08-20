@@ -3,7 +3,7 @@ name: Release Pipeline
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -82,6 +82,8 @@ jobs:
             VERSION=${{ github.ref_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   docker-dashboard:
     name: Build & Push Dashboard Container
@@ -124,6 +126,8 @@ jobs:
             APP_VERSION=${{ github.ref_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-web:
     name: Build Web & Documentation Bundle
@@ -137,15 +141,15 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies & Build Astro Web
+      - name: Install Dependencies
         working-directory: apps/web
-        run: |
-          bun install --frozen-lockfile
-          bun run build
+        run: bun install --frozen-lockfile
+
+      - name: Build Astro Web
+        run: make build-web
 
       - name: Package Web Distribution Bundle
-        run: |
-          tar -czf "triage-web-${{ github.ref_name }}.tar.gz" -C apps/web/dist .
+        run: tar -czf "triage-web-${{ github.ref_name }}.tar.gz" -C apps/web/dist .
 
       - name: Upload Web Artifact
         uses: actions/upload-artifact@v4
