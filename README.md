@@ -78,6 +78,21 @@ Go HTTP Server (your app)
 
 ---
 
+## Documentation
+
+Comprehensive guides and API references are available in the documentation:
+
+- [Overview & Concepts](https://triage.algotyrnt.com/docs/overview)
+- [5-Minute Quickstart](https://triage.algotyrnt.com/docs/quickstart)
+- [Go SDK Integration](https://triage.algotyrnt.com/docs/sdk)
+- [AST Engine Internals](https://triage.algotyrnt.com/docs/ast-engine)
+- [Gemini AI Diagnostics](https://triage.algotyrnt.com/docs/gemini-ai)
+- [GitHub App & PR Automation](https://triage.algotyrnt.com/docs/github-integration)
+- [Engine REST API Reference](https://triage.algotyrnt.com/docs/api-reference)
+- [Self-Hosting Guide](https://triage.algotyrnt.com/docs/self-hosting)
+
+---
+
 ## SDK
 
 ### Install

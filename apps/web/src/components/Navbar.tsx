@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { BookOpen, Menu, X, ArrowRight, Sparkles } from 'lucide-react';
+import { Menu, X, ArrowRight } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
 import { useLatestRelease } from '@/components/useLatestRelease';
 
@@ -14,16 +14,13 @@ export const Navbar: React.FC = () => {
 
   return (
     <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
         {/* Brand Block */}
-        <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-2 group">
-            <div className="bg-black text-white px-2 py-0.5 rounded-sm font-mono text-xs tracking-wider font-bold shadow-xs">
+        <div className="flex items-center gap-3 shrink-0">
+          <a href="/" className="flex items-center group" title="Triage Home">
+            <div className="bg-black text-white px-2.5 py-1 rounded-sm font-mono text-xs tracking-wider font-bold shadow-xs transition-transform group-hover:scale-105">
               [TRIAGE]
             </div>
-            <span className="font-bold text-slate-900 text-sm tracking-tight">
-              Go Crash &amp; AST Engine
-            </span>
           </a>
 
           {/* Version pill */}
@@ -31,7 +28,7 @@ export const Navbar: React.FC = () => {
             href={release.releaseUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 font-mono text-[10px] transition-colors border border-slate-200"
+            className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 font-mono text-[10px] transition-colors border border-slate-200 shrink-0"
             title="View latest GitHub release"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -62,12 +59,12 @@ export const Navbar: React.FC = () => {
         </nav>
 
         {/* Action Controls */}
-        <div className="hidden sm:flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-2.5 shrink-0">
           <a
             href="https://github.com/algotyrnt/triage"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-slate-600 hover:text-black p-1.5 rounded-sm border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center"
+            className="text-slate-600 hover:text-black h-8 w-8 rounded-sm border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center"
             title="GitHub Repository"
             aria-label="GitHub Repository"
           >
@@ -76,7 +73,7 @@ export const Navbar: React.FC = () => {
 
           <a
             href="/docs/quickstart"
-            className="bg-black hover:bg-slate-800 text-white text-xs font-mono font-semibold px-3.5 py-1.5 rounded-sm flex items-center gap-1.5 transition-all shadow-xs"
+            className="bg-black hover:bg-slate-800 text-white text-xs font-mono font-semibold h-8 px-3.5 rounded-sm flex items-center gap-1.5 transition-all shadow-xs"
           >
             <span>Quickstart</span>
             <ArrowRight className="w-3 h-3" />
