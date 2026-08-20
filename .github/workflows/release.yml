@@ -124,6 +124,13 @@ jobs:
           name: web-dist
           path: triage-web-${{ github.ref_name }}.tar.gz
 
+      - name: Deploy to Cloudflare
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun x wrangler deploy
+
   publish-release:
     name: Publish GitHub Release
     needs: [tag-sdk, docker, build-web]
