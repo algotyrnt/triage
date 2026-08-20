@@ -50,8 +50,8 @@ When a Go HTTP server panics at runtime, **triage**:
 1. Non-blockingly catches the panic using standard Go `defer + recover()`.
 2. Gathers the stack trace and slices the exact crash site along with cross-file package context (receiver structs, constructors, helper functions) using `go/parser`.
 3. Streams the AST snippet to **Google Gemini AI** for instant root cause diagnosis and patch proposals.
-4. Auto-creates a detailed GitHub issue with labels and telemetry IDs.
-5. Displays live incidents in your self-hosted **Studio Dashboard UI**.
+4. Auto-creates detailed GitHub issues and enables 1-click **automated bugfix Pull Request generation**.
+5. Displays live incidents in your self-hosted **Studio Dashboard UI** with an interactive project switcher.
 
 ---
 

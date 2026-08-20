@@ -1,9 +1,9 @@
 ---
 title: Overview & Concepts
-description: Zero-overhead Go panic isolation and Gemini AI incident diagnostics
+description: Zero-overhead Go panic isolation, automated GitHub PRs/issues, and Gemini AI incident diagnostics
 ---
 
-Welcome to **triage**—the zero-overhead Go panic isolation tool, automated GitHub issue triaging engine, and AI diagnostic platform.
+Welcome to **triage**—the zero-overhead Go panic isolation tool, automated GitHub issue & bugfix PR engine, and AI diagnostic platform.
 
 ```
 Go HTTP Server (your app)
@@ -19,12 +19,15 @@ Go HTTP Server (your app)
   │     ├── Receiver struct & type definitions (cross-file)
   │     ├── Related constructors (New<Type>) & package helpers
   │     └── 3-tier cache (In-memory <1.5ms → Postgres pre-index → GitHub on-demand)
-  ├── Gemini AI analysis               → root_cause + suggested_fix
+  ├── Gemini AI analysis               → root_cause + suggested_fix + git patch
   ├── Persist incident                 (PostgreSQL)
+  ├── Automated GitHub Actions
+  │     ├── File GitHub Issue with AST snippets & telemetry
+  │     └── Open Bugfix Pull Request with auto-applied git diff
   └── Return JSON response
         │
         ▼
- Studio Dashboard  (:3000)            — real-time incident viewer
+ Studio Dashboard  (:3000)            — multi-project switcher & incident inspector
  Public Web / Docs (:4321)            — landing page & integration docs
 ```
 
@@ -43,8 +46,10 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 - **Multi-File Package AST Slicing:** Using Go's standard `go/parser` and `go/ast` packages, Triage isolates the exact crashing function along with referenced struct definitions, constructors, and helper functions across package files.
 - **>90% Token Reduction:** Instead of sending entire repositories or 2,000-line source files, Triage delivers a selectively pruned multi-file context to Gemini AI, reducing AI diagnostic costs to less than $0.0001 per incident.
 - **Sub-0.02ms Client Latency:** Telemetry is handed off to an asynchronous 4-worker pool backed by a 1,000-job queue. HTTP responses return immediately with zero blockage.
+- **Automated Bugfix Pull Requests:** Creates dedicated fix branches, synthesizes clean fixes via Gemini AI, commits the changes, and opens a GitHub Pull Request with 1 click.
 - **Automated GitHub Issue Triaging:** Automatically creates GitHub issues with structured root causes, formatted AST code, and drop-in git patches.
-- **Single-Container Self-Hosting:** Run the engine and studio dashboard in 1 single Docker container (`triage/engine:latest`).
+- **Multi-Project & Monorepo Support:** Track multiple Go services from a unified workspace with automatic `go.mod` module discovery and a project switcher in the dashboard header.
+- **Single-Container Self-Hosting:** Run the engine and studio dashboard effortlessly using Docker Compose or pre-built GHCR containers.
 
 ---
 
@@ -64,4 +69,5 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 
 - [5-Minute Quickstart Guide](/docs/quickstart)
 - [Go SDK Integration](/docs/sdk)
+- [GitHub App & PR Automation](/docs/github-integration)
 - [Self-Hosting with Docker](/docs/self-hosting)

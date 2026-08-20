@@ -96,9 +96,10 @@ Your HTTP client will receive a generic `500 Internal Server Error` without any 
 
 Now switch back to your Studio Dashboard at **http://localhost:3000**:
 
-1. You will see a new **CRITICAL** incident.
+1. You will see a new **CRITICAL** incident under your active project.
 2. The isolated `*ast.FuncDecl` code block will be highlighted.
 3. Gemini AI will display the exact root cause and suggested drop-in git patch.
+4. Click **Generate Fix (PR)** to automatically create a branch and open a verified Pull Request on GitHub.
 
 ---
 

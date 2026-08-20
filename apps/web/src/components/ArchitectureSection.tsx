@@ -50,9 +50,9 @@ export const ArchitectureSection: React.FC = () => {
     },
     {
       num: '05',
-      title: 'GitHub Issue & Studio',
-      desc: 'Persists to PostgreSQL, streams live to Studio Dashboard, and optionally files a GitHub issue with formatted stack traces and diffs.',
-      badge: 'Automated',
+      title: 'GitHub Issues & PRs',
+      desc: 'Persists to PostgreSQL, streams live to Studio Dashboard, and automatically files GitHub issues or opens bugfix Pull Requests with verified patches.',
+      badge: 'Automated PRs',
       icon: <GitPullRequest className="w-5 h-5 text-amber-600" />,
     },
   ];

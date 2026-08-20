@@ -1,14 +1,16 @@
 ---
-title: GitHub App & Issue Automation
-description: Set up automated GitHub issue creation, repository permissions, and OAuth authentication
+title: GitHub App, Issue & PR Automation
+description: Set up automated GitHub issue creation, bugfix Pull Request generation, permissions, and OAuth authentication
 ---
 
-Triage connects to GitHub as an official GitHub App to fetch source code for on-demand AST parsing and automatically file triage issues with full stack traces.
+Triage connects to GitHub as an official GitHub App to fetch source code for on-demand AST parsing, automatically file triage issues with full stack traces, and open verified bugfix Pull Requests.
 
 ## Capabilities
 
 - **On-Demand Source Fetching:** Access private and public repository source code via GitHub Contents API without storing source trees locally.
-- **Automated Issue Creation:** Automatically open issues when new panics occur, populated with AST code blocks, Gemini root-cause analyses, and git patches.
+- **Automated Issue Creation:** Automatically open issues when new panics occur, populated with AST code blocks, Gemini root-cause analyses, and reproduction details.
+- **Automated Bugfix Pull Requests (PRs):** Generate complete bugfix PRs with 1 click directly from the Studio Dashboard or API.
+- **Go Monorepo & Multi-Module Detection:** Automatically detect nested `go.mod` files and normalize paths for multi-service repos.
 - **OAuth User Login:** Secure team authentication with GitHub OAuth.
 
 ---
@@ -26,41 +28,102 @@ The Studio Dashboard provides an automated manifest-based GitHub App setup:
 
 ## Required Permissions
 
-If creating a GitHub App manually, ensure the following permissions are configured:
+When configuring your GitHub App (or creating it manually), ensure the following permissions are granted:
 
-| Permission              | Access       | Purpose                              |
-| :---------------------- | :----------- | :----------------------------------- |
-| **Repository Contents** | Read-only    | On-demand AST fetching by commit SHA |
-| **Issues**              | Read & Write | Automated triage issue filing        |
-| **Metadata**            | Read-only    | Repository metadata lookup           |
-| **User Email**          | Read-only    | GitHub OAuth authentication          |
+| Permission              | Access       | Purpose                                                     |
+| :---------------------- | :----------- | :---------------------------------------------------------- |
+| **Repository Contents** | Read & Write | On-demand AST fetching & committing bugfix code to branches |
+| **Pull Requests**       | Read & Write | Automated bugfix Pull Request generation                    |
+| **Issues**              | Read & Write | Automated triage issue filing                               |
+| **Metadata**            | Read-only    | Repository metadata lookup                                  |
+| **User Email**          | Read-only    | GitHub OAuth team member login                              |
+
+---
+
+## Automated Bugfix Pull Request Workflow
+
+When a crash is diagnosed, you can trigger an automated Pull Request from the Incident Detail page or via `POST /api/v1/incidents/create-pr`:
+
+```
+1. Fetch latest file content via GitHub Contents API
+   (with Monorepo path normalization if root_dir is configured)
+              │
+              ▼
+2. Gemini AI synthesizes bugfix via ApplyFixToFile
+   (preserving existing imports, comments, and style)
+              │
+              ▼
+3. Query repository default branch & base commit SHA
+              │
+              ▼
+4. Create dedicated Git branch: triage/fix-<incident_id>-<timestamp>
+              │
+              ▼
+5. Commit updated file to branch via GitHub Contents API
+              │
+              ▼
+6. Open Pull Request on GitHub referencing incident & closing issue
+              │
+              ▼
+7. Update incident record in database with PR number and PR URL
+```
 
 ---
 
 ## Automated Issue Template
 
-When a panic occurs, Triage opens an issue with the following format:
+When an incident issue is created, Triage opens an issue with structured diagnostic information:
 
-```markdown
-## Panic Intercepted: `payment.go:28`
+````markdown
+## 🚨 Panic in handlers/payment.go:28: runtime error: invalid memory address or nil pointer dereference
 
-**Trace ID:** `tr_7f9c2d1e8a4b0c3d9a1f`  
-**Commit:** `7f8b9e1`  
-**Goroutine:** `goroutine 42 [running]`
+A runtime panic was intercepted by **Triage** in `handlers/payment.go:28`.
 
-### Gemini AI Diagnostic Summary
+---
 
-> **Root Cause:** Attempted to evaluate req.Amount on an uninitialized nil pointer (*PaymentPayload) on line 28.  
-> **Suggested Fix:** Allocate memory before access: `req := &PaymentPayload{}`
+### Panic Details
 
-### Enclosing AST Node (`ProcessTransaction`)
+- **Incident ID**: `INC-8094`
+- **File**: `handlers/payment.go:28`
+- **Timestamp**: `2026-08-18 14:32:10 UTC`
 
-\`\`\`go
+---
+
+### Root Cause Analysis (Gemini AI)
+
+Attempted to evaluate `req.Amount` on an uninitialized nil pointer (`*PaymentPayload`) on line 28.
+
+---
+
+### Recommended Fix
+
+Allocate memory before access: `req := &PaymentPayload{}` and validate JSON decoding errors.
+
+- [ ] [**Generate Fix (PR)**](http://localhost:3000/?incident=INC-8094)
+
+---
+
+### AST Context
+
+```go
 func ProcessTransaction(w http.ResponseWriter, r *http.Request) {
-var req *PaymentPayload
-if req.Amount <= 0 { // <--- PANIC TRIGGER [LINE 28]
+    var req *PaymentPayload
+    if req.Amount <= 0 { // <--- PANIC TRIGGER [LINE 28]
+        ...
+    }
+}
+```
+````
+
+---
+
+### Stack Trace
+
+```
+goroutine 42 [running]:
 ...
-}
-}
-\`\`\`
+```
+
+```
+
 ```

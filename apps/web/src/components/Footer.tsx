@@ -6,8 +6,11 @@
 import React from 'react';
 import { BookOpen, ExternalLink, Terminal, Shield, Activity, Tag } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
+import { useLatestRelease } from '@/components/useLatestRelease';
 
 export const Footer: React.FC = () => {
+  const release = useLatestRelease();
+
   return (
     <footer className="border-t border-slate-200 bg-white text-slate-600 font-sans">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
@@ -25,13 +28,13 @@ export const Footer: React.FC = () => {
               incident triage engine.
             </p>
             <a
-              href="https://github.com/algotyrnt/triage/releases"
+              href={release.releaseUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs font-mono text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded w-fit transition-colors"
             >
               <Tag className="w-3 h-3 text-slate-500" />
-              <span>Self-Hosted &amp; Open Source</span>
+              <span>Release: {release.version}</span>
             </a>
           </div>
 
