@@ -26,13 +26,78 @@ import '@/styles/custom.css';
       name="description"
       content="Intercept Go HTTP server panics non-blockingly, isolate the enclosing *ast.FuncDecl code block, and diagnose root causes instantly with Google Gemini AI."
     />
+    <meta
+      name="keywords"
+      content="golang, go, panic isolation, crash reporting, AST parser, gemini ai, developer tools, observability, APM, zero overhead, github automation, bugfix pull requests"
+    />
+    <meta name="author" content="Punjitha Bandara (algotyrnt)" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://triage.algotyrnt.com/" />
     <meta name="theme-color" content="#0f172a" />
+
+    {/* Open Graph / Facebook */}
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://triage.algotyrnt.com/" />
+    <meta
+      property="og:title"
+      content="triage — Zero-Overhead Go Crash Isolation & Gemini AI Diagnostics"
+    />
+    <meta
+      property="og:description"
+      content="Intercept Go HTTP server panics non-blockingly, isolate the enclosing *ast.FuncDecl code block, and diagnose root causes instantly with Google Gemini AI."
+    />
+    <meta property="og:site_name" content="Triage" />
+    <meta property="og:image" content="https://triage.algotyrnt.com/favicon.svg" />
+
+    {/* Twitter */}
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:site" content="@algotyrnt" />
+    <meta name="twitter:creator" content="@algotyrnt" />
+    <meta
+      name="twitter:title"
+      content="triage — Zero-Overhead Go Crash Isolation & Gemini AI Diagnostics"
+    />
+    <meta
+      name="twitter:description"
+      content="Intercept Go HTTP server panics non-blockingly, isolate the enclosing *ast.FuncDecl code block, and diagnose root causes instantly with Google Gemini AI."
+    />
+    <meta name="twitter:image" content="https://triage.algotyrnt.com/favicon.svg" />
+
+    {/* Favicon & Fonts */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
+    />
+
+    {/* Structured Data (JSON-LD) */}
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'Triage',
+        headline: 'Zero-Overhead Go Crash Isolation & Gemini AI Diagnostics',
+        description:
+          'Intercepts Go HTTP server panics non-blockingly, isolates enclosing *ast.FuncDecl code blocks, and diagnoses root causes with Google Gemini AI.',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Linux, macOS, Windows',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD',
+        },
+        author: {
+          '@type': 'Person',
+          name: 'Punjitha Bandara',
+          url: 'https://algotyrnt.com',
+        },
+        license: 'https://opensource.org/licenses/Apache-2.0',
+        url: 'https://triage.algotyrnt.com',
+        sameAs: ['https://github.com/algotyrnt/triage'],
+      })}
     />
   </head>
   <body
