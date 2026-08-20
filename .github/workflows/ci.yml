@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   engine:
-    name: apps/engine
+    name: engine
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -38,7 +38,7 @@ jobs:
         run: make test-service-build
 
   web:
-    name: apps/web
+    name: web
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -60,7 +60,7 @@ jobs:
         run: make build-web
 
   dashboard:
-    name: apps/dashboard
+    name: dashboard
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
