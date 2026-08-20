@@ -17,24 +17,28 @@ const FAQS: FaqItem[] = [
     a: 'When an HTTP handler panics, Triage catches the exception using defer + recover, writes the raw stack trace to an internal buffered ring buffer (1000 jobs), and immediately sends a sanitized 500 error response to the client. The telemetry payload is then dispatched asynchronously by a background 4-goroutine worker pool.',
   },
   {
+    q: 'How does automated Bugfix Pull Request (PR) generation work?',
+    a: 'When an incident is diagnosed, you can click "Generate Fix (PR)" in the Studio Dashboard. The Triage Engine uses Gemini AI to apply the suggested patch cleanly to the target file, creates a new Git branch (e.g. triage/fix-inc...), commits the fix, and opens a Pull Request on GitHub linked to the incident and closing any related GitHub issue.',
+  },
+  {
     q: 'Do I need to pre-index all Go code in a database?',
-    a: 'No! Triage features an on-demand AST slicing architecture. When a panic occurs, the engine uses the git commit SHA and file path to fetch only the required source file (via in-memory KV cache, local workspace, or GitHub Contents API) and parses the enclosing *ast.FuncDecl subtree synchronously in under 14 milliseconds.',
+    a: 'No! Triage features an on-demand AST slicing architecture. When a panic occurs, the engine uses the git commit SHA and file path to fetch only the required source file (via in-memory KV cache, local workspace, or GitHub Contents API) and parses the enclosing *ast.FuncDecl subtree and package context synchronously in under 14 milliseconds.',
+  },
+  {
+    q: 'How does Triage handle Go monorepos and multi-module projects?',
+    a: 'Triage automatically detects nested go.mod files across your repository subdirectories (/api/v1/repos/detect-modules). It normalizes file paths between module-relative and repo-relative paths, allowing accurate AST symbolication and GitHub file patching regardless of directory structure.',
+  },
+  {
+    q: 'Can I manage multiple Go projects and API keys from a single deployment?',
+    a: 'Yes. The Studio Dashboard includes a Workspace Projects page and Header Project Switcher. You can track multiple microservices, generate project-specific API keys, revoke keys, and filter incidents by repository ID or name.',
   },
   {
     q: 'Can I use my own Gemini API key or select different models?',
-    a: 'Yes. You can supply your own Google AI Studio API key via the GEMINI_API_KEY environment variable or configure it via the Studio Dashboard setup wizard. You can configure any Gemini model of your choice via the GEMINI_MODEL_NAME setting.',
-  },
-  {
-    q: 'How does GitHub App integration work?',
-    a: 'Triage includes a 5-step automated setup wizard that creates and authenticates a GitHub App on your organization. This allows the engine to fetch exact commit trees on demand and automatically create triage issues with formatted AST snippets, stack traces, and suggested fixes.',
-  },
-  {
-    q: 'Can Triage be self-hosted in a private VPC or air-gapped network?',
-    a: 'Yes. The Triage Engine runs as a single Docker container (triage/engine:latest) backed by PostgreSQL. When running in offline or private networks, the engine can resolve AST nodes from local mounted source code repositories via the AST_WORKSPACE_ROOT configuration.',
+    a: 'Yes. You can supply your own Google AI Studio API key via the GEMINI_API_KEY environment variable or configure it via the Studio Dashboard setup wizard. You can configure any Gemini model of your choice (such as gemini-2.5-flash or gemini-1.5-pro) via the GEMINI_MODEL_NAME setting.',
   },
   {
     q: 'What happens if the Triage Engine is unreachable when a panic occurs?',
-    a: 'The SDK gracefully fails open. If the telemetry worker pool fails to connect to the engine after 2 retries, the payload is safely dropped with zero impact on the host application and zero blocking of HTTP goroutines.',
+    a: 'The SDK gracefully fails open. If the telemetry worker pool fails to connect to the engine after retries, the payload is safely dropped with zero impact on the host application and zero blocking of HTTP goroutines.',
   },
 ];
 
