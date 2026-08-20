@@ -345,6 +345,11 @@ build-web: ## Build Astro web documentation & landing page
 	@printf "$(COLOR_CYAN)==> Building Astro Web bundle...$(COLOR_RESET)\n"
 	@cd apps/web && $(BUN) run build
 
+.PHONY: deploy-web
+deploy-web: build-web ## Deploy Astro web site to Cloudflare via Wrangler
+	@printf "$(COLOR_CYAN)==> Deploying Web to Cloudflare...$(COLOR_RESET)\n"
+	@cd apps/web && $(BUN) x wrangler deploy
+
 .PHONY: build-dashboard
 build-dashboard: ## Build Next.js Studio Dashboard
 	@printf "$(COLOR_CYAN)==> Building Next.js Dashboard...$(COLOR_RESET)\n"
