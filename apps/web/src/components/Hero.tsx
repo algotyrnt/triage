@@ -15,10 +15,13 @@ import {
   Code2,
   ShieldCheck,
   Server,
+  Tag,
 } from 'lucide-react';
+import { useLatestRelease } from '@/components/useLatestRelease';
 
 export const Hero: React.FC = () => {
   const [copied, setCopied] = useState(false);
+  const release = useLatestRelease();
   const installCmd = 'go get github.com/algotyrnt/triage/sdk/go';
 
   const copyInstall = () => {
@@ -34,13 +37,13 @@ export const Hero: React.FC = () => {
 
       {/* Pill Badge */}
       <a
-        href="https://github.com/algotyrnt/triage/releases"
+        href={release.releaseUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-8 transition-colors group"
       >
         <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
-          Releases
+          {release.version}
         </span>
         <span>Go Crash Isolation &amp; Gemini AI Diagnostics</span>
         <ArrowRight className="w-3 h-3 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
@@ -61,8 +64,8 @@ export const Hero: React.FC = () => {
           defer + recover
         </code>
         . Automatically isolates the crash site and surrounding multi-file package context (struct
-        definitions, constructors, helpers), queries Gemini AI for root causes, and files GitHub
-        issues with drop-in patches.
+        definitions, constructors, helpers), queries Gemini AI for root causes, and opens automated
+        bugfix Pull Requests with drop-in patches.
       </p>
 
       {/* Primary Action Buttons */}
