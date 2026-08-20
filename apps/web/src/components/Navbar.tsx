@@ -17,9 +17,11 @@ import {
   Tag,
 } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
+import { useLatestRelease } from '@/components/useLatestRelease';
 
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const release = useLatestRelease();
 
   return (
     <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-50">
@@ -62,13 +64,16 @@ export const Navbar: React.FC = () => {
             Benchmarks
           </a>
           <a
-            href="https://github.com/algotyrnt/triage/releases"
+            href={release.releaseUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-black transition-colors flex items-center gap-1 text-slate-700 font-semibold"
+            className="hover:text-black transition-colors flex items-center gap-1.5 text-slate-700 font-semibold"
           >
             <Tag className="w-3 h-3 text-slate-500" />
             <span>Releases</span>
+            <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-slate-600 font-mono">
+              {release.version}
+            </span>
           </a>
           <a
             href="/docs/overview"
@@ -161,14 +166,19 @@ export const Navbar: React.FC = () => {
             Benchmarks
           </a>
           <a
-            href="https://github.com/algotyrnt/triage/releases"
+            href={release.releaseUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center gap-1.5 text-slate-700 hover:text-black py-1 font-semibold"
+            className="flex items-center justify-between text-slate-700 hover:text-black py-1 font-semibold"
           >
-            <Tag className="w-3.5 h-3.5 text-slate-500" />
-            <span>Releases</span>
+            <div className="flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-slate-500" />
+              <span>Releases</span>
+            </div>
+            <span className="text-[10px] bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-slate-600 font-mono">
+              {release.version}
+            </span>
           </a>
           <a
             href="/docs/overview"
