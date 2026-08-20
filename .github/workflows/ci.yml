@@ -12,24 +12,41 @@ permissions:
   contents: read
 
 jobs:
-  go:
-    name: ${{ matrix.component.name }}
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        component:
-          - name: engine
-            lint: make lint-engine
-            test: make test-engine
-            build: make build-engine
-          - name: sdk
-            lint: make lint-sdk
-            test: make test-sdk
-            build: make build-sdk
-          - name: test-service
-            lint: make lint-test-service
-            test: ''
-            build: make build-test-service
+    outputs:
+      engine: ${{ steps.filter.outputs.engine }}
+      sdk: ${{ steps.filter.outputs.sdk }}
+      test_service: ${{ steps.filter.outputs.test_service }}
+      web: ${{ steps.filter.outputs.web }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Filter Changed Paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            engine:
+              - 'apps/engine/**'
+            sdk:
+              - 'sdk/go/**'
+            test_service:
+              - 'test-service/**'
+              - 'sdk/go/**'
+            web:
+              - 'apps/web/**'
+            dashboard:
+              - 'apps/dashboard/**'
+
+  engine:
+    name: engine
+    needs: changes
+    if: needs.changes.outputs.engine == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -38,24 +55,98 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-          check-latest: true
+          check-latest: false
+          cache: true
+          cache-dependency-path: apps/engine/go.sum
+
+      - name: Cache Go Build & Test Artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-engine-${{ hashFiles('apps/engine/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-engine-${{ hashFiles('apps/engine/go.sum') }}-
+            ${{ runner.os }}-go-build-engine-
 
       - name: Check Formatting & Vet
-        run: ${{ matrix.component.lint }}
+        run: make lint-engine
 
-      - name: Run Tests
-        if: matrix.component.test != ''
-        run: ${{ matrix.component.test }}
+      - name: Run Engine Tests
+        run: make test-engine
 
-      - name: Build Binary
-        run: ${{ matrix.component.build }}
+      - name: Build Engine Binary
+        run: make build-engine
 
-  frontend:
-    name: ${{ matrix.app }}
+  sdk:
+    name: sdk/go
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        app: [web, dashboard]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: false
+
+      - name: Cache Go Build & Test Artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-sdk-${{ hashFiles('sdk/go/go.mod') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-sdk-${{ hashFiles('sdk/go/go.mod') }}-
+            ${{ runner.os }}-go-build-sdk-
+
+      - name: Check Formatting & Vet
+        run: make lint-sdk
+
+      - name: Run SDK Tests
+        run: make test-sdk
+
+      - name: Build SDK
+        run: make build-sdk
+
+  test-service:
+    name: test-service
+    needs: changes
+    if: needs.changes.outputs.test_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: false
+          cache: true
+          cache-dependency-path: test-service/go.sum
+
+      - name: Cache Go Build & Test Artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build
+          key: ${{ runner.os }}-go-build-test-service-${{ hashFiles('test-service/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-test-service-${{ hashFiles('test-service/go.sum') }}-
+            ${{ runner.os }}-go-build-test-service-
+
+      - name: Check Formatting & Vet
+        run: make lint-test-service
+
+      - name: Build Test Service
+        run: make build-test-service
+
+  web:
+    name: web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -65,12 +156,52 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Cache Bun Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-web-${{ hashFiles('apps/web/bun.lock*') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-web-
+
       - name: Install Dependencies
-        working-directory: apps/${{ matrix.app }}
+        working-directory: apps/web
         run: bun install --frozen-lockfile
 
       - name: Check Formatting
-        run: make lint-${{ matrix.app }}
+        run: make lint-web
 
-      - name: Build Application
-        run: make build-${{ matrix.app }}
+      - name: Build Web
+        run: make build-web
+
+  dashboard:
+    name: dashboard
+    needs: changes
+    if: needs.changes.outputs.dashboard == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-dashboard-${{ hashFiles('apps/dashboard/bun.lock*') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-dashboard-
+
+      - name: Install Dependencies
+        working-directory: apps/dashboard
+        run: bun install --frozen-lockfile
+
+      - name: Check Formatting
+        run: make lint-dashboard
+
+      - name: Build Dashboard
+        run: make build-dashboard
