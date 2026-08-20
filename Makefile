@@ -247,16 +247,39 @@ lint: lint-go lint-web lint-dashboard ## Run all code linters and formatting che
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Linting & formatting checks passed!$(COLOR_RESET)\n"
 
 .PHONY: lint-go
-lint-go: ## Verify Go formatting and static analysis
-	@printf "$(COLOR_CYAN)==> Checking Go formatting and vet...$(COLOR_RESET)\n"
-	@UNFORMATTED=$$(gofmt -l .); \
+lint-go: lint-engine lint-sdk lint-test-service ## Verify all Go formatting and static analysis
+
+.PHONY: lint-engine
+lint-engine: ## Verify Engine formatting and vet
+	@printf "$(COLOR_CYAN)==> Checking Engine formatting and vet...$(COLOR_RESET)\n"
+	@UNFORMATTED=$$(gofmt -l apps/engine); \
 	if [ -n "$$UNFORMATTED" ]; then \
-		printf "$(COLOR_RED)[ERROR] Unformatted Go files detected:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
-		printf "Run '$(COLOR_YELLOW)make format$(COLOR_RESET)' to auto-fix.\n"; \
+		printf "$(COLOR_RED)[ERROR] Unformatted Go files in apps/engine:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
+		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
 		exit 1; \
 	fi
 	@cd apps/engine && $(GO) vet ./...
+
+.PHONY: lint-sdk
+lint-sdk: ## Verify Go SDK formatting and vet
+	@printf "$(COLOR_CYAN)==> Checking Go SDK formatting and vet...$(COLOR_RESET)\n"
+	@UNFORMATTED=$$(gofmt -l sdk/go); \
+	if [ -n "$$UNFORMATTED" ]; then \
+		printf "$(COLOR_RED)[ERROR] Unformatted Go files in sdk/go:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
+		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
+		exit 1; \
+	fi
 	@cd sdk/go && $(GO) vet ./...
+
+.PHONY: lint-test-service
+lint-test-service: ## Verify Test Service formatting and vet
+	@printf "$(COLOR_CYAN)==> Checking Test Service formatting and vet...$(COLOR_RESET)\n"
+	@UNFORMATTED=$$(gofmt -l test-service); \
+	if [ -n "$$UNFORMATTED" ]; then \
+		printf "$(COLOR_RED)[ERROR] Unformatted Go files in test-service:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
+		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
+		exit 1; \
+	fi
 	@cd test-service && $(GO) vet ./...
 
 .PHONY: lint-web
