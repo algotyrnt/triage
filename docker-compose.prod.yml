@@ -47,7 +47,6 @@ services:
       - "${DASHBOARD_PORT:-3000}:3000"
     environment:
       PORT: "3000"
-      TRIAGE_DASHBOARD_URL: "${TRIAGE_DASHBOARD_URL:-http://localhost:3000}"
       TRIAGE_ENGINE_URL: "${TRIAGE_ENGINE_URL:-http://localhost:8080}"
     depends_on:
       engine:

@@ -220,7 +220,7 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet,
 
 > **When using Docker Compose, you don't need to set most of these.** The compose file already wires all inter-service configuration. These variables are only relevant when running services natively (e.g. during engine development with `go run`).
 
-### Engine Configuration (Optional Overrides)
+### Engine Configuration
 
 | Variable       | Default | Description                                                 |
 | -------------- | ------- | ----------------------------------------------------------- |
@@ -229,6 +229,15 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet,
 | `LOG_LEVEL`    | `info`  | Structured logging level (`debug`, `info`, `warn`, `error`) |
 
 > **Note:** Ingestion API keys, Gemini AI credentials, GitHub App settings, and the Dashboard origin URL (`instance_url` for CORS protection) are managed and validated strictly through PostgreSQL via the Setup Wizard and Dashboard Settings.
+
+### Studio Dashboard Configuration
+
+| Variable            | Default                 | Description                |
+| ------------------- | ----------------------- | -------------------------- |
+| `PORT`              | `3000`                  | Dashboard HTTP listen port |
+| `TRIAGE_ENGINE_URL` | `http://localhost:8080` | Engine backend URL         |
+
+> **Note:** The dashboard dynamically resolves its public origin from incoming requests.
 
 ### Test Services (`test-services/*`)
 

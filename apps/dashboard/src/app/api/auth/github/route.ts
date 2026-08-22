@@ -1,7 +1,17 @@
 import { NextResponse } from 'next/server';
 
+function getBaseUrl(request: Request): string {
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const proto = request.headers.get('x-forwarded-proto') || 'http';
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: Request) {
   let clientId = '';
+  const baseUrl = getBaseUrl(request);
 
   try {
     const engineUrl = process.env.TRIAGE_ENGINE_URL || 'http://localhost:8080';
@@ -15,12 +25,9 @@ export async function GET(request: Request) {
   }
 
   if (!clientId) {
-    const appUrl = process.env.TRIAGE_DASHBOARD_URL || 'http://localhost:3000';
-    return NextResponse.redirect(`${appUrl}?user=algotyrnt&auth=dev`);
+    return NextResponse.redirect(`${baseUrl}?user=algotyrnt&auth=dev`);
   }
 
-  // Use the dashboard URL as the base for the callback
-  const baseUrl = process.env.TRIAGE_DASHBOARD_URL || 'http://localhost:3000';
   const callbackUrl = `${baseUrl}/api/auth/github/callback`;
 
   // Note: if the client ID belongs to a GitHub App, scopes are ignored.

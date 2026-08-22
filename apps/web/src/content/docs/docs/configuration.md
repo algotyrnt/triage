@@ -23,11 +23,12 @@ The engine (`apps/engine`) supports the following environment variables:
 
 The Next.js dashboard (`apps/dashboard`) supports:
 
-| Variable               | Type     | Default                 | Description                 |
-| :--------------------- | :------- | :---------------------- | :-------------------------- |
-| `PORT`                 | `string` | `3000`                  | Dashboard HTTP listen port. |
-| `TRIAGE_ENGINE_URL`    | `string` | `http://localhost:8080` | Engine backend URL.         |
-| `TRIAGE_DASHBOARD_URL` | `string` | `http://localhost:3000` | Public dashboard origin.    |
+| Variable            | Type     | Default                 | Description                 |
+| :------------------ | :------- | :---------------------- | :-------------------------- |
+| `PORT`              | `string` | `3000`                  | Dashboard HTTP listen port. |
+| `TRIAGE_ENGINE_URL` | `string` | `http://localhost:8080` | Engine backend URL.         |
+
+> **Note:** The dashboard automatically discovers its public origin directly from incoming HTTP requests without requiring an explicit dashboard URL variable.
 
 ---
 
