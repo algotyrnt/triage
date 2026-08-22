@@ -309,7 +309,7 @@ build: build-engine build-sdk build-web build-dashboard ## Build all components
 build-engine: ## Compile Engine server binary to bin/engine-server
 	@printf "$(COLOR_CYAN)==> Building Engine binary ($(VERSION))...$(COLOR_RESET)\n"
 	@mkdir -p $(BIN_DIR)
-	@cd apps/engine && CGO_ENABLED=0 $(GO) build -ldflags="$(LDFLAGS)" -o ../../$(BIN_DIR)/engine-server main.go
+	@cd apps/engine && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../../$(BIN_DIR)/engine-server main.go
 	@printf "$(COLOR_GREEN)Built $(BIN_DIR)/engine-server$(COLOR_RESET)\n"
 
 .PHONY: build-sdk
