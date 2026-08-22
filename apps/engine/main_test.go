@@ -18,10 +18,7 @@ import (
 )
 
 func newTestServer() *api.Server {
-	return api.NewServer(api.Config{
-		AppURL:    "http://localhost:3000",
-		EngineURL: "http://localhost:8080",
-	})
+	return api.NewServer(api.Config{})
 }
 
 func TestIsValidAPIKey(t *testing.T) {
@@ -242,8 +239,7 @@ func TestCreateIncidentIssueRoute(t *testing.T) {
 func TestGeminiRoutes(t *testing.T) {
 	s := newTestServer()
 
-	// 1. Test POST /api/v1/gemini/analyze-panic missing api key
-	_ = os.Unsetenv("GEMINI_API_KEY")
+	// 1. Test POST /api/v1/gemini/analyze-panic missing api key or model
 	body, _ := json.Marshal(map[string]string{
 		"panicMessage":   "nil pointer dereference",
 		"triggeringFile": "main.go",
@@ -253,7 +249,7 @@ func TestGeminiRoutes(t *testing.T) {
 	s.HandleGeminiAnalyzePanic(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", rec.Code)
+		t.Fatalf("expected status 400 when Gemini AI is unconfigured, got %d", rec.Code)
 	}
 
 	// 2. Test POST /api/v1/gemini/generate-patch missing api key
