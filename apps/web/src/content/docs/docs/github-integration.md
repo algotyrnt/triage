@@ -123,7 +123,3 @@ func ProcessTransaction(w http.ResponseWriter, r *http.Request) {
 goroutine 42 [running]:
 ...
 ```
-
-```
-
-```

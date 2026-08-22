@@ -34,7 +34,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'Can I use my own Gemini API key or select different models?',
-    a: 'Yes. You can supply your own Google AI Studio API key via the GEMINI_API_KEY environment variable or configure it via the Studio Dashboard setup wizard. You can configure any Gemini model of your choice (such as gemini-2.5-flash or gemini-1.5-pro) via the GEMINI_MODEL_NAME setting.',
+    a: 'Yes. You can supply your own Google AI Studio API key and configure your preferred Gemini model (such as gemini-1.5-flash or gemini-2.5-flash) directly via the Studio Dashboard setup wizard or Settings page.',
   },
   {
     q: 'What happens if the Triage Engine is unreachable when a panic occurs?',

@@ -49,6 +49,7 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 - **Automated Bugfix Pull Requests:** Creates dedicated fix branches, synthesizes clean fixes via Gemini AI, commits the changes, and opens a GitHub Pull Request with 1 click.
 - **Automated GitHub Issue Triaging:** Automatically creates GitHub issues with structured root causes, formatted AST code, and drop-in git patches.
 - **Multi-Project & Monorepo Support:** Track multiple Go services from a unified workspace with automatic `go.mod` module discovery and a project switcher in the dashboard header.
+- **Dynamic Origin-Restricted CORS:** Protects proprietary AST context and stack traces from malicious browser scripts by restricting API access strictly to your dashboard domain.
 - **Single-Container Self-Hosting:** Run the engine and studio dashboard effortlessly using Docker Compose or pre-built GHCR containers.
 
 ---
