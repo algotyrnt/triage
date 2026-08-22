@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -308,21 +307,7 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// 2. Generate updated file content using Gemini
-	llmAPIKey := ""
-	llmModelName := ""
-	if s.db != nil {
-		llmAPIKey, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
-		llmModelName, _ = s.db.GetInstanceConfig(r.Context(), "gemini_model")
-	}
-	if llmAPIKey == "" {
-		llmAPIKey = os.Getenv("GEMINI_API_KEY")
-	}
-	if llmModelName == "" {
-		llmModelName = os.Getenv("GEMINI_MODEL_NAME")
-	}
-	if llmModelName == "" {
-		llmModelName = "gemini-1.5-flash"
-	}
+	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
 
 	patchCode := req.PatchCode
 	if patchCode == "" {
@@ -330,7 +315,7 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var updatedContent string
-	if len(currentFileBytes) > 0 && llmAPIKey != "" {
+	if len(currentFileBytes) > 0 && llmAPIKey != "" && llmModelName != "" {
 		applyCtx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
@@ -459,24 +444,10 @@ func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	llmAPIKey := ""
-	llmModelName := ""
-	if s.db != nil {
-		llmAPIKey, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
-		llmModelName, _ = s.db.GetInstanceConfig(r.Context(), "gemini_model")
-	}
-	if llmAPIKey == "" {
-		llmAPIKey = os.Getenv("GEMINI_API_KEY")
-	}
-	if llmModelName == "" {
-		llmModelName = os.Getenv("GEMINI_MODEL_NAME")
-	}
-	if llmModelName == "" {
-		llmModelName = "gemini-1.5-flash"
-	}
+	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
 
-	if llmAPIKey == "" {
-		http.Error(w, "Gemini API key is not configured. Please configure it in Project Settings or Setup Wizard.", http.StatusBadRequest)
+	if llmAPIKey == "" || llmModelName == "" {
+		http.Error(w, "Gemini AI is not configured. Please configure your API key and model name in Settings or Setup Wizard.", http.StatusBadRequest)
 		return
 	}
 
@@ -521,24 +492,10 @@ func (s *Server) HandleGeminiGeneratePatch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	llmAPIKey := ""
-	llmModelName := ""
-	if s.db != nil {
-		llmAPIKey, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
-		llmModelName, _ = s.db.GetInstanceConfig(r.Context(), "gemini_model")
-	}
-	if llmAPIKey == "" {
-		llmAPIKey = os.Getenv("GEMINI_API_KEY")
-	}
-	if llmModelName == "" {
-		llmModelName = os.Getenv("GEMINI_MODEL_NAME")
-	}
-	if llmModelName == "" {
-		llmModelName = "gemini-1.5-flash"
-	}
+	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
 
-	if llmAPIKey == "" {
-		http.Error(w, "Gemini API key is not configured. Please configure it in Project Settings or Setup Wizard.", http.StatusBadRequest)
+	if llmAPIKey == "" || llmModelName == "" {
+		http.Error(w, "Gemini AI is not configured. Please configure your API key and model name in Settings or Setup Wizard.", http.StatusBadRequest)
 		return
 	}
 

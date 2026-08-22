@@ -13,7 +13,7 @@ Triage is completely model-agnostic. You can configure any model available in yo
 - **Deterministic Schema Support:** Guaranteed JSON schema compliance without hallucinated fields or markdown formatting glitches.
 - **Cost Efficiency:** Combined with Triage's 94% AST token reduction, incident analysis uses minimal tokens (< $0.0001 per incident).
 
-You can set your model during the Studio Dashboard setup wizard, update it dynamically in **Settings > Gemini AI**, or pass the `GEMINI_MODEL_NAME` environment variable.
+You can select your preferred model during the Studio Dashboard setup wizard or update it dynamically at any time in **Settings > Gemini AI**.
 
 ---
 
@@ -91,18 +91,4 @@ curl -X POST http://localhost:8080/api/v1/gemini/generate-patch \
 
 ## Configuring Your Gemini API Key & Model
 
-### Option 1: Studio Dashboard Settings
-
-Open your self-hosted Studio Dashboard, navigate to **Settings > Gemini AI**, and enter your Google AI Studio API key and desired model name.
-
-### Option 2: Environment Variables
-
-Pass your API key and model name when launching the engine:
-
-```bash
-docker run -d \
-  -p 8080:8080 \
-  -e GEMINI_API_KEY="your_api_key_here" \
-  -e GEMINI_MODEL_NAME="gemini-2.5-flash" \
-  ghcr.io/algotyrnt/triage-engine:latest
-```
+Open your self-hosted Studio Dashboard, navigate to **Settings > Gemini AI** (or complete the initial Setup Wizard), and enter your Google AI Studio API key and desired model name (e.g. `gemini-1.5-flash` or `gemini-2.5-flash`). Credentials are automatically stored and encrypted in PostgreSQL.

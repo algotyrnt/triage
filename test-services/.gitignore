@@ -1,0 +1,14 @@
+# Ignore all compiled binaries by default, whitelist source and config files
+*
+!*/
+!*.go
+!*.md
+!*.example
+!go.mod
+!go.sum
+!*.json
+!*.yaml
+!*.yml
+!*.sh
+!*.sql
+!.gitignore

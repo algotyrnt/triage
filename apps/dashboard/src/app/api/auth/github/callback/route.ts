@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 
+function getBaseUrl(request: Request): string {
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const proto = request.headers.get('x-forwarded-proto') || 'http';
+  if (host) {
+    return `${proto}://${host}`;
+  }
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
-  const baseUrl = process.env.TRIAGE_DASHBOARD_URL || 'http://localhost:3000';
+  const baseUrl = getBaseUrl(request);
 
   if (!code) {
     return NextResponse.redirect(`${baseUrl}?auth=error&reason=missing_code`);

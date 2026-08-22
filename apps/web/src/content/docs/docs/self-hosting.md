@@ -42,8 +42,6 @@ docker run -d \
   --name triage-engine \
   -p 8080:8080 \
   -e DATABASE_URL="postgres://user:pass@db.internal:5432/triage_db" \
-  -e GEMINI_API_KEY="your_gemini_api_key" \
-  -e TRIAGE_API_KEY="tr_live_production_key" \
   ghcr.io/algotyrnt/triage-engine:latest
 ```
 
@@ -53,10 +51,11 @@ docker run -d \
 
 The PostgreSQL schema is located in `db/schema.sql`. It contains:
 
-- `projects`: Configured Go repositories and API keys.
-- `incidents`: Captured panics, stack traces, and AI root causes.
-- `ast_nodes`: Cached/pre-indexed AST function declarations.
-- `system_config`: Encrypted GitHub App credentials and settings.
+- `repositories`: Configured Go repositories and root directory paths.
+- `incidents`: Captured panics, stack traces, AST context, and AI root causes.
+- `ast_nodes` & `ast_indexes`: Cached/pre-indexed AST function declarations.
+- `api_keys`: Ingestion API key hashes and metadata.
+- `instance_config`: Dynamic settings (GitHub App, Gemini AI key/model, instance URL).
 - `users` & `sessions`: Authenticated dashboard team members.
 
 ---
@@ -65,4 +64,5 @@ The PostgreSQL schema is located in `db/schema.sql`. It contains:
 
 1. **Postgres Password:** Always supply an explicit, strong `POSTGRES_PASSWORD` when launching `docker-compose.prod.yml`.
 2. **Session Secrets:** The engine auto-generates a cryptographic session secret on first boot and stores it in PostgreSQL.
-3. **HTTPS / Reverse Proxy:** Place Caddy, Nginx, or Cloudflare in front of `:8080` and `:3000` for SSL termination.
+3. **CORS & Origin Security:** Browser cross-origin access is automatically locked to your configured dashboard origin (`instance_url`) upon completing the setup wizard.
+4. **HTTPS / Reverse Proxy:** Place Caddy, Nginx, or Cloudflare in front of `:8080` and `:3000` for SSL termination.

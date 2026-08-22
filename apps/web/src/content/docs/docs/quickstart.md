@@ -38,7 +38,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The initial
 1. **GitHub App Manifest Creation** (One-click app registration).
 2. **Repository Installation** (Grant access to your Go repositories).
 3. **OAuth Linking** (Configure GitHub login).
-4. **Gemini AI API Key** (Enter your Google AI Studio API key).
+4. **Gemini AI Configuration** (Enter your Google AI Studio API key and preferred model name).
 5. **Verification** (Engine self-test).
 
 Once configured, copy your project API key (e.g. `tr_live_...`).
@@ -86,7 +86,15 @@ func main() {
 
 ## 4. Trigger a Panic & View Diagnostics
 
-Run your Go application and trigger the crash:
+Run your Go application (using `-trimpath` to generate production-accurate relative stack traces):
+
+```bash
+# Run test-services/simple-service on :8081 with your API key
+cd test-services/simple-service
+TRIAGE_API_KEY=tr_live_your_key go run -trimpath main.go
+```
+
+In another terminal, trigger the crash:
 
 ```bash
 curl http://localhost:8081/crash
@@ -97,7 +105,7 @@ Your HTTP client will receive a generic `500 Internal Server Error` without any 
 Now switch back to your Studio Dashboard at **http://localhost:3000**:
 
 1. You will see a new **CRITICAL** incident under your active project.
-2. The isolated `*ast.FuncDecl` code block will be highlighted.
+2. The isolated `*ast.FuncDecl` code block will be highlighted along with resolved cross-file structs and constructors.
 3. Gemini AI will display the exact root cause and suggested drop-in git patch.
 4. Click **Generate Fix (PR)** to automatically create a branch and open a verified Pull Request on GitHub.
 

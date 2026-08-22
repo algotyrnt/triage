@@ -5,137 +5,68 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"triage/engine/internal/api"
 	"triage/engine/internal/ast"
+	"triage/engine/internal/config"
 	"triage/engine/internal/db"
-	"triage/engine/internal/github"
 	"triage/engine/internal/logger"
-
-	"github.com/joho/godotenv"
 )
 
-func loadEnvLocal() {
-	_ = godotenv.Load(".env.local", ".env")
-}
-
-func loadGitHubAppConfig(ctx context.Context, database *db.DB) *github.AppConfig {
-	if database == nil {
-		return nil
-	}
-	appIDStr, _ := database.GetInstanceConfig(ctx, "github_app_id")
-	pemKey, _ := database.GetInstanceConfig(ctx, "github_app_private_key")
-	webhookSecret, _ := database.GetInstanceConfig(ctx, "github_app_webhook_secret")
-	clientID, _ := database.GetInstanceConfig(ctx, "github_app_client_id")
-	clientSecret, _ := database.GetInstanceConfig(ctx, "github_app_client_secret")
-
-	if appIDStr == "" || pemKey == "" {
-		return nil
-	}
-	appID, err := strconv.ParseInt(appIDStr, 10, 64)
-	if err != nil {
-		slog.Warn("invalid GITHUB_APP_ID in database config", "error", err, "app_id", appIDStr)
-		return nil
-	}
-	cfg, err := github.LoadAppConfig(appID, []byte(pemKey), webhookSecret, clientID, clientSecret)
-	if err != nil {
-		slog.Warn("failed to load GitHub App config", "error", err)
-		return nil
-	}
-	slog.Info("loaded GitHub App configuration", "app_id", appID)
-	return cfg
-}
-
 func main() {
-	loadEnvLocal()
+	env, err := config.LoadEnv()
+	if err != nil {
+		slog.Error("fatal: invalid environment configuration", "error", err)
+		os.Exit(1)
+	}
+
 	logger.InitLogger()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var database *db.DB
-	var astManager *ast.Manager
+	database, err := db.NewDB(ctx, env.DatabaseURL)
+	if err != nil {
+		slog.Error("fatal: failed to connect to PostgreSQL database", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+	slog.Info("connected engine to PostgreSQL database pool")
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL != "" {
-		var err error
-		database, err = db.NewDB(ctx, dbURL)
-		if err != nil {
-			slog.Warn("failed to connect database pool", "error", err)
-		} else {
-			defer database.Close()
-			slog.Info("connected engine to PostgreSQL database pool")
-		}
+	astManager, err := ast.NewManager(ctx, env.DatabaseURL)
+	if err != nil {
+		slog.Error("fatal: failed to connect AST manager to PostgreSQL", "error", err)
+		os.Exit(1)
+	}
+	defer astManager.Close()
+	slog.Info("connected engine to PostgreSQL AST indexer")
 
-		astManager, err = ast.NewManager(ctx, dbURL)
-		if err != nil {
-			slog.Warn("failed to connect AST manager to PostgreSQL", "error", err)
-		} else {
-			defer astManager.Close()
-			slog.Info("connected engine to PostgreSQL AST indexer")
-		}
+	configStore := config.NewStore(database)
+	if _, err := configStore.EnsureSessionSecret(ctx); err != nil {
+		slog.Warn("failed to ensure session secret", "error", err)
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	engineURL := os.Getenv("TRIAGE_ENGINE_URL")
-	if engineURL == "" {
-		engineURL = fmt.Sprintf("http://localhost:%s", port)
-	}
-
-	dashboardURL := os.Getenv("TRIAGE_DASHBOARD_URL")
-	if dashboardURL == "" {
-		dashboardURL = "http://localhost:3000"
-	}
-
-	sessionSecret := ""
-	if database != nil {
-		storedSecret, _ := database.GetInstanceConfig(ctx, "session_secret")
-		if storedSecret != "" {
-			sessionSecret = storedSecret
-		} else {
-			b := make([]byte, 32)
-			_, _ = rand.Read(b)
-			sessionSecret = hex.EncodeToString(b)
-			_ = database.SaveInstanceConfig(ctx, "session_secret", sessionSecret)
-			slog.Info("auto-generated and persisted secure session_secret")
-		}
-	} else {
-		sessionSecret = "dev-secret-change-me-in-production"
-	}
-
-	var githubApp *github.AppConfig
-	if database != nil {
-		githubApp = loadGitHubAppConfig(ctx, database)
-	}
+	githubApp, _ := configStore.GetGitHubApp(ctx)
 
 	server := api.NewServer(api.Config{
-		DB:         database,
-		GitHubApp:  githubApp,
-		ASTManager: astManager,
-		AppURL:     dashboardURL,
-		EngineURL:  engineURL,
+		DB:          database,
+		ConfigStore: configStore,
+		GitHubApp:   githubApp,
+		ASTManager:  astManager,
 	})
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)
 
 	httpServer := &http.Server{
-		Addr:         ":" + port,
+		Addr:         ":" + env.Port,
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -147,7 +78,7 @@ func main() {
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		slog.Info("triage engine server starting", "port", port, "engine_url", engineURL, "dashboard_url", dashboardURL)
+		slog.Info("triage engine server starting", "port", env.Port)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("HTTP server failed", "error", err)
 			os.Exit(1)

@@ -18,38 +18,21 @@ import (
 )
 
 func newTestServer() *api.Server {
-	return api.NewServer(api.Config{
-		AppURL:    "http://localhost:3000",
-		EngineURL: "http://localhost:8080",
-	})
+	return api.NewServer(api.Config{})
 }
 
 func TestIsValidAPIKey(t *testing.T) {
 	s := newTestServer()
 	ctx := context.Background()
 
-	// 1. Unset TRIAGE_API_KEY should fail closed
-	_ = os.Unsetenv("TRIAGE_API_KEY")
+	// 1. Without database, IsValidAPIKey fails closed
 	if s.IsValidAPIKey(ctx, "any_key") {
-		t.Errorf("expected IsValidAPIKey to fail closed when TRIAGE_API_KEY is unset")
+		t.Errorf("expected IsValidAPIKey to fail closed when database is nil")
 	}
 
 	// 2. Empty input key should return false
-	_ = os.Setenv("TRIAGE_API_KEY", "tr_valid_key")
-	defer os.Unsetenv("TRIAGE_API_KEY")
-
 	if s.IsValidAPIKey(ctx, "") {
 		t.Errorf("expected IsValidAPIKey to return false for empty key")
-	}
-
-	// 3. Valid matching key should return true
-	if !s.IsValidAPIKey(ctx, "tr_valid_key") {
-		t.Errorf("expected IsValidAPIKey to return true for matching key")
-	}
-
-	// 4. Mismatched key should return false
-	if s.IsValidAPIKey(ctx, "tr_wrong_key") {
-		t.Errorf("expected IsValidAPIKey to return false for wrong key")
 	}
 }
 
@@ -256,8 +239,7 @@ func TestCreateIncidentIssueRoute(t *testing.T) {
 func TestGeminiRoutes(t *testing.T) {
 	s := newTestServer()
 
-	// 1. Test POST /api/v1/gemini/analyze-panic missing api key
-	_ = os.Unsetenv("GEMINI_API_KEY")
+	// 1. Test POST /api/v1/gemini/analyze-panic missing api key or model
 	body, _ := json.Marshal(map[string]string{
 		"panicMessage":   "nil pointer dereference",
 		"triggeringFile": "main.go",
@@ -267,7 +249,7 @@ func TestGeminiRoutes(t *testing.T) {
 	s.HandleGeminiAnalyzePanic(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", rec.Code)
+		t.Fatalf("expected status 400 when Gemini AI is unconfigured, got %d", rec.Code)
 	}
 
 	// 2. Test POST /api/v1/gemini/generate-patch missing api key

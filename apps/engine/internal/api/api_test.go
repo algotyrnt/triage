@@ -8,15 +8,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 )
 
 func newTestAPIServer() *Server {
-	return NewServer(Config{
-		AppURL:    "http://localhost:3000",
-		EngineURL: "http://localhost:8080",
-	})
+	return NewServer(Config{})
 }
 
 func TestServerHealthAndStats(t *testing.T) {
@@ -74,6 +70,7 @@ func TestServerSetupStatus(t *testing.T) {
 func TestServerTelemetry_Unauthorized(t *testing.T) {
 	s := newTestAPIServer()
 
+	// 1. Invalid key without database fails with 401
 	body, _ := json.Marshal(TelemetryRequest{
 		APIKey: "invalid_key",
 		File:   "main.go",
@@ -84,35 +81,21 @@ func TestServerTelemetry_Unauthorized(t *testing.T) {
 	s.HandleTelemetry(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
+		t.Fatalf("expected status 401 Unauthorized for invalid key, got %d", rec.Code)
 	}
-}
 
-func TestServerTelemetry_ValidKey(t *testing.T) {
-	s := newTestAPIServer()
-	_ = os.Setenv("TRIAGE_API_KEY", "tr_secret_test_key")
-	defer os.Unsetenv("TRIAGE_API_KEY")
-
-	body, _ := json.Marshal(TelemetryRequest{
-		APIKey:     "tr_secret_test_key",
-		File:       "main.go",
-		Line:       10,
-		StackTrace: "panic: runtime error\ngoroutine 1 [running]:",
+	// 2. Empty key fails with 401
+	emptyBody, _ := json.Marshal(TelemetryRequest{
+		APIKey: "",
+		File:   "main.go",
+		Line:   10,
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry", bytes.NewBuffer(body))
-	rec := httptest.NewRecorder()
-	s.HandleTelemetry(rec, req)
+	emptyReq := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry", bytes.NewBuffer(emptyBody))
+	emptyRec := httptest.NewRecorder()
+	s.HandleTelemetry(emptyRec, emptyReq)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200 OK, got %d", rec.Code)
-	}
-
-	var res TelemetryResponse
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("failed to decode telemetry response: %v", err)
-	}
-	if res.Status != "success" {
-		t.Errorf("expected status 'success', got: %s", res.Status)
+	if emptyRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 Unauthorized for empty key, got %d", emptyRec.Code)
 	}
 }
 
@@ -150,5 +133,47 @@ func TestServerSetupRepos(t *testing.T) {
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
 		t.Fatalf("failed to decode setup repos response: %v", err)
+	}
+}
+
+func TestCORSResolution(t *testing.T) {
+	s := newTestAPIServer()
+
+	// 1. Initial setup phase (unconfigured DB) reflects caller origin
+	setupReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	setupReq.Header.Set("Origin", "http://setup-domain.com:3000")
+	setupRec := httptest.NewRecorder()
+	handler := s.withMiddleware(s.HandleHealth)
+	handler(setupRec, setupReq)
+
+	if setupRec.Header().Get("Access-Control-Allow-Origin") != "http://setup-domain.com:3000" {
+		t.Errorf("expected reflected origin during setup, got: %s", setupRec.Header().Get("Access-Control-Allow-Origin"))
+	}
+	if setupRec.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Errorf("expected Allow-Credentials true, got: %s", setupRec.Header().Get("Access-Control-Allow-Credentials"))
+	}
+
+	// 2. Preflight OPTIONS request
+	optionsReq := httptest.NewRequest(http.MethodOptions, "/api/v1/telemetry", nil)
+	optionsReq.Header.Set("Origin", "http://localhost:3000")
+	optionsRec := httptest.NewRecorder()
+	handler(optionsRec, optionsReq)
+
+	if optionsRec.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for OPTIONS preflight, got %d", optionsRec.Code)
+	}
+	if optionsRec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3000" {
+		t.Errorf("expected localhost origin allowed, got: %s", optionsRec.Header().Get("Access-Control-Allow-Origin"))
+	}
+
+	// 3. Localhost loopback check helper
+	if !isLocalhostOrigin("http://localhost:3000") {
+		t.Errorf("expected localhost:3000 to be localhost origin")
+	}
+	if !isLocalhostOrigin("http://127.0.0.1:8080") {
+		t.Errorf("expected 127.0.0.1:8080 to be localhost origin")
+	}
+	if isLocalhostOrigin("https://evil-site.com") {
+		t.Errorf("expected evil-site.com to not be localhost origin")
 	}
 }
