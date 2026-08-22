@@ -587,6 +587,126 @@ export class EngineClient {
       return { success: false, error: e?.message || 'Failed to connect to AI engine' };
     }
   }
+
+  async getAuthUser(): Promise<{
+    id: string;
+    username: string;
+    email?: string;
+    avatar_url?: string;
+    role: string;
+  } | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/me`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await this.safeParseJSON(res);
+        return data.user || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getTeamMembers(): Promise<any[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/members`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await this.safeParseJSON(res);
+        return data.members || [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  async updateMemberRole(id: string, role: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/members/role`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ id, role }),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'success') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to update role' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  async removeMember(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/members?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'success') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to remove member' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  async getTeamInvites(): Promise<any[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/invites`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await this.safeParseJSON(res);
+        return data.invitations || [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createInvite(
+    githubUsername: string,
+    role: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/invites`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ github_username: githubUsername, role }),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'created') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to create invite' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  async cancelInvite(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/invites?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'success') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to cancel invite' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
 }
 
 export const engineClient = new EngineClient();
