@@ -31,7 +31,7 @@ interface HeaderProps {
   activeRootDir?: string;
   projects?: Project[];
   onSelectProject?: (project: Project, targetScreen?: ScreenId) => void;
-  currentUser?: { username: string; avatarUrl?: string } | null;
+  currentUser?: { username: string; avatarUrl?: string; role?: string } | null;
   onLogout?: () => void;
 }
 
@@ -133,11 +133,11 @@ export const Header: React.FC<HeaderProps> = ({
               title="Switch Project"
             >
               <GitBranch className="w-3 h-3 text-slate-500 shrink-0" />
-              <span className="font-bold text-slate-900 max-w-[160px] sm:max-w-[220px] truncate">
+              <span className="font-bold text-slate-900 max-w-40 sm:max-w-55 truncate">
                 {activeRepo || 'Select Project'}
               </span>
               {activeRootDir && (
-                <span className="text-indigo-600 font-medium hidden md:inline truncate max-w-[100px]">
+                <span className="text-indigo-600 font-medium hidden md:inline truncate max-w-25">
                   ({activeRootDir})
                 </span>
               )}
@@ -263,6 +263,21 @@ export const Header: React.FC<HeaderProps> = ({
           {currentUser ? (
             <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 px-2 py-1 rounded-sm font-mono text-xs text-slate-800">
               <span className="font-semibold">@{currentUser.username}</span>
+              {currentUser.role && (
+                <span
+                  className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm ${
+                    currentUser.role.toLowerCase() === 'owner'
+                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                      : currentUser.role.toLowerCase() === 'admin'
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                        : currentUser.role.toLowerCase() === 'developer'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {currentUser.role}
+                </span>
+              )}
               {onLogout && (
                 <button
                   onClick={onLogout}
