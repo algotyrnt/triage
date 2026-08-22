@@ -7,9 +7,9 @@ Triage includes a centralized `Makefile` to streamline local development, multi-
 
 ## Prerequisites
 
-- **Go 1.22+**
-- **Bun** (latest)
-- **Docker & Docker Compose**
+- **Go 1.26+** (Required for Engine and Go SDK)
+- **Bun** (latest / 1.x+, used for Web & Dashboard build tooling)
+- **Docker & Docker Compose** (For local stack orchestration)
 - **Make** (`/usr/bin/make` on macOS / Linux)
 
 ---
@@ -116,7 +116,7 @@ Releases in Triage follow [Semantic Versioning](https://semver.org) and publish 
 Preview the release process and verify all build assets without creating git tags or modifying git history:
 
 ```bash
-make release-dry-run VERSION=v0.1.1
+make release-dry-run VERSION=vX.Y.Z
 ```
 
 ### 2. Cutting a Release
@@ -134,7 +134,7 @@ make release-minor
 make release-major
 
 # Or specify an explicit version:
-make release VERSION=v0.1.1
+make release VERSION=vX.Y.Z
 ```
 
 ### 3. Release Pipeline Lifecycle
@@ -143,12 +143,13 @@ make release VERSION=v0.1.1
 Local `make release`
   │  1. Verifies git working directory is clean
   │  2. Runs full test & lint matrix (`make check`)
-  │  3. Creates tags `v0.1.1` and `sdk/go/v0.1.1`
+  │  3. Creates tags `vX.Y.Z` and `sdk/go/vX.Y.Z`
   │  4. Pushes tags to GitHub
   ▼
 GitHub Actions (`release.yml`)
   ├── Warms Go module proxy cache (pkg.go.dev indexing)
   ├── Builds & pushes multi-arch Docker images to GHCR
-  ├── Packages web distribution bundle (`triage-web-v0.1.1.tar.gz`)
-  └── Publishes GitHub Release with automated notes
+  ├── Packages web distribution bundle (`triage-web-vX.Y.Z.tar.gz`)
+  ├── Deploys documentation to Cloudflare Pages
+  └── Publishes GitHub Release with automated notes and assets
 ```

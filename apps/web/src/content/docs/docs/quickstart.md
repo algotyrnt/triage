@@ -7,7 +7,7 @@ Follow this guide to spin up a local Triage stack and capture your first Go cras
 
 ## Prerequisites
 
-- **Go 1.22+**
+- **Go 1.26+**
 - **Docker & Docker Compose**
 - A Google AI Studio API key ([aistudio.google.com](https://aistudio.google.com))
 

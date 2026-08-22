@@ -148,10 +148,10 @@ make down             # Stop cluster
 ├── db/schema.sql             # PostgreSQL DDL — schema, RBAC tables & performance indexes
 ├── apps/
 │   ├── engine/               # Go 1.26+ core engine (AST slicing, Gemini AI, OAuth & REST APIs)
-│   ├── dashboard/            # Next.js 16 Studio Dashboard (Pure static SPA)
-│   └── web/                  # Astro & Starlight public site and documentation
-├── sdk/go/                   # Official Go SDK (panic recovery middleware & async dispatch)
-└── test-services/            # Simulation microservices for local validation
+│   ├── dashboard/            # Next.js 16 Studio Dashboard (Bun runtime / Pure static SPA)
+│   └── web/                  # Astro & Starlight public site and documentation (Bun runtime)
+├── sdk/go/                   # Official Go SDK (panic recovery middleware & async dispatch, Go 1.26+)
+└── test-services/            # Simulation microservices for local validation (Go 1.26+)
 ```
 
 ---
