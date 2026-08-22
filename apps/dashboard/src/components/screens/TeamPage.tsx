@@ -6,31 +6,71 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TeamMember, ScreenId } from '@/types';
 import { GithubIcon as Github } from '@/components/GithubIcon';
-import { Users, Shield, Lock, UserPlus, X, Mail } from 'lucide-react';
+import { engineClient } from '@/services/engineClient';
+import { Users, Shield, Lock, UserPlus, X, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface TeamPageProps {
-  teamMembers: TeamMember[];
+  teamMembers?: TeamMember[];
+  currentUser?: { username: string; avatarUrl?: string; role?: string } | null;
   onNavigate: (screen: ScreenId) => void;
 }
 
 interface PendingInvite {
   id: string;
   githubUsername: string;
-  role: 'Admin' | 'Member';
+  role: string;
   sentAt: string;
 }
 
-export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) => {
-  const [members, setMembers] = useState<TeamMember[]>(teamMembers);
+export const TeamPage: React.FC<TeamPageProps> = ({ currentUser, onNavigate }) => {
+  const [members, setMembers] = useState<any[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteUsername, setInviteUsername] = useState('');
-  const [inviteRole, setInviteRole] = useState<'Admin' | 'Member'>('Member');
+  const [inviteRole, setInviteRole] = useState<'Admin' | 'Developer' | 'Viewer'>('Developer');
   const [searchQuery, setSearchQuery] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const inviteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
+
+  const isOwnerOrAdmin =
+    currentUser?.role?.toLowerCase() === 'owner' || currentUser?.role?.toLowerCase() === 'admin';
+
+  const loadTeamData = async () => {
+    setLoading(true);
+    try {
+      const [membersData, invitesData] = await Promise.all([
+        engineClient.getTeamMembers(),
+        engineClient.getTeamInvites(),
+      ]);
+
+      if (membersData) {
+        setMembers(membersData);
+      }
+      if (invitesData) {
+        setPendingInvites(
+          invitesData.map((inv: any) => ({
+            id: inv.id,
+            githubUsername: inv.github_username,
+            role: inv.role,
+            sentAt: new Date(inv.created_at || Date.now()).toLocaleDateString(),
+          })),
+        );
+      }
+    } catch (e) {
+      console.error('Failed to load team data', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTeamData();
+  }, []);
 
   useEffect(() => {
     if (showInviteModal) {
@@ -65,33 +105,59 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
 
   const filteredMembers = members.filter(
     (m) =>
-      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.githubUsername.toLowerCase().includes(searchQuery.toLowerCase()),
+      (m.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.email || '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteUsername) return;
+    setErrorMsg('');
+    setSuccessMsg('');
 
-    // Create a pending invitation record instead of appending directly to active members
-    const newInvite: PendingInvite = {
-      id: `inv-${Date.now()}`,
-      githubUsername: inviteUsername,
-      role: inviteRole,
-      sentAt: 'Just now',
-    };
-
-    setPendingInvites((prev) => [...prev, newInvite]);
-    setInviteUsername('');
-    setShowInviteModal(false);
+    const res = await engineClient.createInvite(inviteUsername.trim(), inviteRole);
+    if (res.success) {
+      setSuccessMsg(`Invitation created for @${inviteUsername.trim()}`);
+      setInviteUsername('');
+      setShowInviteModal(false);
+      loadTeamData();
+    } else {
+      setErrorMsg(res.error || 'Failed to create invitation');
+    }
   };
 
-  const handleCancelInvite = (id: string) => {
-    setPendingInvites((prev) => prev.filter((inv) => inv.id !== id));
+  const handleCancelInvite = async (id: string) => {
+    setErrorMsg('');
+    const res = await engineClient.cancelInvite(id);
+    if (res.success) {
+      setPendingInvites((prev) => prev.filter((inv) => inv.id !== id));
+    } else {
+      setErrorMsg(res.error || 'Failed to revoke invitation');
+    }
   };
 
-  const handleRemoveMember = (id: string) => {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
+  const handleRemoveMember = async (id: string, username: string) => {
+    if (!window.confirm(`Are you sure you want to revoke access for @${username}?`)) return;
+    setErrorMsg('');
+    const res = await engineClient.removeMember(id);
+    if (res.success) {
+      setMembers((prev) => prev.filter((m) => m.id !== id));
+      setSuccessMsg(`Access revoked for @${username}`);
+    } else {
+      setErrorMsg(res.error || 'Failed to remove member');
+    }
+  };
+
+  const handleRoleChange = async (id: string, newRole: string) => {
+    setErrorMsg('');
+    const res = await engineClient.updateMemberRole(id, newRole);
+    if (res.success) {
+      setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role: newRole } : m)));
+      setSuccessMsg('Member role updated');
+    } else {
+      setErrorMsg(res.error || 'Failed to update role');
+      loadTeamData();
+    }
   };
 
   return (
@@ -112,15 +178,42 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
             </p>
           </div>
 
-          <button
-            ref={inviteTriggerRef}
-            onClick={() => setShowInviteModal(true)}
-            className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>Invite GitHub User</span>
-          </button>
+          {isOwnerOrAdmin && (
+            <button
+              ref={inviteTriggerRef}
+              onClick={() => setShowInviteModal(true)}
+              className="bg-black hover:bg-slate-800 text-white font-mono text-xs font-semibold py-1.5 px-3 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Invite GitHub User</span>
+            </button>
+          )}
         </div>
+
+        {/* Feedback alerts */}
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-sm text-xs font-mono flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600" />
+              <span>{errorMsg}</span>
+            </div>
+            <button onClick={() => setErrorMsg('')} className="text-red-400 hover:text-red-800">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-sm text-xs font-mono flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{successMsg}</span>
+            </div>
+            <button onClick={() => setSuccessMsg('')} className="text-emerald-400 hover:text-emerald-800">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Security Policies Overview Bar */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -129,8 +222,8 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
               <Shield className="w-4 h-4 text-slate-800" />
             </div>
             <div className="font-mono text-xs">
-              <div className="font-bold text-slate-900">Enforced 2FA Policy</div>
-              <div className="text-[11px] text-slate-500">Require GitHub 2FA for all members</div>
+              <div className="font-bold text-slate-900">Enforced RBAC Policy</div>
+              <div className="text-[11px] text-slate-500">Zero-trust cryptographic JWT sessions</div>
             </div>
           </div>
 
@@ -139,9 +232,9 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
               <Lock className="w-4 h-4 text-slate-800" />
             </div>
             <div className="font-mono text-xs">
-              <div className="font-bold text-slate-900">Zero Trust Token Scoping</div>
+              <div className="font-bold text-slate-900">Role Scoping</div>
               <div className="text-[11px] text-slate-500">
-                Least privilege AST & incident access
+                Owner, Admin, Developer, &amp; Viewer tiers
               </div>
             </div>
           </div>
@@ -152,7 +245,10 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
             </div>
             <div className="font-mono text-xs">
               <div className="font-bold text-slate-900">{members.length} Active Members</div>
-              <div className="text-[11px] text-slate-500">Organization: algotyrnt</div>
+              <div className="text-[11px] text-slate-500">
+                Your Role:{' '}
+                <span className="font-bold text-slate-900">{currentUser?.role || 'Developer'}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -176,15 +272,17 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                       {inv.role}
                     </span>
                     <span className="text-slate-500 text-[11px]">
-                      • Sent {inv.sentAt} (Awaiting Acceptance & 2FA)
+                      • Invited {inv.sentAt} (Awaiting first GitHub login)
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleCancelInvite(inv.id)}
-                    className="text-xs text-red-600 hover:underline"
-                  >
-                    Revoke Invite
-                  </button>
+                  {isOwnerOrAdmin && (
+                    <button
+                      onClick={() => handleCancelInvite(inv.id)}
+                      className="text-xs text-red-600 hover:underline cursor-pointer"
+                    >
+                      Revoke Invite
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -217,8 +315,8 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                 <tr>
                   <th className="py-2.5 px-4 font-semibold">User</th>
                   <th className="py-2.5 px-4 font-semibold">Role</th>
-                  <th className="py-2.5 px-4 font-semibold">Scopes</th>
-                  <th className="py-2.5 px-4 font-semibold">2FA</th>
+                  <th className="py-2.5 px-4 font-semibold">Email</th>
+                  <th className="py-2.5 px-4 font-semibold">Joined</th>
                   <th className="py-2.5 px-4 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
@@ -227,22 +325,22 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                   <tr key={m.id} className="hover:bg-slate-50">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2.5">
-                        {m.avatarUrl ? (
+                        {m.avatar_url ? (
                           <img
-                            src={m.avatarUrl}
+                            src={m.avatar_url}
                             alt=""
                             className="w-7 h-7 rounded-full border border-slate-200"
                           />
                         ) : (
                           <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-700 text-xs">
-                            {m.name.charAt(0)}
+                            {(m.username || 'U').charAt(0).toUpperCase()}
                           </div>
                         )}
                         <div>
                           <div className="font-bold text-slate-900 flex items-center gap-1">
-                            <span>{m.name}</span>
+                            <span>{m.username}</span>
                             <a
-                              href={`https://github.com/${m.githubUsername}`}
+                              href={`https://github.com/${m.username}`}
                               target="_blank"
                               rel="noreferrer"
                               className="text-slate-400 hover:text-black"
@@ -250,51 +348,48 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                               <Github className="w-3 h-3" />
                             </a>
                           </div>
-                          <div className="text-[11px] text-slate-500">@{m.githubUsername}</div>
+                          <div className="text-[11px] text-slate-500">ID: {m.id}</div>
                         </div>
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-sm font-bold text-[10px] border ${
-                          m.role === 'Owner'
-                            ? 'bg-purple-50 text-purple-700 border-purple-200'
-                            : m.role === 'Admin'
-                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {m.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex flex-wrap gap-1">
-                        {m.scopes.map((scope) => (
-                          <span
-                            key={scope}
-                            className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] px-1.5 py-0.5 rounded-xs"
-                          >
-                            {scope}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {m.mfaEnabled ? (
-                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded-xs">
-                          2FA Verified
-                        </span>
+                      {isOwnerOrAdmin && m.role !== 'Owner' ? (
+                        <select
+                          value={m.role}
+                          onChange={(e) => handleRoleChange(m.id, e.target.value)}
+                          className="bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 text-xs font-mono font-bold"
+                        >
+                          <option value="Admin">Admin</option>
+                          <option value="Developer">Developer</option>
+                          <option value="Viewer">Viewer</option>
+                        </select>
                       ) : (
-                        <span className="text-red-700 bg-red-50 border border-red-200 text-[10px] font-bold px-1.5 py-0.5 rounded-xs">
-                          Disabled
+                        <span
+                          className={`px-2 py-0.5 rounded-sm font-bold text-[10px] border ${
+                            m.role === 'Owner'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : m.role === 'Admin'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : m.role === 'Developer'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {m.role}
                         </span>
                       )}
                     </td>
+                    <td className="py-3 px-4 text-slate-600">
+                      {m.email || '—'}
+                    </td>
+                    <td className="py-3 px-4 text-slate-500 text-[11px]">
+                      {m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
+                    </td>
                     <td className="py-3 px-4 text-right">
-                      {m.role !== 'Owner' && (
+                      {isOwnerOrAdmin && m.role !== 'Owner' && m.id !== currentUser?.username && (
                         <button
-                          onClick={() => handleRemoveMember(m.id)}
-                          className="text-red-600 hover:underline text-xs"
+                          onClick={() => handleRemoveMember(m.id, m.username)}
+                          className="text-red-600 hover:underline text-xs cursor-pointer"
                         >
                           Revoke Access
                         </button>
@@ -322,7 +417,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
               <div className="font-bold text-sm text-slate-900">Invite GitHub User</div>
               <button
                 onClick={() => setShowInviteModal(false)}
-                className="text-slate-400 hover:text-black"
+                className="text-slate-400 hover:text-black cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -336,7 +431,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                   type="text"
                   value={inviteUsername}
                   onChange={(e) => setInviteUsername(e.target.value)}
-                  placeholder="e.g. devonvance-go"
+                  placeholder="e.g. torvalds"
                   required
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
                 />
@@ -349,8 +444,9 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                   onChange={(e) => setInviteRole(e.target.value as any)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
                 >
-                  <option value="Member">Member (Read-only Incidents)</option>
-                  <option value="Admin">Admin (AST Write & Key Management)</option>
+                  <option value="Developer">Developer (Triage, ASTs, Fix PRs)</option>
+                  <option value="Admin">Admin (Project Management &amp; Invites)</option>
+                  <option value="Viewer">Viewer (Read-only Dashboards)</option>
                 </select>
               </div>
 
@@ -358,7 +454,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({ teamMembers, onNavigate }) =
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-sm border border-slate-200"
+                  className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-sm border border-slate-200 cursor-pointer"
                 >
                   Cancel
                 </button>
