@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,28 +65,27 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var database *db.DB
-	var astManager *ast.Manager
-
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL != "" {
-		var err error
-		database, err = db.NewDB(ctx, dbURL)
-		if err != nil {
-			slog.Warn("failed to connect database pool", "error", err)
-		} else {
-			defer database.Close()
-			slog.Info("connected engine to PostgreSQL database pool")
-		}
-
-		astManager, err = ast.NewManager(ctx, dbURL)
-		if err != nil {
-			slog.Warn("failed to connect AST manager to PostgreSQL", "error", err)
-		} else {
-			defer astManager.Close()
-			slog.Info("connected engine to PostgreSQL AST indexer")
-		}
+	dbURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
+	if dbURL == "" {
+		slog.Error("fatal: missing required environment variable DATABASE_URL")
+		os.Exit(1)
 	}
+
+	database, err := db.NewDB(ctx, dbURL)
+	if err != nil {
+		slog.Error("fatal: failed to connect to PostgreSQL database", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+	slog.Info("connected engine to PostgreSQL database pool")
+
+	astManager, err := ast.NewManager(ctx, dbURL)
+	if err != nil {
+		slog.Error("fatal: failed to connect AST manager to PostgreSQL", "error", err)
+		os.Exit(1)
+	}
+	defer astManager.Close()
+	slog.Info("connected engine to PostgreSQL AST indexer")
 
 	port := os.Getenv("PORT")
 	if port == "" {
