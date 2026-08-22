@@ -113,7 +113,9 @@ export class EngineClient {
 
   async getIncidents(): Promise<any[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/incidents`);
+      const res = await fetch(`${this.baseUrl}/incidents`, {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return data.incidents || [];
@@ -152,7 +154,9 @@ export class EngineClient {
 
   async getProjects(): Promise<any[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/projects`);
+      const res = await fetch(`${this.baseUrl}/projects`, {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return data.projects || [];
@@ -208,7 +212,9 @@ export class EngineClient {
 
   async getStats(): Promise<any> {
     try {
-      const res = await fetch(`${this.baseUrl}/stats`);
+      const res = await fetch(`${this.baseUrl}/stats`, {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -272,7 +278,9 @@ export class EngineClient {
   }
 
   async getInstallUrl(): Promise<{ url: string }> {
-    const res = await fetch(`${this.baseUrl}/setup/install`);
+    const res = await fetch(`${this.baseUrl}/setup/install`, {
+      headers: this.getAuthHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to get install URL: ${await res.text()}`);
     return await res.json();
   }
@@ -280,7 +288,7 @@ export class EngineClient {
   async saveOAuthConfig(clientId: string, clientSecret: string): Promise<{ success: boolean }> {
     const res = await fetch(`${this.baseUrl}/setup/oauth`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify({
         client_id: clientId,
         client_secret: clientSecret,
@@ -343,7 +351,10 @@ export class EngineClient {
     app_name?: string;
     error?: string;
   }> {
-    const res = await fetch(`${this.baseUrl}/setup/test`, { method: 'POST' });
+    const res = await fetch(`${this.baseUrl}/setup/test`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: 'Connection failed' }));
       return { success: false, error: data.error || 'Connection test failed' };
