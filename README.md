@@ -73,6 +73,7 @@ Go HTTP Server (your app)
 - **Automated GitHub Issue Filing:** Automatically creates GitHub issues with formatted AST code blocks, raw stack traces, Gemini diagnostic summaries, and triage labels.
 - **Multi-Project & Monorepo Support:** Track multiple Go repositories and monorepos from a single dashboard with an instant project switcher. Includes automatic Go submodule detection (`go.mod` discovery) and path normalization.
 - **Direct Gemini AI Endpoints:** Dedicated REST APIs for on-demand crash analysis (`/api/v1/gemini/analyze-panic`) and unified diff patch generation (`/api/v1/gemini/generate-patch`).
+- **Dynamic Origin-Restricted CORS:** Protects proprietary AST context and stack traces by locking down browser access strictly to your configured dashboard domain.
 - **Project-Level API Key Management:** Issue, view, and revoke project-scoped API keys with masked key security.
 - **Single-Container Self-Hosting:** Deploy the engine and dashboard effortlessly with Docker Compose or pre-built GHCR images.
 
@@ -201,13 +202,11 @@ In the dashboard, add your repository (or choose a detected Go submodule) to get
 ### 4. Test the pipeline locally
 
 ```bash
-cd test-service
+cd test-services/simple-service
 
-# Copy and fill in your API key and engine URL
-cp .env.example .env.local
-
-go run main.go
-# → Starting test-service on :8081 ...
+# Run with your API key and -trimpath for production stack trace parity:
+TRIAGE_API_KEY=tr_live_your_key go run -trimpath main.go
+# → Starting simple-service on :8081 ...
 
 # In another terminal — trigger a nil pointer dereference panic:
 curl http://localhost:8081/crash
@@ -223,25 +222,21 @@ Open the dashboard at **http://localhost:3000** to see the isolated AST snippet,
 
 ### Engine Configuration (Optional Overrides)
 
-| Variable               | Default                 | Description                                                  |
-| ---------------------- | ----------------------- | ------------------------------------------------------------ |
-| `DATABASE_URL`         | —                       | PostgreSQL connection string (**required**)                  |
-| `PORT`                 | `8080`                  | Engine listen port                                           |
-| `TRIAGE_API_KEY`       | —                       | Fallback static API key (used when DB is unreachable)        |
-| `GEMINI_API_KEY`       | —                       | Overrides the Gemini key stored in DB                        |
-| `GEMINI_MODEL_NAME`    | `gemini-1.5-flash`      | Configured Gemini model (e.g. `gemini-2.5-flash`)            |
-| `AST_WORKSPACE_ROOT`   | `.`                     | Local workspace root path for offline AST resolution         |
-| `TRIAGE_DASHBOARD_URL` | `http://localhost:3000` | Dashboard origin (used for OAuth redirect URLs, issue links) |
-| `TRIAGE_ENGINE_URL`    | `http://localhost:8080` | Engine URL for telemetry and internal redirection            |
-| `LOG_LEVEL`            | `info`                  | Structured logging level (`debug`, `info`, `warn`, `error`)  |
+| Variable       | Default | Description                                                 |
+| -------------- | ------- | ----------------------------------------------------------- |
+| `DATABASE_URL` | —       | PostgreSQL connection string (**required**)                 |
+| `PORT`         | `8080`  | Engine listen port                                          |
+| `LOG_LEVEL`    | `info`  | Structured logging level (`debug`, `info`, `warn`, `error`) |
 
-### Test Service (`test-service/.env.example`)
+> **Note:** Ingestion API keys, Gemini AI credentials, GitHub App settings, and the Dashboard origin URL (`instance_url` for CORS protection) are managed and validated strictly through PostgreSQL via the Setup Wizard and Dashboard Settings.
 
-| Variable            | Default            | Description                           |
-| ------------------- | ------------------ | ------------------------------------- |
-| `TRIAGE_API_KEY`    | `tr_test_key_9042` | API key sent with telemetry payloads  |
-| `TRIAGE_ENGINE_URL` | SDK default        | Engine URL override for local testing |
-| `PORT`              | `8081`             | Test service listen port              |
+### Test Services (`test-services/*`)
+
+| Variable            | Required? | Default                                  | Description                           |
+| ------------------- | :-------- | ---------------------------------------- | ------------------------------------- |
+| `TRIAGE_API_KEY`    | **Yes**   | —                                        | API key sent with telemetry payloads  |
+| `TRIAGE_ENGINE_URL` | No        | `http://localhost:8080/api/v1/telemetry` | Engine URL override for local testing |
+| `PORT`              | No        | `8081` - `8084`                          | Test service listen port              |
 
 ---
 
@@ -260,7 +255,6 @@ make check
 make dev-engine       # Engine on :8080
 make dev-dashboard    # Dashboard on :3000
 make dev-web          # Docs & Landing on :4321
-make dev-test-service # Panic simulation harness on :8081
 
 # Docker stack management
 make up               # Start Docker Compose cluster
@@ -306,8 +300,11 @@ make release-major                   # Bump major (e.g. v0.1.0 -> v1.0.0)
 │   └── go/                   # Go client SDK (panic middleware & async telemetry dispatch)
 │       ├── middleware.go
 │       └── middleware_test.go
-├── test-service/             # Local panic simulation harness (:8081)
-│   └── main.go
+├── test-services/            # Dummy test suite for panic & AST simulation (:8081-:8084)
+│   ├── simple-service/
+│   ├── order-service/
+│   ├── payment-gateway/
+│   └── auth-service/
 └── docker-compose.yml
 ```
 
