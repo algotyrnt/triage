@@ -35,8 +35,10 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
   const [activeApiKey, setActiveApiKey] = useState<string>('');
   const [isRefreshingProjects, setIsRefreshingProjects] = useState(false);
   const [currentUser, setCurrentUser] = useState<{
+    id?: string;
     username: string;
     avatarUrl?: string;
+    role?: string;
   } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
@@ -110,31 +112,25 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         const storedToken = urlToken || localStorage.getItem('triage_session');
         let authenticatedUser: any = null;
 
-        // Step 2: If we have a stored token, verify the user session directly with GitHub API
+        // Step 2: Verify user session with Engine backend
         if (storedToken) {
           try {
-            const res = await fetch('https://api.github.com/user', {
-              headers: {
-                Authorization: `Bearer ${storedToken}`,
-                Accept: 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28',
-              },
-            });
-
-            if (res.ok) {
-              const user = await res.json();
+            engineClient.setAuthToken(storedToken);
+            const user = await engineClient.getAuthUser();
+            if (user) {
               authenticatedUser = user;
-              engineClient.setAuthToken(storedToken);
               setCurrentUser({
-                username: user.login,
+                id: user.id,
+                username: user.username,
                 avatarUrl: user.avatar_url,
+                role: user.role,
               });
             } else {
               localStorage.removeItem('triage_session');
               engineClient.setAuthToken(null);
             }
           } catch (e) {
-            console.error('Failed to verify GitHub token', e);
+            console.error('Failed to verify session with Engine', e);
             localStorage.removeItem('triage_session');
             engineClient.setAuthToken(null);
           }
@@ -457,7 +453,10 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               <WebhooksPage onNavigate={(screen) => setCurrentScreen(screen)} logs={[]} />
             )}
             {currentScreen === 'team' && (
-              <TeamPage teamMembers={[]} onNavigate={(screen) => setCurrentScreen(screen)} />
+              <TeamPage
+                currentUser={currentUser}
+                onNavigate={(screen) => setCurrentScreen(screen)}
+              />
             )}
             {currentScreen === 'status' && (
               <SystemStatusPage

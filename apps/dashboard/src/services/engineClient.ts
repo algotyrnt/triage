@@ -39,21 +39,12 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
-const rawEngineUrl = process.env.TRIAGE_ENGINE_URL || 'http://localhost:8080';
-const cleanEngineUrl = rawEngineUrl
-  .replace(/\/telemetry\/?$/, '')
-  .replace(/\/api\/v1\/?$/, '')
-  .replace(/\/$/, '');
-const DEFAULT_BASE_URL = `${cleanEngineUrl}/api/v1`;
-
 export class EngineClient {
   private baseUrl: string;
-  private telemetryUrl: string;
   private authToken: string | null = null;
 
-  constructor(engineUrl: string = DEFAULT_BASE_URL) {
-    this.baseUrl = engineUrl.replace(/\/telemetry$/, '');
-    this.telemetryUrl = `${this.baseUrl}/telemetry`;
+  constructor(baseUrl: string = `${process.env.TRIAGE_ENGINE_URL}/api/v1`) {
+    this.baseUrl = baseUrl;
   }
 
   getBaseUrl(): string {
@@ -61,7 +52,7 @@ export class EngineClient {
   }
 
   getTelemetryUrl(): string {
-    return this.telemetryUrl;
+    return `${this.baseUrl}/telemetry`;
   }
 
   setAuthToken(token: string | null) {
@@ -83,27 +74,28 @@ export class EngineClient {
 
   async checkStatus(): Promise<EngineStatus> {
     const startTime = Date.now();
+    const telemetryUrl = this.getTelemetryUrl();
     try {
-      const response = await fetch(this.telemetryUrl, {
+      const response = await fetch(telemetryUrl, {
         method: 'OPTIONS',
       });
       const latencyMs = Date.now() - startTime;
       return {
         online: response.ok || response.status === 405 || response.status === 200,
-        url: this.telemetryUrl,
+        url: telemetryUrl,
         latencyMs,
       };
     } catch {
       return {
         online: false,
-        url: this.telemetryUrl,
+        url: telemetryUrl,
         latencyMs: 0,
       };
     }
   }
 
   async sendTelemetry(payload: TelemetryPayload): Promise<TelemetryResponse> {
-    const response = await fetch(this.telemetryUrl, {
+    const response = await fetch(this.getTelemetryUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -121,7 +113,9 @@ export class EngineClient {
 
   async getIncidents(): Promise<any[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/incidents`);
+      const res = await fetch(`${this.baseUrl}/incidents`, {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return data.incidents || [];
@@ -160,7 +154,9 @@ export class EngineClient {
 
   async getProjects(): Promise<any[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/projects`);
+      const res = await fetch(`${this.baseUrl}/projects`, {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return [];
       const data = await res.json();
       return data.projects || [];
@@ -216,7 +212,9 @@ export class EngineClient {
 
   async getStats(): Promise<any> {
     try {
-      const res = await fetch(`${this.baseUrl}/stats`);
+      const res = await fetch(`${this.baseUrl}/stats`, {
+        headers: this.getAuthHeaders(),
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -280,7 +278,9 @@ export class EngineClient {
   }
 
   async getInstallUrl(): Promise<{ url: string }> {
-    const res = await fetch(`${this.baseUrl}/setup/install`);
+    const res = await fetch(`${this.baseUrl}/setup/install`, {
+      headers: this.getAuthHeaders(),
+    });
     if (!res.ok) throw new Error(`Failed to get install URL: ${await res.text()}`);
     return await res.json();
   }
@@ -288,7 +288,7 @@ export class EngineClient {
   async saveOAuthConfig(clientId: string, clientSecret: string): Promise<{ success: boolean }> {
     const res = await fetch(`${this.baseUrl}/setup/oauth`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getAuthHeaders(),
       body: JSON.stringify({
         client_id: clientId,
         client_secret: clientSecret,
@@ -351,7 +351,10 @@ export class EngineClient {
     app_name?: string;
     error?: string;
   }> {
-    const res = await fetch(`${this.baseUrl}/setup/test`, { method: 'POST' });
+    const res = await fetch(`${this.baseUrl}/setup/test`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: 'Connection failed' }));
       return { success: false, error: data.error || 'Connection test failed' };
@@ -585,6 +588,126 @@ export class EngineClient {
       };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to connect to AI engine' };
+    }
+  }
+
+  async getAuthUser(): Promise<{
+    id: string;
+    username: string;
+    email?: string;
+    avatar_url?: string;
+    role: string;
+  } | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/me`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await this.safeParseJSON(res);
+        return data.user || null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getTeamMembers(): Promise<any[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/members`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await this.safeParseJSON(res);
+        return data.members || [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  async updateMemberRole(id: string, role: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/members/role`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ id, role }),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'success') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to update role' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  async removeMember(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/members?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'success') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to remove member' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  async getTeamInvites(): Promise<any[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/invites`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (res.ok) {
+        const data = await this.safeParseJSON(res);
+        return data.invitations || [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  async createInvite(
+    githubUsername: string,
+    role: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/invites`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ github_username: githubUsername, role }),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'created') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to create invite' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  }
+
+  async cancelInvite(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/team/invites?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+      const data = await this.safeParseJSON(res);
+      if (res.ok && data.status === 'success') {
+        return { success: true };
+      }
+      return { success: false, error: data.error || 'Failed to cancel invite' };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
     }
   }
 }

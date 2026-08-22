@@ -16,10 +16,11 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
+
   const handleGitHubOAuthRedirect = () => {
     setLoading(true);
-    // Redirect to backend OAuth route
-    window.location.href = '/api/auth/github';
+    // Redirect to Engine backend OAuth route
+    window.location.href = `${engineClient.getBaseUrl()}/auth/github`;
   };
 
   return (

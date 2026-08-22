@@ -96,7 +96,7 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 		"redirect_url": engineURL + "/api/v1/setup/callback",
 		"setup_url":    engineURL + "/api/v1/setup/install/callback",
 		"callback_urls": []string{
-			req.InstanceURL + "/api/auth/github/callback",
+			engineURL + "/api/v1/auth/github/callback",
 		},
 		"public": false,
 		"default_permissions": map[string]string{

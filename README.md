@@ -6,34 +6,7 @@
 [![Docker Dashboard](https://img.shields.io/badge/docker-ghcr.io%2Falgotyrnt%2Ftriage--dashboard-blue?logo=docker)](https://github.com/algotyrnt/triage/pkgs/container/triage-dashboard)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-> **Work in Progress (Pre-v1.0)** — interfaces, telemetry protocols, and SDK signatures are in active development. Releases follow SemVer starting at `v0.1.0`.
-
 Zero-overhead Go panic isolation, automated GitHub triage, and AI-powered incident diagnostics. When a panic occurs in a Go HTTP server, triage intercepts it non-blockingly, isolates the exact crash site along with cross-file package context (receiver struct definitions, referenced types, constructors, and helper functions), runs it through Gemini AI for root-cause analysis, and enables 1-click **automated GitHub issue filing** and **bugfix Pull Request generation** — all without blocking your server's response.
-
----
-
-## Releases & Installation
-
-### Go SDK
-
-Install the latest release via `go get`:
-
-```bash
-go get github.com/algotyrnt/triage/sdk/go@latest
-```
-
-Or pin a specific version:
-
-```bash
-go get github.com/algotyrnt/triage/sdk/go@v0.1.0
-```
-
-### Pre-Built Containers (GHCR)
-
-Multi-architecture images (`linux/amd64`, `linux/arm64`) are published automatically on every release:
-
-- **Engine:** `docker pull ghcr.io/algotyrnt/triage-engine:latest` (or `:v0.1.0`)
-- **Dashboard:** `docker pull ghcr.io/algotyrnt/triage-dashboard:latest` (or `:v0.1.0`)
 
 ---
 
@@ -45,7 +18,8 @@ Go HTTP Server (your app)
         │  async, non-blocking POST (<0.02ms overhead)
         ▼
  Triage Engine  (:8080)
-  ├── Verify API key  (PostgreSQL)
+  ├── Ingestion & In-Memory Auth (<1ms API key verification)
+  ├── Engine-Driven OAuth & JWT Session RBAC (Owner/Admin/Dev/Viewer)
   ├── Resolve Multi-File Package AST Context
   │     ├── Crash function *ast.FuncDecl
   │     ├── Receiver struct & type definitions (cross-file)
@@ -59,52 +33,43 @@ Go HTTP Server (your app)
   └── Return JSON response
         │
         ▼
- Studio Dashboard  (:3000)            — multi-project switcher & incident inspector
+ Studio Dashboard  (:3000)            — multi-project switcher, RBAC team & incident inspector
  Public Web / Docs (:4321)            — landing page & integration docs
 ```
 
 ---
 
-## Key Features
+## Key Highlights
 
-- **Multi-File Package AST Slicing:** Extracts the exact crashing function alongside cross-file receiver structs, referenced types, constructors, and package helpers using Go's `go/parser` and `go/ast`. Eliminates >90% of token overhead while providing 100% semantic clarity.
+- **Multi-File Package AST Slicing:** Extracts the exact crashing function alongside cross-file receiver structs, referenced types, constructors, and package helpers using Go's standard `go/parser` and `go/ast`. Eliminates >90% of token overhead while providing 100% semantic clarity.
 - **Sub-0.02ms Client Latency:** Bounded 4-goroutine worker pool with a 1,000-job buffer asynchronously dispatches telemetry without blocking user HTTP requests.
+- **Engine-Driven OAuth & RBAC:** Zero frontend secret exposure. The Go engine performs GitHub OAuth code exchanges, manages user identity, issues signed 30-day HS256 JWTs, and enforces permissions across `Owner`, `Admin`, `Developer`, and `Viewer` tiers.
 - **Automated Bugfix Pull Requests:** 1-click Pull Request generation directly from the Studio Dashboard. The engine creates a dedicated fix branch, applies the patch via Gemini AI, commits the changes, and opens a linked PR on GitHub.
 - **Automated GitHub Issue Filing:** Automatically creates GitHub issues with formatted AST code blocks, raw stack traces, Gemini diagnostic summaries, and triage labels.
 - **Multi-Project & Monorepo Support:** Track multiple Go repositories and monorepos from a single dashboard with an instant project switcher. Includes automatic Go submodule detection (`go.mod` discovery) and path normalization.
 - **Direct Gemini AI Endpoints:** Dedicated REST APIs for on-demand crash analysis (`/api/v1/gemini/analyze-panic`) and unified diff patch generation (`/api/v1/gemini/generate-patch`).
 - **Dynamic Origin-Restricted CORS:** Protects proprietary AST context and stack traces by locking down browser access strictly to your configured dashboard domain.
-- **Project-Level API Key Management:** Issue, view, and revoke project-scoped API keys with masked key security.
 - **Single-Container Self-Hosting:** Deploy the engine and dashboard effortlessly with Docker Compose or pre-built GHCR images.
 
 ---
 
-## Documentation
+## Quickstart
 
-Comprehensive guides and API references are available in the documentation:
+### 1. Start Triage Stack
 
-- [Overview & Concepts](https://triage.algotyrnt.com/docs/overview)
-- [5-Minute Quickstart](https://triage.algotyrnt.com/docs/quickstart)
-- [Go SDK Integration](https://triage.algotyrnt.com/docs/sdk)
-- [AST Engine Internals](https://triage.algotyrnt.com/docs/ast-engine)
-- [Gemini AI Diagnostics](https://triage.algotyrnt.com/docs/gemini-ai)
-- [GitHub App & PR Automation](https://triage.algotyrnt.com/docs/github-integration)
-- [Engine REST API Reference](https://triage.algotyrnt.com/docs/api-reference)
-- [Self-Hosting Guide](https://triage.algotyrnt.com/docs/self-hosting)
+```bash
+git clone https://github.com/algotyrnt/triage.git
+cd triage
+docker compose up --build -d
+```
 
----
+Open [http://localhost:3000](http://localhost:3000) to complete the 5-step Setup Wizard (GitHub App, OAuth, Gemini AI API key).
 
-## SDK
-
-### Install
+### 2. Add SDK Middleware to Your Go App
 
 ```bash
 go get github.com/algotyrnt/triage/sdk/go@latest
 ```
-
-### Usage
-
-Wrap any standard `http.Handler` or `http.ServeMux`:
 
 ```go
 package main
@@ -118,140 +83,43 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/data", handleData)
 
-	engineURL := "https://triage.yourcompany.com/api/v1/telemetry"
-	handler := triage.Middleware("tr_live_your_api_key", engineURL)(mux)
+	// Wrap your standard http.Handler with Triage panic middleware:
+	handler := triage.Middleware(
+		"tr_live_your_api_key",
+		"http://localhost:8080/api/v1/telemetry",
+	)(mux)
 
 	http.ListenAndServe(":8080", handler)
 }
 ```
 
-### Zero Configuration by Default
-
-Because the Triage engine automatically resolves your repository, monorepo root directory, and Git commit hash directly from your API key and binary build metadata, the 2-argument signature is all you need:
-
-```go
-handler := triage.Middleware(
-	"tr_live_your_api_key",
-	"https://triage.yourcompany.com/api/v1/telemetry",
-)(mux)
-```
-
-The Triage engine automatically resolves your repository, monorepo root directory, and permissions from the API key, while the SDK automatically detects the Git commit SHA via `debug.ReadBuildInfo()` and propagates OpenTelemetry W3C trace headers (`traceparent`, `X-Triage-Trace-ID`).
-
-On panic, the middleware:
-
-1. Recovers from the panic using `defer + recover()`
-2. Captures the full stack trace via `debug.Stack()`
-3. Parses the top application frame (skipping runtime/stdlib/middleware frames)
-4. Generates an OpenTelemetry-compatible trace ID (`X-Triage-Trace-ID` / `traceparent`)
-5. Dispatches an **async, non-blocking** POST to the engine via a bounded worker pool (4 workers, 1000-job queue)
-6. Returns a generic `500 Internal Server Error` to the caller — no internal detail is leaked
+> **Tip:** When running or building your Go service, use `-trimpath` to generate clean relative stack traces that match your repository structure on GitHub.
 
 ---
 
-## Self-Hosting
+## Documentation
 
-### Prerequisites
+Full technical documentation, architectural deep dives, and API specifications are available at [**triage.algotyrnt.com**](https://triage.algotyrnt.com):
 
-- Docker & Docker Compose
-- A Google AI Studio API key ([aistudio.google.com](https://aistudio.google.com))
-- A GitHub account (for GitHub App creation and OAuth)
-
-### 1. Start the stack
-
-#### Option A: Production with Pre-Built Images (Recommended)
-
-```bash
-mkdir -p db
-curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql -o db/schema.sql
-curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml -o docker-compose.prod.yml
-
-POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
-```
-
-#### Option B: Local Development from Source
-
-```bash
-git clone https://github.com/algotyrnt/triage.git
-cd triage
-docker compose up --build -d
-```
-
-This starts three containers:
-
-| Container          | Port   | Description                                              |
-| ------------------ | ------ | -------------------------------------------------------- |
-| `triage-db`        | `5432` | PostgreSQL 16 — schema auto-applied from `db/schema.sql` |
-| `triage-engine`    | `8080` | Go engine — all API, setup, and auth routes              |
-| `triage-dashboard` | `3000` | Next.js Studio Dashboard                                 |
-
-### 2. Run the setup wizard
-
-Open **http://localhost:3000** and follow the 5-step wizard:
-
-1. **GitHub App** — create and install a GitHub App with Issue, Pull Request, and Contents permissions
-2. **Installation** — install the app on your GitHub org or personal account
-3. **OAuth** — link GitHub OAuth for secure dashboard logins
-4. **Gemini AI** — enter your Google AI Studio API key and model name (e.g. `gemini-2.5-flash`)
-5. **Verify** — confirm the full pipeline is operational
-
-### 3. Create a project and get an API key
-
-In the dashboard, add your repository (or choose a detected Go submodule) to get an API key (`tr_live_...`). Use that key in the SDK.
-
-### 4. Test the pipeline locally
-
-```bash
-cd test-services/simple-service
-
-# Run with your API key and -trimpath for production stack trace parity:
-TRIAGE_API_KEY=tr_live_your_key go run -trimpath main.go
-# → Starting simple-service on :8081 ...
-
-# In another terminal — trigger a nil pointer dereference panic:
-curl http://localhost:8081/crash
-```
-
-Open the dashboard at **http://localhost:3000** to see the isolated AST snippet, AI root-cause analysis, and click **Generate Fix (PR)** to open a Pull Request.
+| Guide                                                                                  | Description                                                        |
+| :------------------------------------------------------------------------------------- | :----------------------------------------------------------------- |
+| [**Overview & Concepts**](https://triage.algotyrnt.com/docs/overview)                  | Platform architecture and core design principles                   |
+| [**5-Minute Quickstart**](https://triage.algotyrnt.com/docs/quickstart)                | End-to-end setup and first panic crash simulation                  |
+| [**Go SDK Integration**](https://triage.algotyrnt.com/docs/sdk)                        | Zero-config middleware setup and trace propagation                 |
+| [**Monorepos & Multi-Module**](https://triage.algotyrnt.com/docs/monorepo-support)     | Managing nested `go.mod` submodules and path normalization         |
+| [**AST Engine & Node Slicing**](https://triage.algotyrnt.com/docs/ast-engine)          | AST parsing, multi-file symbol resolution, and 3-tier caching      |
+| [**Gemini AI Diagnostics**](https://triage.algotyrnt.com/docs/gemini-ai)               | Root-cause analysis, prompt design, and patch synthesis            |
+| [**GitHub App & PR Automation**](https://triage.algotyrnt.com/docs/github-integration) | 1-click GitHub App creation, issue filing, and automated PRs       |
+| [**Authentication & Team RBAC**](https://triage.algotyrnt.com/docs/team-and-rbac)      | Engine-driven OAuth, JWT sessions, and member onboarding           |
+| [**Self-Hosting Guide**](https://triage.algotyrnt.com/docs/self-hosting)               | Docker Compose, GHCR images, and database migrations               |
+| [**Environment & Configuration**](https://triage.algotyrnt.com/docs/configuration)     | Engine, Dashboard, and SDK environment reference                   |
+| [**Development & Releases**](https://triage.algotyrnt.com/docs/development)            | Makefile targets, test suites, and SemVer automation               |
+| [**Engine REST API Reference**](https://triage.algotyrnt.com/docs/api-reference)       | Complete HTTP REST endpoints and telemetry protocols               |
+| [**Troubleshooting & FAQ**](https://triage.algotyrnt.com/docs/troubleshooting)         | Solutions for `-trimpath`, CORS, reverse proxies, and missing ASTs |
 
 ---
 
-## Environment Reference
-
-> **When using Docker Compose, you don't need to set most of these.** The compose file already wires all inter-service configuration. These variables are only relevant when running services natively (e.g. during engine development with `go run`).
-
-### Engine Configuration
-
-| Variable       | Default | Description                                                 |
-| -------------- | ------- | ----------------------------------------------------------- |
-| `DATABASE_URL` | —       | PostgreSQL connection string (**required**)                 |
-| `PORT`         | `8080`  | Engine listen port                                          |
-| `LOG_LEVEL`    | `info`  | Structured logging level (`debug`, `info`, `warn`, `error`) |
-
-> **Note:** Ingestion API keys, Gemini AI credentials, GitHub App settings, and the Dashboard origin URL (`instance_url` for CORS protection) are managed and validated strictly through PostgreSQL via the Setup Wizard and Dashboard Settings.
-
-### Studio Dashboard Configuration
-
-| Variable            | Default                 | Description                |
-| ------------------- | ----------------------- | -------------------------- |
-| `PORT`              | `3000`                  | Dashboard HTTP listen port |
-| `TRIAGE_ENGINE_URL` | `http://localhost:8080` | Engine backend URL         |
-
-> **Note:** The dashboard dynamically resolves its public origin from incoming requests.
-
-### Test Services (`test-services/*`)
-
-| Variable            | Required? | Default                                  | Description                           |
-| ------------------- | :-------- | ---------------------------------------- | ------------------------------------- |
-| `TRIAGE_API_KEY`    | **Yes**   | —                                        | API key sent with telemetry payloads  |
-| `TRIAGE_ENGINE_URL` | No        | `http://localhost:8080/api/v1/telemetry` | Engine URL override for local testing |
-| `PORT`              | No        | `8081` - `8084`                          | Test service listen port              |
-
----
-
-## Development & Release Toolkit
-
-Triage provides a unified `Makefile` for local service development, testing, linting, Docker workflows, and automated SemVer releases.
+## Development Toolkit
 
 ```bash
 # View all available targets
@@ -268,13 +136,7 @@ make dev-web          # Docs & Landing on :4321
 # Docker stack management
 make up               # Start Docker Compose cluster
 make logs             # Tail container logs
-make down             # Stop containers
-
-# Release automation (checks git, tags vX.Y.Z & sdk/go/vX.Y.Z, pushes to trigger CI)
-make release-dry-run VERSION=v0.1.1  # Preview release without pushing
-make release-patch                   # Bump patch (e.g. v0.1.0 -> v0.1.1)
-make release-minor                   # Bump minor (e.g. v0.1.0 -> v0.2.0)
-make release-major                   # Bump major (e.g. v0.1.0 -> v1.0.0)
+make down             # Stop cluster
 ```
 
 ---
@@ -283,38 +145,13 @@ make release-major                   # Bump major (e.g. v0.1.0 -> v1.0.0)
 
 ```
 .
-├── db/
-│   └── schema.sql            # PostgreSQL DDL — tables, indexes & performance constraints
+├── db/schema.sql             # PostgreSQL DDL — schema, RBAC tables & performance indexes
 ├── apps/
-│   ├── engine/               # Go 1.26+ core engine
-│   │   ├── internal/
-│   │   │   ├── api/          # HTTP REST endpoints & routing
-│   │   │   ├── ast/          # On-demand AST fetcher, multi-file resolver, in-memory KV cache
-│   │   │   ├── db/           # PostgreSQL pool, incident store, API key verification
-│   │   │   ├── github/       # GitHub App JWT auth, Contents API, Issue & PR automation
-│   │   │   ├── llm/          # Gemini AI SDK integration (analysis, patch & ApplyFixToFile)
-│   │   │   └── logger/       # Structured logging with secret sanitization
-│   │   ├── main.go           # HTTP server (:8080)
-│   │   └── Dockerfile
-│   ├── dashboard/            # Next.js 16 Studio Dashboard (:3000)
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   │   ├── screens/  # ProjectsPage, DashboardPage, IncidentDetailPage, etc.
-│   │   │   │   └── Header.tsx # Project switcher dropdown with search
-│   │   │   └── services/     # EngineClient and Logger services
-│   │   └── Dockerfile
-│   └── web/                  # Astro public landing page & Starlight docs (:4321)
-│       └── src/
-├── sdk/
-│   └── go/                   # Go client SDK (panic middleware & async telemetry dispatch)
-│       ├── middleware.go
-│       └── middleware_test.go
-├── test-services/            # Dummy test suite for panic & AST simulation (:8081-:8084)
-│   ├── simple-service/
-│   ├── order-service/
-│   ├── payment-gateway/
-│   └── auth-service/
-└── docker-compose.yml
+│   ├── engine/               # Go 1.26+ core engine (AST slicing, Gemini AI, OAuth & REST APIs)
+│   ├── dashboard/            # Next.js 16 Studio Dashboard (Pure static SPA)
+│   └── web/                  # Astro & Starlight public site and documentation
+├── sdk/go/                   # Official Go SDK (panic recovery middleware & async dispatch)
+└── test-services/            # Simulation microservices for local validation
 ```
 
 ---
