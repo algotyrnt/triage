@@ -141,6 +141,49 @@ make down             # Stop cluster
 
 ---
 
+## Making a Release
+
+Triage follows [Semantic Versioning](https://semver.org) (`vMAJOR.MINOR.PATCH`) with automated pre-flight quality checks, Go submodule dual-tagging, and continuous delivery via GitHub Actions.
+
+### 1. Pre-flight & Dry Run (Optional)
+
+Preview the release workflow, build artifacts, and simulated tag creation without making any git changes:
+
+```bash
+make release-dry-run VERSION=v0.2.0
+```
+
+### 2. Cut and Publish a Release
+
+Releases must be initiated from the `main` branch with a clean git working tree. Use automated SemVer bump targets or specify an explicit version:
+
+```bash
+# Automated SemVer bumps:
+make release-patch   # e.g. v0.1.0 -> v0.1.1
+make release-minor   # e.g. v0.1.0 -> v0.2.0
+make release-major   # e.g. v0.1.0 -> v1.0.0
+
+# Or specify an explicit version:
+make release VERSION=v0.2.0
+```
+
+### 3. Automated Release Lifecycle
+
+When a release is triggered, the pipeline performs the following steps:
+
+1. **Local Pre-flight Quality Gate:** Runs `make check` (format validation, `go vet`, engine/SDK test suites, and component builds).
+2. **Dual Git Tagging:** Creates root tag `vX.Y.Z` and submodule tag `sdk/go/vX.Y.Z` (required for Go module proxy resolution).
+3. **Push to Remote:** Pushes tags to GitHub to trigger the release workflow.
+4. **CI/CD Pipeline (`.github/workflows/release.yml`):**
+   - **Go SDK:** Publishes `sdk/go/vX.Y.Z` and warms the Go module proxy cache (`pkg.go.dev`).
+   - **Docker Images:** Builds and publishes multi-arch (`linux/amd64`, `linux/arm64`) images to GitHub Container Registry:
+     - `ghcr.io/algotyrnt/triage-engine:vX.Y.Z` (and `:latest`)
+     - `ghcr.io/algotyrnt/triage-dashboard:vX.Y.Z` (and `:latest`)
+   - **Web / Documentation:** Builds and deploys the documentation site to Cloudflare Pages and creates `triage-web-vX.Y.Z.tar.gz`.
+   - **GitHub Release:** Publishes the official immutable GitHub release with auto-generated release notes and attached assets (`docker-compose.prod.yml`, `db/schema.sql`, and web distribution tarball).
+
+---
+
 ## Repository Structure
 
 ```
