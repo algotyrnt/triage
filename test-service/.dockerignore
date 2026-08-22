@@ -1,8 +1,0 @@
-.git
-.github
-.vscode
-.gemini
-bin
-.env*
-!.env.example
-.DS_Store

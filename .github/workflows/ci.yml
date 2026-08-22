@@ -18,7 +18,6 @@ jobs:
     outputs:
       engine: ${{ steps.filter.outputs.engine }}
       sdk: ${{ steps.filter.outputs.sdk }}
-      test_service: ${{ steps.filter.outputs.test_service }}
       web: ${{ steps.filter.outputs.web }}
       dashboard: ${{ steps.filter.outputs.dashboard }}
     steps:
@@ -33,9 +32,6 @@ jobs:
             engine:
               - 'apps/engine/**'
             sdk:
-              - 'sdk/go/**'
-            test_service:
-              - 'test-service/**'
               - 'sdk/go/**'
             web:
               - 'apps/web/**'
@@ -109,38 +105,6 @@ jobs:
 
       - name: Build SDK
         run: make build-sdk
-
-  test-service:
-    name: test-service
-    needs: changes
-    if: needs.changes.outputs.test_service == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-          check-latest: false
-          cache: true
-          cache-dependency-path: test-service/go.sum
-
-      - name: Cache Go Build & Test Artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/go-build
-          key: ${{ runner.os }}-go-build-test-service-${{ hashFiles('test-service/go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-build-test-service-${{ hashFiles('test-service/go.sum') }}-
-            ${{ runner.os }}-go-build-test-service-
-
-      - name: Check Formatting & Vet
-        run: make lint-test-service
-
-      - name: Build Test Service
-        run: make build-test-service
 
   web:
     name: web

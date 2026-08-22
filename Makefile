@@ -199,7 +199,7 @@ package-web: build-web ## Package web distribution bundle tarball
 	@printf "$(COLOR_GREEN)Created triage-web-$(VERSION).tar.gz$(COLOR_RESET)\n"
 
 .PHONY: release-bundle
-release-bundle: check-version-var build-engine build-test-service package-web ## Build all release assets locally (binaries, tarballs, configs)
+release-bundle: check-version-var build-engine package-web ## Build all release assets locally (binaries, tarballs, configs)
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Release bundle generated successfully:$(COLOR_RESET)\n"
 	@ls -la $(BIN_DIR) triage-web-$(VERSION).tar.gz docker-compose.prod.yml db/schema.sql
 
@@ -212,7 +212,7 @@ check: lint test build ## Run full pre-flight quality gate (lint + test + build)
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> All pre-flight checks passed!$(COLOR_RESET)\n"
 
 .PHONY: test
-test: test-engine test-sdk test-service-build ## Run all Go test suites
+test: test-engine test-sdk ## Run all Go test suites
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> All test suites passed!$(COLOR_RESET)\n"
 
 .PHONY: test-engine
@@ -224,11 +224,6 @@ test-engine: ## Run Engine unit tests
 test-sdk: ## Run Go SDK unit tests
 	@printf "$(COLOR_CYAN)==> Testing Go SDK (sdk/go)...$(COLOR_RESET)\n"
 	@cd sdk/go && $(GO) test -v ./...
-
-.PHONY: test-service-build
-test-service-build: ## Verify test-service compilation and vet
-	@printf "$(COLOR_CYAN)==> Verifying Test Service (test-service)...$(COLOR_RESET)\n"
-	@cd test-service && $(GO) vet ./... && $(GO) build ./...
 
 .PHONY: test-coverage
 test-coverage: ## Run tests with code coverage report
@@ -247,7 +242,7 @@ lint: lint-go lint-web lint-dashboard ## Run all code linters and formatting che
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Linting & formatting checks passed!$(COLOR_RESET)\n"
 
 .PHONY: lint-go
-lint-go: lint-engine lint-sdk lint-test-service ## Verify all Go formatting and static analysis
+lint-go: lint-engine lint-sdk ## Verify all Go formatting and static analysis
 
 .PHONY: lint-engine
 lint-engine: ## Verify Engine formatting and vet
@@ -270,17 +265,6 @@ lint-sdk: ## Verify Go SDK formatting and vet
 		exit 1; \
 	fi
 	@cd sdk/go && $(GO) vet ./...
-
-.PHONY: lint-test-service
-lint-test-service: ## Verify Test Service formatting and vet
-	@printf "$(COLOR_CYAN)==> Checking Test Service formatting and vet...$(COLOR_RESET)\n"
-	@UNFORMATTED=$$(gofmt -l test-service); \
-	if [ -n "$$UNFORMATTED" ]; then \
-		printf "$(COLOR_RED)[ERROR] Unformatted Go files in test-service:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
-		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
-		exit 1; \
-	fi
-	@cd test-service && $(GO) vet ./...
 
 .PHONY: lint-web
 lint-web: ## Check Astro web formatting
@@ -318,7 +302,7 @@ format-dashboard: ## Auto-format Next.js dashboard code
 # ==============================================================================
 
 .PHONY: build
-build: build-engine build-sdk build-test-service build-web build-dashboard ## Build all components
+build: build-engine build-sdk build-web build-dashboard ## Build all components
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> All components built successfully!$(COLOR_RESET)\n"
 
 .PHONY: build-engine
@@ -332,13 +316,6 @@ build-engine: ## Compile Engine server binary to bin/engine-server
 build-sdk: ## Build & verify Go SDK
 	@printf "$(COLOR_CYAN)==> Building Go SDK...$(COLOR_RESET)\n"
 	@cd sdk/go && $(GO) build ./...
-
-.PHONY: build-test-service
-build-test-service: ## Compile test-service binary to bin/test-service
-	@printf "$(COLOR_CYAN)==> Building Test Service binary...$(COLOR_RESET)\n"
-	@mkdir -p $(BIN_DIR)
-	@cd test-service && $(GO) build -o ../$(BIN_DIR)/test-service main.go
-	@printf "$(COLOR_GREEN)Built $(BIN_DIR)/test-service$(COLOR_RESET)\n"
 
 .PHONY: build-web
 build-web: ## Build Astro web documentation & landing page
@@ -419,7 +396,6 @@ install: ## Install all dependencies (Go modules & Bun packages)
 	@printf "$(COLOR_CYAN)==> Downloading Go modules and installing Bun packages...$(COLOR_RESET)\n"
 	@cd apps/engine && $(GO) mod download
 	@cd sdk/go && $(GO) mod download
-	@cd test-service && $(GO) mod download
 	@cd apps/web && $(BUN) install && $(BUN) x astro sync
 	@cd apps/dashboard && $(BUN) install
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Dependencies installed and types synchronized!$(COLOR_RESET)\n"
@@ -440,11 +416,6 @@ dev-dashboard: ## Run Next.js Dashboard in development mode
 dev-web: ## Run Astro Web & docs in development mode
 	@printf "$(COLOR_CYAN)==> Starting Astro Web on :4321...$(COLOR_RESET)\n"
 	@cd apps/web && $(BUN) run dev
-
-.PHONY: dev-test-service
-dev-test-service: ## Run panic simulation test service on :8081
-	@printf "$(COLOR_CYAN)==> Starting Test Service on :8081...$(COLOR_RESET)\n"
-	@cd test-service && $(GO) run main.go
 
 # ==============================================================================
 # Utilities & Cleanup

@@ -1,8 +1,5 @@
 # Binaries & build artifacts
 bin/
-apps/engine/engine
-apps/engine/triage-engine
-test-service/test-service
 *.exe
 *.exe~
 *.dll
