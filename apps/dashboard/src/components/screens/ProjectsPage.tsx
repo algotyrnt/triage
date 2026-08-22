@@ -165,7 +165,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             </span>
           </div>
           <div className="text-2xl font-bold font-mono text-slate-900">{totalProjects}</div>
-          <div className="text-[11px] font-mono text-slate-500">Go 1.22+ AST Instrumented</div>
+          <div className="text-[11px] font-mono text-slate-500">Go 1.26+ AST Instrumented</div>
         </div>
 
         {/* Metric 2: Panics Recorded */}
@@ -386,7 +386,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
                       <Terminal className="w-3 h-3 text-slate-400" />
                       <span>{projectIncs.length} Panics Ingested</span>
                     </span>
-                    <span>Go 1.22+</span>
+                    <span>Go 1.26+</span>
                   </div>
 
                   {/* Action Buttons */}

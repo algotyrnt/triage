@@ -87,7 +87,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate, onLoginSuccess
 
         {/* Footer info */}
         <div className="text-center text-[11px] text-slate-400 font-mono">
-          Triage Engine v1.4.2 • Go 1.22+ Runtime Verified
+          Triage Engine • Go 1.26+ Runtime Verified
         </div>
       </div>
     </div>

@@ -10,16 +10,16 @@ permissions:
   packages: write
 
 jobs:
-  tag-sdk:
+  sdk:
     name: Release & Index Go SDK
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Create and Push Submodule Tag
+      - name: Create and Push Go SDK Tag
         run: |
           TAG="${{ github.ref_name }}"
           SDK_TAG="sdk/go/${TAG}"
@@ -56,7 +56,7 @@ jobs:
             file: ./apps/dashboard/Dockerfile
             arg: APP_VERSION
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -72,7 +72,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
+      - name: Extract Docker Metadata & Tags
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -82,7 +82,7 @@ jobs:
             type=semver,pattern=v{{version}}
             type=raw,value=latest
 
-      - name: Build and push image
+      - name: Build and Push Multi-Arch Docker Image
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.image.context }}
@@ -96,11 +96,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  build-web:
-    name: Build Web & Documentation Bundle
+  web:
+    name: Build, Package & Deploy Web
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Bun
@@ -108,23 +108,23 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install Dependencies
+      - name: Install Web Dependencies
         working-directory: apps/web
         run: bun install --frozen-lockfile
 
-      - name: Build Astro Web
+      - name: Build Astro Web Application
         run: make build-web
 
-      - name: Package Web Distribution Bundle
+      - name: Package Web Distribution Tarball
         run: tar -czf "triage-web-${{ github.ref_name }}.tar.gz" -C apps/web/dist .
 
-      - name: Upload Web Artifact
+      - name: Upload Web Distribution Artifact
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: triage-web-${{ github.ref_name }}.tar.gz
 
-      - name: Deploy to Cloudflare
+      - name: Deploy Web to Cloudflare Pages
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -133,19 +133,19 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    needs: [tag-sdk, docker, build-web]
+    needs: [sdk, docker, web]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Download Web Artifact
+      - name: Download Web Distribution Artifact
         uses: actions/download-artifact@v4
         with:
           name: web-dist
           path: ./
 
-      - name: Generate Release Notes & Publish
+      - name: Publish GitHub Release with Assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}

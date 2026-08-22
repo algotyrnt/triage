@@ -98,7 +98,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 }`,
     'go.mod': `module ${activeRepo}
 
-go 1.22
+go 1.26
 
 require (
 	github.com/algotyrnt/triage/sdk/go v1.0.0
@@ -209,7 +209,7 @@ require (
           <div className="font-mono text-xs font-bold text-slate-900 truncate">{activeRepo}</div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
             <span>{rootDir ? `Subdir: ${rootDir}/` : 'Root: /'}</span>
-            <span className="text-slate-800 font-mono">Go 1.22+</span>
+            <span className="text-slate-800 font-mono">Go 1.26+</span>
           </div>
         </div>
 
