@@ -23,10 +23,10 @@ type AnalysisResult struct {
 // and returns a structured root cause analysis and suggested fix.
 func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName string) (*AnalysisResult, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY is missing or empty")
+		return nil, fmt.Errorf("gemini api key is not configured")
 	}
 	if modelName == "" {
-		return nil, fmt.Errorf("GEMINI_MODEL_NAME is missing or empty")
+		return nil, fmt.Errorf("gemini model name is not configured")
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -81,10 +81,10 @@ Respond ONLY with a valid JSON object with the following schema:
 // GeneratePatch sends the crash details, AST context, and analysis to Gemini to generate a unified git diff patch.
 func GeneratePatch(ctx context.Context, file, panicMessage, astSnippet, stackTrace, rootCause, apiKey, modelName string) (string, error) {
 	if apiKey == "" {
-		return "", fmt.Errorf("GEMINI_API_KEY is missing or empty")
+		return "", fmt.Errorf("gemini api key is not configured")
 	}
 	if modelName == "" {
-		return "", fmt.Errorf("GEMINI_MODEL_NAME is missing or empty")
+		return "", fmt.Errorf("gemini model name is not configured")
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -141,10 +141,10 @@ Instructions:
 // ApplyFixToFile merges the suggested patch / panic fix into the complete source file and returns the full updated file content.
 func ApplyFixToFile(ctx context.Context, file, currentContent, panicMessage, astSnippet, stackTrace, rootCause, suggestedFix, patch, apiKey, modelName string) (string, error) {
 	if apiKey == "" {
-		return "", fmt.Errorf("GEMINI_API_KEY is missing or empty")
+		return "", fmt.Errorf("gemini api key is not configured")
 	}
 	if modelName == "" {
-		return "", fmt.Errorf("GEMINI_MODEL_NAME is missing or empty")
+		return "", fmt.Errorf("gemini model name is not configured")
 	}
 
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
