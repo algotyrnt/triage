@@ -39,21 +39,12 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
-const rawEngineUrl = process.env.TRIAGE_ENGINE_URL || 'http://localhost:8080';
-const cleanEngineUrl = rawEngineUrl
-  .replace(/\/telemetry\/?$/, '')
-  .replace(/\/api\/v1\/?$/, '')
-  .replace(/\/$/, '');
-const DEFAULT_BASE_URL = `${cleanEngineUrl}/api/v1`;
-
 export class EngineClient {
   private baseUrl: string;
-  private telemetryUrl: string;
   private authToken: string | null = null;
 
-  constructor(engineUrl: string = DEFAULT_BASE_URL) {
-    this.baseUrl = engineUrl.replace(/\/telemetry$/, '');
-    this.telemetryUrl = `${this.baseUrl}/telemetry`;
+  constructor(baseUrl: string = `${process.env.TRIAGE_ENGINE_URL}/api/v1`) {
+    this.baseUrl = baseUrl;
   }
 
   getBaseUrl(): string {
@@ -61,7 +52,7 @@ export class EngineClient {
   }
 
   getTelemetryUrl(): string {
-    return this.telemetryUrl;
+    return `${this.baseUrl}/telemetry`;
   }
 
   setAuthToken(token: string | null) {
@@ -83,27 +74,28 @@ export class EngineClient {
 
   async checkStatus(): Promise<EngineStatus> {
     const startTime = Date.now();
+    const telemetryUrl = this.getTelemetryUrl();
     try {
-      const response = await fetch(this.telemetryUrl, {
+      const response = await fetch(telemetryUrl, {
         method: 'OPTIONS',
       });
       const latencyMs = Date.now() - startTime;
       return {
         online: response.ok || response.status === 405 || response.status === 200,
-        url: this.telemetryUrl,
+        url: telemetryUrl,
         latencyMs,
       };
     } catch {
       return {
         online: false,
-        url: this.telemetryUrl,
+        url: telemetryUrl,
         latencyMs: 0,
       };
     }
   }
 
   async sendTelemetry(payload: TelemetryPayload): Promise<TelemetryResponse> {
-    const response = await fetch(this.telemetryUrl, {
+    const response = await fetch(this.getTelemetryUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
