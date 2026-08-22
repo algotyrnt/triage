@@ -34,6 +34,7 @@ export default defineConfig({
           items: [
             { label: 'SDK Integration Guide', link: '/docs/sdk/' },
             { label: 'Telemetry & Architecture', link: '/docs/sdk-architecture/' },
+            { label: 'Monorepos & Multi-Module', link: '/docs/monorepo-support/' },
           ],
         },
         {
@@ -47,10 +48,12 @@ export default defineConfig({
         {
           label: 'Operations & Reference',
           items: [
+            { label: 'Authentication & Team RBAC', link: '/docs/team-and-rbac/' },
             { label: 'Self-Hosting & Docker', link: '/docs/self-hosting/' },
             { label: 'Environment & Configuration', link: '/docs/configuration/' },
             { label: 'Development & Releases', link: '/docs/development/' },
             { label: 'Engine REST API', link: '/docs/api-reference/' },
+            { label: 'Troubleshooting & FAQ', link: '/docs/troubleshooting/' },
           ],
         },
       ],
