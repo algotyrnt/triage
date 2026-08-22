@@ -134,3 +134,57 @@ func ExtractBearerOrAPIKey(r *http.Request) string {
 	}
 	return ""
 }
+
+type contextKey string
+
+const userClaimsContextKey contextKey = "user_claims"
+
+// getUserClaims extracts the verified UserClaims from the request context or Authorization header.
+func (s *Server) getUserClaims(r *http.Request) *UserClaims {
+	if r == nil {
+		return nil
+	}
+	if val := r.Context().Value(userClaimsContextKey); val != nil {
+		if claims, ok := val.(*UserClaims); ok {
+			return claims
+		}
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		secret := s.getSessionSecret(r.Context())
+		if claims, err := ParseAndVerifyUserJWT(tokenStr, secret); err == nil {
+			return claims
+		}
+	}
+	return nil
+}
+
+// withAuth enforces that the request has a valid JWT session and optionally checks required RBAC roles.
+func (s *Server) withAuth(next http.HandlerFunc, requiredRoles ...string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := s.getUserClaims(r)
+		if claims == nil {
+			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+
+		if len(requiredRoles) > 0 {
+			allowed := false
+			for _, role := range requiredRoles {
+				if strings.EqualFold(claims.Role, role) {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				http.Error(w, `{"error":"Forbidden: Insufficient role permissions"}`, http.StatusForbidden)
+				return
+			}
+		}
+
+		ctx := context.WithValue(r.Context(), userClaimsContextKey, claims)
+		next(w, r.WithContext(ctx))
+	}
+}
