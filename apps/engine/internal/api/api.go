@@ -8,65 +8,75 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"triage/engine/internal/ast"
+	"triage/engine/internal/config"
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
 )
 
 var githubNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_\.\-]+$`)
 
-// Config holds runtime dependencies and configurations for the API server.
+// Config holds initialization dependencies for the Server.
 type Config struct {
-	DB         *db.DB
-	GitHubApp  *github.AppConfig
-	ASTManager *ast.Manager
-	ASTCache   *ast.ASTCache
-	ASTFetcher *ast.OnDemandFetcher
-	AppURL     string
-	EngineURL  string
+	DB          *db.DB
+	ConfigStore *config.Store
+	GitHubApp   *github.AppConfig
+	ASTManager  *ast.Manager
+	ASTCache    *ast.ASTCache
+	ASTFetcher  *ast.OnDemandFetcher
 }
 
 // Server encapsulates HTTP routes and middleware for the Triage Engine.
 type Server struct {
-	db         *db.DB
-	githubApp  *github.AppConfig
-	astManager *ast.Manager
-	astCache   *ast.ASTCache
-	astFetcher *ast.OnDemandFetcher
-	appURL     string
-	engineURL  string
-	appSlug    string
+	db          *db.DB
+	configStore *config.Store
+	githubApp   *github.AppConfig
+	astManager  *ast.Manager
+	astCache    *ast.ASTCache
+	astFetcher  *ast.OnDemandFetcher
+	appSlug     string
 }
 
 // NewServer initializes a new API server with the provided dependencies.
 func NewServer(cfg Config) *Server {
+	if cfg.ConfigStore == nil {
+		cfg.ConfigStore = config.NewStore(cfg.DB)
+	}
 	if cfg.ASTCache == nil {
 		cfg.ASTCache = ast.NewASTCache()
 	}
 	if cfg.ASTFetcher == nil {
 		cfg.ASTFetcher = ast.NewOnDemandFetcher()
 	}
-	if cfg.AppURL == "" {
-		cfg.AppURL = "http://localhost:3000"
-	}
-	if cfg.EngineURL == "" {
-		cfg.EngineURL = "http://localhost:8080"
-	}
 
 	return &Server{
-		db:         cfg.DB,
-		githubApp:  cfg.GitHubApp,
-		astManager: cfg.ASTManager,
-		astCache:   cfg.ASTCache,
-		astFetcher: cfg.ASTFetcher,
-		appURL:     cfg.AppURL,
-		engineURL:  cfg.EngineURL,
+		db:          cfg.DB,
+		configStore: cfg.ConfigStore,
+		githubApp:   cfg.GitHubApp,
+		astManager:  cfg.ASTManager,
+		astCache:    cfg.ASTCache,
+		astFetcher:  cfg.ASTFetcher,
 	}
+}
+
+// ResolveEngineURL dynamically retrieves the base engine URL from the incoming HTTP request.
+func (s *Server) ResolveEngineURL(r *http.Request) string {
+	scheme := "http"
+	if r != nil {
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		if fHost := r.Header.Get("X-Forwarded-Host"); fHost != "" {
+			return fmt.Sprintf("%s://%s", scheme, strings.TrimRight(strings.TrimSpace(fHost), "/"))
+		}
+		if r.Host != "" {
+			return fmt.Sprintf("%s://%s", scheme, strings.TrimRight(strings.TrimSpace(r.Host), "/"))
+		}
+	}
+	return "http://localhost:8080"
 }
 
 // RegisterRoutes registers all API routes onto the given ServeMux with standard middleware.
@@ -102,13 +112,20 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/gemini/analyze-panic", s.withMiddleware(s.HandleGeminiAnalyzePanic))
 	mux.HandleFunc("/api/v1/gemini/generate-patch", s.withMiddleware(s.HandleGeminiGeneratePatch))
 
-	// Root handler: seamlessly redirect visitors/setup queries from engine to dashboard
+	// Root handler: redirect visitors to dashboard if configured, or return engine operational status
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
 		dashboardURL := s.ResolveAppURL(r.Context(), r)
+		if dashboardURL == "" {
+			writeJSON(w, http.StatusOK, map[string]string{
+				"service": "triage-engine",
+				"status":  "operational",
+			})
+			return
+		}
 		target := dashboardURL
 		if r.URL.RawQuery != "" {
 			target = fmt.Sprintf("%s?%s", dashboardURL, r.URL.RawQuery)
@@ -119,64 +136,33 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 // LoadGitHubAppConfig refreshes the GitHub App credentials and client details from the instance configuration database.
 func (s *Server) LoadGitHubAppConfig(ctx context.Context) {
-	if s.db == nil || ctx == nil {
+	if s.configStore == nil || ctx == nil {
 		return
 	}
 
-	appIDStr, _ := s.db.GetInstanceConfig(ctx, "github_app_id")
-	privateKey, _ := s.db.GetInstanceConfig(ctx, "github_app_private_key")
-	clientID, _ := s.db.GetInstanceConfig(ctx, "github_app_client_id")
-	if clientID == "" {
-		clientID, _ = s.db.GetInstanceConfig(ctx, "github_client_id")
-	}
-	clientSecret, _ := s.db.GetInstanceConfig(ctx, "github_app_client_secret")
-	if clientSecret == "" {
-		clientSecret, _ = s.db.GetInstanceConfig(ctx, "github_client_secret")
-	}
-	webhookSecret, _ := s.db.GetInstanceConfig(ctx, "github_app_webhook_secret")
-	if webhookSecret == "" {
-		webhookSecret, _ = s.db.GetInstanceConfig(ctx, "github_webhook_secret")
-	}
-	if dbSlug, _ := s.db.GetInstanceConfig(ctx, "github_app_slug"); dbSlug != "" {
-		s.appSlug = dbSlug
+	if slug := s.configStore.GetGitHubAppSlug(ctx); slug != "" {
+		s.appSlug = slug
 	}
 
-	if appIDStr != "" && privateKey != "" {
-		appID, err := strconv.ParseInt(strings.TrimSpace(appIDStr), 10, 64)
-		if err == nil && appID > 0 {
-			cfg, err := github.LoadAppConfig(appID, []byte(privateKey), webhookSecret, clientID, clientSecret)
-			if err == nil {
-				s.githubApp = cfg
-			}
-		}
+	if cfg, err := s.configStore.GetGitHubApp(ctx); err == nil && cfg != nil {
+		s.githubApp = cfg
 	}
 }
 
-// ResolveAppURL dynamically determines the public self-hosted Dashboard URL.
-// Priority:
-// 1. TRIAGE_DASHBOARD_URL environment variable
-// 2. Stored DB configuration ("instance_url", "app_url")
-// 3. Server configured appURL
-// 4. Default "http://localhost:3000"
+// ResolveAppURL dynamically retrieves the public self-hosted Dashboard URL strictly from database instance configuration.
 func (s *Server) ResolveAppURL(ctx context.Context, r ...*http.Request) string {
-	if envURL := os.Getenv("TRIAGE_DASHBOARD_URL"); envURL != "" {
-		return strings.TrimRight(envURL, "/")
+	if s.configStore == nil {
+		return ""
 	}
+	return s.configStore.GetInstanceURL(ctx, r...)
+}
 
-	if s.db != nil && ctx != nil {
-		if u, _ := s.db.GetInstanceConfig(ctx, "instance_url"); u != "" {
-			return strings.TrimRight(u, "/")
-		}
-		if u, _ := s.db.GetInstanceConfig(ctx, "app_url"); u != "" {
-			return strings.TrimRight(u, "/")
-		}
+// GetLLMConfig retrieves configured Gemini API key and model name strictly from the database instance configuration.
+func (s *Server) GetLLMConfig(ctx context.Context) (apiKey, modelName string) {
+	if s.configStore == nil {
+		return "", ""
 	}
-
-	if s.appURL != "" {
-		return strings.TrimRight(s.appURL, "/")
-	}
-
-	return "http://localhost:3000"
+	return s.configStore.GetLLM(ctx)
 }
 
 // Helper to respond with JSON

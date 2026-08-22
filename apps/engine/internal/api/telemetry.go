@@ -328,24 +328,10 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	llmAPIKey := ""
-	llmModelName := ""
-	if s.db != nil {
-		llmAPIKey, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
-		llmModelName, _ = s.db.GetInstanceConfig(r.Context(), "gemini_model")
-	}
-	if llmAPIKey == "" {
-		llmAPIKey = os.Getenv("GEMINI_API_KEY")
-	}
-	if llmModelName == "" {
-		llmModelName = os.Getenv("GEMINI_MODEL_NAME")
-	}
-	if llmModelName == "" {
-		llmModelName = "gemini-1.5-flash"
-	}
+	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
 
 	var analysis *llm.AnalysisResult
-	if astSnippet != "" && llmAPIKey != "" {
+	if astSnippet != "" && llmAPIKey != "" && llmModelName != "" {
 		analysisCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 

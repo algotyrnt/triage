@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"triage/engine/internal/config"
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
 )
@@ -36,19 +37,19 @@ func (s *Server) HandleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	apiKey := ""
 	var hasInstallation bool
 
-	if s.db != nil {
-		appID, _ = s.db.GetInstanceConfig(r.Context(), "github_app_id")
-		if slug == "" {
-			slug, _ = s.db.GetInstanceConfig(r.Context(), "github_app_slug")
+	if s.configStore != nil {
+		if app, _ := s.configStore.GetGitHubApp(r.Context()); app != nil {
+			appID = "configured"
 		}
+		if slug == "" {
+			slug = s.configStore.GetGitHubAppSlug(r.Context())
+		}
+		oauthID, _ = s.configStore.GetGitHubOAuth(r.Context())
+		apiKey, _ = s.configStore.GetLLM(r.Context())
+	}
+	if s.db != nil {
 		inst, _ := s.db.GetInstallation(r.Context())
 		hasInstallation = inst != nil
-
-		oauthID, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
-		if oauthID == "" {
-			oauthID, _ = s.db.GetInstanceConfig(r.Context(), "github_client_id")
-		}
-		apiKey, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
 	}
 
 	if appID == "" && s.githubApp != nil {
@@ -60,12 +61,11 @@ func (s *Server) HandleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	hasLLM := apiKey != ""
 
 	result := map[string]interface{}{
-		"configured":   hasApp && hasInstallation && hasOauth && hasLLM,
 		"github_app":   hasApp,
-		"app_slug":     slug,
 		"installation": hasInstallation,
 		"oauth":        hasOauth,
 		"llm":          hasLLM,
+		"configured":   hasApp && hasInstallation && hasOauth && hasLLM,
 	}
 
 	writeJSON(w, http.StatusOK, result)
@@ -81,19 +81,20 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	if req.InstanceURL != "" {
-		s.appURL = strings.TrimRight(req.InstanceURL, "/")
-		if s.db != nil {
-			_ = s.db.SaveInstanceConfig(r.Context(), "instance_url", req.InstanceURL)
+		if s.configStore != nil {
+			_ = s.configStore.SaveInstanceURL(r.Context(), req.InstanceURL)
 		}
 	} else {
 		req.InstanceURL = s.ResolveAppURL(r.Context(), r)
 	}
 
+	engineURL := s.ResolveEngineURL(r)
+
 	manifest := map[string]interface{}{
 		"name":         "Triage",
 		"url":          req.InstanceURL,
-		"redirect_url": s.engineURL + "/api/v1/setup/callback",
-		"setup_url":    s.engineURL + "/api/v1/setup/install/callback",
+		"redirect_url": engineURL + "/api/v1/setup/callback",
+		"setup_url":    engineURL + "/api/v1/setup/install/callback",
 		"callback_urls": []string{
 			req.InstanceURL + "/api/auth/github/callback",
 		},
@@ -106,9 +107,9 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	if !strings.Contains(s.engineURL, "localhost") {
+	if !strings.Contains(engineURL, "localhost") {
 		manifest["hook_attributes"] = map[string]string{
-			"url": s.engineURL + "/api/v1/webhooks/github",
+			"url": engineURL + "/api/v1/webhooks/github",
 		}
 		manifest["default_events"] = []string{"push", "installation", "installation_repositories"}
 	}
@@ -164,15 +165,15 @@ func (s *Server) HandleSetupCallback(w http.ResponseWriter, r *http.Request) {
 
 	s.appSlug = result.Slug
 
-	if s.db != nil {
-		s.db.SaveInstanceConfig(r.Context(), "github_app_id", strconv.FormatInt(result.ID, 10))
-		s.db.SaveInstanceConfig(r.Context(), "github_app_slug", result.Slug)
-		s.db.SaveInstanceConfig(r.Context(), "github_app_private_key", result.PEM)
-		s.db.SaveInstanceConfig(r.Context(), "github_app_webhook_secret", result.WebhookSecret)
-		s.db.SaveInstanceConfig(r.Context(), "github_app_client_id", result.ClientID)
-		s.db.SaveInstanceConfig(r.Context(), "github_app_client_secret", result.ClientSecret)
-		s.db.SaveInstanceConfig(r.Context(), "github_oauth_client_id", result.ClientID)
-		s.db.SaveInstanceConfig(r.Context(), "github_oauth_client_secret", result.ClientSecret)
+	if s.configStore != nil {
+		_ = s.configStore.SaveGitHubApp(r.Context(), config.GitHubAppParams{
+			ID:            result.ID,
+			Slug:          result.Slug,
+			PEM:           result.PEM,
+			WebhookSecret: result.WebhookSecret,
+			ClientID:      result.ClientID,
+			ClientSecret:  result.ClientSecret,
+		})
 	}
 
 	if result.ID > 0 && result.PEM != "" {
@@ -189,8 +190,8 @@ func (s *Server) HandleSetupCallback(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) HandleSetupInstall(w http.ResponseWriter, r *http.Request) {
 	slug := s.appSlug
-	if slug == "" && s.db != nil {
-		slug, _ = s.db.GetInstanceConfig(r.Context(), "github_app_slug")
+	if slug == "" && s.configStore != nil {
+		slug = s.configStore.GetGitHubAppSlug(r.Context())
 	}
 	if slug == "" {
 		s.LoadGitHubAppConfig(r.Context())
@@ -300,9 +301,8 @@ func (s *Server) HandleSetupInstallCallback(w http.ResponseWriter, r *http.Reque
 func (s *Server) HandleSetupOAuth(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		var clientID, clientSecret string
-		if s.db != nil {
-			clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
-			clientSecret, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_secret")
+		if s.configStore != nil {
+			clientID, clientSecret = s.configStore.GetGitHubOAuth(r.Context())
 		}
 		writeJSON(w, http.StatusOK, map[string]string{
 			"client_id":     clientID,
@@ -324,9 +324,8 @@ func (s *Server) HandleSetupOAuth(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "client_id and client_secret are required", http.StatusBadRequest)
 		return
 	}
-	if s.db != nil {
-		s.db.SaveInstanceConfig(r.Context(), "github_oauth_client_id", req.ClientID)
-		s.db.SaveInstanceConfig(r.Context(), "github_oauth_client_secret", req.ClientSecret)
+	if s.configStore != nil {
+		_ = s.configStore.SaveGitHubOAuth(r.Context(), req.ClientID, req.ClientSecret)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
@@ -347,8 +346,8 @@ func (s *Server) HandleSetupTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	appName := ""
-	if s.db != nil {
-		appName, _ = s.db.GetInstanceConfig(r.Context(), "github_app_slug")
+	if s.configStore != nil {
+		appName = s.configStore.GetGitHubAppSlug(r.Context())
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "app_name": appName})
 }
@@ -534,13 +533,8 @@ func (s *Server) HandleSetupLLM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.db != nil {
-		if req.GeminiAPIKey != "" {
-			s.db.SaveInstanceConfig(r.Context(), "gemini_api_key", req.GeminiAPIKey)
-		}
-		if req.GeminiModel != "" {
-			s.db.SaveInstanceConfig(r.Context(), "gemini_model", req.GeminiModel)
-		}
+	if s.configStore != nil {
+		_ = s.configStore.SaveLLM(r.Context(), req.GeminiAPIKey, req.GeminiModel)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -550,9 +544,8 @@ func (s *Server) HandleSettingsLLM(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		api := ""
 		model := ""
-		if s.db != nil {
-			api, _ = s.db.GetInstanceConfig(r.Context(), "gemini_api_key")
-			model, _ = s.db.GetInstanceConfig(r.Context(), "gemini_model")
+		if s.configStore != nil {
+			api, model = s.configStore.GetLLM(r.Context())
 		}
 		writeJSON(w, http.StatusOK, map[string]string{
 			"gemini_api_key": api,
@@ -571,13 +564,8 @@ func (s *Server) HandleSettingsLLM(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if s.db != nil {
-			if req.GeminiAPIKey != "" {
-				s.db.SaveInstanceConfig(r.Context(), "gemini_api_key", req.GeminiAPIKey)
-			}
-			if req.GeminiModel != "" {
-				s.db.SaveInstanceConfig(r.Context(), "gemini_model", req.GeminiModel)
-			}
+		if s.configStore != nil {
+			_ = s.configStore.SaveLLM(r.Context(), req.GeminiAPIKey, req.GeminiModel)
 		}
 
 		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
