@@ -34,9 +34,6 @@ services:
     environment:
       PORT: "8080"
       DATABASE_URL: "postgres://${POSTGRES_USER:-triage}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-triage_db}?sslmode=disable"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      TRIAGE_DASHBOARD_URL: "${TRIAGE_DASHBOARD_URL:-http://localhost:3000}"
-      TRIAGE_ENGINE_URL: "${TRIAGE_ENGINE_URL:-http://localhost:8080}"
     depends_on:
       postgres:
         condition: service_healthy
