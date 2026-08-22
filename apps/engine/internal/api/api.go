@@ -105,6 +105,16 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/setup/installed-repos", s.withMiddleware(s.HandleInstalledRepos))
 	mux.HandleFunc("/api/v1/setup/check-repo", s.withMiddleware(s.HandleCheckRepo))
 
+	// Auth & RBAC routes
+	mux.HandleFunc("/api/v1/auth/github", s.withMiddleware(s.HandleAuthGitHub))
+	mux.HandleFunc("/api/v1/auth/github/callback", s.withMiddleware(s.HandleAuthGitHubCallback))
+	mux.HandleFunc("/api/v1/auth/me", s.withMiddleware(s.HandleAuthMe))
+
+	// Team Management routes
+	mux.HandleFunc("/api/v1/team/members", s.withMiddleware(s.HandleTeamMembers))
+	mux.HandleFunc("/api/v1/team/members/role", s.withMiddleware(s.HandleTeamMemberRole))
+	mux.HandleFunc("/api/v1/team/invites", s.withMiddleware(s.HandleTeamInvites))
+
 	// Settings & Key management routes
 	mux.HandleFunc("/api/v1/settings/llm", s.withMiddleware(s.HandleSettingsLLM))
 	mux.HandleFunc("/api/v1/projects/keys", s.withMiddleware(s.HandleProjectKeys))

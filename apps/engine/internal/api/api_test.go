@@ -5,10 +5,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"triage/engine/internal/db"
 )
 
 func newTestAPIServer() *Server {
@@ -175,5 +178,77 @@ func TestCORSResolution(t *testing.T) {
 	}
 	if isLocalhostOrigin("https://evil-site.com") {
 		t.Errorf("expected evil-site.com to not be localhost origin")
+	}
+}
+
+func TestJWTAuthAndRBAC(t *testing.T) {
+	s := newTestAPIServer()
+	secret := s.getSessionSecret(context.Background())
+
+	// 1. Generate JWT
+	user := &db.User{
+		ID:        "usr_123",
+		GitHubID:  "123",
+		Username:  "testdev",
+		Email:     "dev@example.com",
+		AvatarURL: "https://example.com/avatar.png",
+		Role:      "Developer",
+	}
+
+	tokenStr, err := GenerateUserJWT(user, secret)
+	if err != nil {
+		t.Fatalf("failed to generate user JWT: %v", err)
+	}
+
+	// 2. Verify JWT
+	claims, err := ParseAndVerifyUserJWT(tokenStr, secret)
+	if err != nil {
+		t.Fatalf("failed to parse user JWT: %v", err)
+	}
+	if claims.Username != "testdev" || claims.Role != "Developer" {
+		t.Errorf("unexpected claims: %+v", claims)
+	}
+
+	// 3. Test /api/v1/auth/me
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	meReq.Header.Set("Authorization", "Bearer "+tokenStr)
+	meRec := httptest.NewRecorder()
+
+	s.HandleAuthMe(meRec, meReq)
+	if meRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for /api/v1/auth/me, got %d", meRec.Code)
+	}
+
+	// 4. Test withAuth middleware with role check
+	protectedHandler := s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"authorized"}`))
+	}, "Owner", "Admin")
+
+	// Developer should be forbidden (403)
+	forbiddenReq := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	forbiddenReq.Header.Set("Authorization", "Bearer "+tokenStr)
+	forbiddenRec := httptest.NewRecorder()
+	protectedHandler(forbiddenRec, forbiddenReq)
+
+	if forbiddenRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for Developer role, got %d", forbiddenRec.Code)
+	}
+
+	// Owner token should pass (200)
+	ownerUser := &db.User{
+		ID:       "usr_owner",
+		Username: "ownerdev",
+		Role:     "Owner",
+	}
+	ownerToken, _ := GenerateUserJWT(ownerUser, secret)
+
+	allowedReq := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	allowedReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	allowedRec := httptest.NewRecorder()
+	protectedHandler(allowedRec, allowedReq)
+
+	if allowedRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for Owner role, got %d", allowedRec.Code)
 	}
 }
