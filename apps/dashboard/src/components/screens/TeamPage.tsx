@@ -209,7 +209,10 @@ export const TeamPage: React.FC<TeamPageProps> = ({ currentUser, onNavigate }) =
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>{successMsg}</span>
             </div>
-            <button onClick={() => setSuccessMsg('')} className="text-emerald-400 hover:text-emerald-800">
+            <button
+              onClick={() => setSuccessMsg('')}
+              className="text-emerald-400 hover:text-emerald-800"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -223,7 +226,9 @@ export const TeamPage: React.FC<TeamPageProps> = ({ currentUser, onNavigate }) =
             </div>
             <div className="font-mono text-xs">
               <div className="font-bold text-slate-900">Enforced RBAC Policy</div>
-              <div className="text-[11px] text-slate-500">Zero-trust cryptographic JWT sessions</div>
+              <div className="text-[11px] text-slate-500">
+                Zero-trust cryptographic JWT sessions
+              </div>
             </div>
           </div>
 
@@ -379,9 +384,7 @@ export const TeamPage: React.FC<TeamPageProps> = ({ currentUser, onNavigate }) =
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {m.email || '—'}
-                    </td>
+                    <td className="py-3 px-4 text-slate-600">{m.email || '—'}</td>
                     <td className="py-3 px-4 text-slate-500 text-[11px]">
                       {m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
                     </td>

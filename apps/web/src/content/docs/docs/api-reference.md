@@ -436,6 +436,7 @@ Receives GitHub OAuth authorization code, exchanges it securely with GitHub, ups
 Returns the current authenticated caller profile and role.
 
 **Headers:**
+
 - `Authorization: Bearer <JWT>`
 
 **Response (200 OK):**
@@ -464,6 +465,7 @@ Endpoints to manage team members, roles (`Owner`, `Admin`, `Developer`, `Viewer`
 Lists all active team members in the organization.
 
 **Headers:**
+
 - `Authorization: Bearer <JWT>`
 
 **Response (200 OK):**
@@ -516,6 +518,7 @@ Updates a team member's assigned role. Requires `Owner` or `Admin` permissions.
 Revokes a team member's access. Requires `Owner` permission.
 
 **Query Parameters:**
+
 - `id`: Target user ID (e.g. `usr_67890`)
 
 **Response (200 OK):**
@@ -586,6 +589,7 @@ Creates a pending invitation for a GitHub username. Requires `Owner` or `Admin` 
 Revokes a pending invitation.
 
 **Query Parameters:**
+
 - `id`: Invitation ID or GitHub username
 
 **Response (200 OK):**
