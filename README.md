@@ -45,7 +45,8 @@ Go HTTP Server (your app)
         │  async, non-blocking POST (<0.02ms overhead)
         ▼
  Triage Engine  (:8080)
-  ├── Verify API key  (PostgreSQL)
+  ├── Ingestion & In-Memory Auth (<1ms API key verification)
+  ├── Engine-Driven OAuth & JWT Session RBAC (Owner/Admin/Dev/Viewer)
   ├── Resolve Multi-File Package AST Context
   │     ├── Crash function *ast.FuncDecl
   │     ├── Receiver struct & type definitions (cross-file)
@@ -59,7 +60,7 @@ Go HTTP Server (your app)
   └── Return JSON response
         │
         ▼
- Studio Dashboard  (:3000)            — multi-project switcher & incident inspector
+ Studio Dashboard  (:3000)            — multi-project switcher, RBAC team & incident inspector
  Public Web / Docs (:4321)            — landing page & integration docs
 ```
 
@@ -69,6 +70,7 @@ Go HTTP Server (your app)
 
 - **Multi-File Package AST Slicing:** Extracts the exact crashing function alongside cross-file receiver structs, referenced types, constructors, and package helpers using Go's `go/parser` and `go/ast`. Eliminates >90% of token overhead while providing 100% semantic clarity.
 - **Sub-0.02ms Client Latency:** Bounded 4-goroutine worker pool with a 1,000-job buffer asynchronously dispatches telemetry without blocking user HTTP requests.
+- **Engine-Driven OAuth & RBAC:** Zero frontend secret exposure. The Go engine performs GitHub OAuth code exchanges, manages user identity, issues signed 30-day HS256 JWTs, and enforces permissions across `Owner`, `Admin`, `Developer`, and `Viewer` tiers.
 - **Automated Bugfix Pull Requests:** 1-click Pull Request generation directly from the Studio Dashboard. The engine creates a dedicated fix branch, applies the patch via Gemini AI, commits the changes, and opens a linked PR on GitHub.
 - **Automated GitHub Issue Filing:** Automatically creates GitHub issues with formatted AST code blocks, raw stack traces, Gemini diagnostic summaries, and triage labels.
 - **Multi-Project & Monorepo Support:** Track multiple Go repositories and monorepos from a single dashboard with an instant project switcher. Includes automatic Go submodule detection (`go.mod` discovery) and path normalization.

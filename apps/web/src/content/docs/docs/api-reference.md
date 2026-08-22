@@ -412,3 +412,187 @@ Returns runtime statistics including total projects, total panics ingested, and 
   "status": "operational"
 }
 ```
+
+---
+
+## Authentication & RBAC Identity
+
+Triage uses Go engine-driven GitHub OAuth and issues cryptographically signed JWT sessions.
+
+### `GET /api/v1/auth/github`
+
+Initiates the GitHub OAuth authorization redirect with cryptographic CSRF state cookies.
+
+---
+
+### `GET /api/v1/auth/github/callback`
+
+Receives GitHub OAuth authorization code, exchanges it securely with GitHub, upserts user profile, assigns role, and redirects to dashboard with session JWT.
+
+---
+
+### `GET /api/v1/auth/me`
+
+Returns the current authenticated caller profile and role.
+
+**Headers:**
+- `Authorization: Bearer <JWT>`
+
+**Response (200 OK):**
+
+```json
+{
+  "user": {
+    "id": "usr_12345",
+    "github_id": "12345",
+    "username": "octocat",
+    "email": "octocat@github.com",
+    "avatar_url": "https://avatars.githubusercontent.com/u/12345",
+    "role": "Owner"
+  }
+}
+```
+
+---
+
+## Team & Member Access Control
+
+Endpoints to manage team members, roles (`Owner`, `Admin`, `Developer`, `Viewer`), and pending invitations.
+
+### `GET /api/v1/team/members`
+
+Lists all active team members in the organization.
+
+**Headers:**
+- `Authorization: Bearer <JWT>`
+
+**Response (200 OK):**
+
+```json
+{
+  "members": [
+    {
+      "id": "usr_12345",
+      "github_id": "12345",
+      "username": "octocat",
+      "email": "octocat@github.com",
+      "avatar_url": "https://avatars.githubusercontent.com/u/12345",
+      "role": "Owner",
+      "created_at": "2026-08-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `PUT /api/v1/team/members/role`
+
+Updates a team member's assigned role. Requires `Owner` or `Admin` permissions.
+
+**Request Body:**
+
+```json
+{
+  "id": "usr_67890",
+  "role": "Admin"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "success",
+  "id": "usr_67890",
+  "role": "Admin"
+}
+```
+
+---
+
+### `DELETE /api/v1/team/members`
+
+Revokes a team member's access. Requires `Owner` permission.
+
+**Query Parameters:**
+- `id`: Target user ID (e.g. `usr_67890`)
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "success",
+  "id": "usr_67890"
+}
+```
+
+---
+
+### `GET /api/v1/team/invites`
+
+Lists all pending team invitations.
+
+**Response (200 OK):**
+
+```json
+{
+  "invitations": [
+    {
+      "id": "inv_1724123456",
+      "github_username": "torvalds",
+      "role": "Developer",
+      "invited_by": "usr_12345",
+      "created_at": "2026-08-20T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/v1/team/invites`
+
+Creates a pending invitation for a GitHub username. Requires `Owner` or `Admin` permissions.
+
+**Request Body:**
+
+```json
+{
+  "github_username": "torvalds",
+  "role": "Developer"
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "status": "created",
+  "invitation": {
+    "id": "inv_1724123456",
+    "github_username": "torvalds",
+    "role": "Developer",
+    "invited_by": "usr_12345",
+    "created_at": "2026-08-20T12:00:00Z"
+  }
+}
+```
+
+---
+
+### `DELETE /api/v1/team/invites`
+
+Revokes a pending invitation.
+
+**Query Parameters:**
+- `id`: Invitation ID or GitHub username
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "success",
+  "id": "inv_1724123456"
+}
+```

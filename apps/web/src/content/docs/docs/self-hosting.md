@@ -51,18 +51,19 @@ docker run -d \
 
 The PostgreSQL schema is located in `db/schema.sql`. It contains:
 
+- `users` & `invitations`: RBAC identity and team access tiers (`Owner`, `Admin`, `Developer`, `Viewer`).
 - `repositories`: Configured Go repositories and root directory paths.
 - `incidents`: Captured panics, stack traces, AST context, and AI root causes.
-- `ast_nodes` & `ast_indexes`: Cached/pre-indexed AST function declarations.
+- `ast_nodes` & `ast_indexes`: Cached and pre-indexed AST function declarations.
 - `api_keys`: Ingestion API key hashes and metadata.
-- `instance_config`: Dynamic settings (GitHub App, Gemini AI key/model, instance URL).
-- `users` & `sessions`: Authenticated dashboard team members.
+- `instance_config`: Dynamic settings (GitHub App, Gemini AI key/model, instance URL, session secrets).
+- `github_installations` & `installation_repos`: GitHub App org and repository access maps.
 
 ---
 
 ## Production Checklist
 
 1. **Postgres Password:** Always supply an explicit, strong `POSTGRES_PASSWORD` when launching `docker-compose.prod.yml`.
-2. **Session Secrets:** The engine auto-generates a cryptographic session secret on first boot and stores it in PostgreSQL.
-3. **CORS & Origin Security:** Browser cross-origin access is automatically locked to your configured dashboard origin (`instance_url`) upon completing the setup wizard.
+2. **Session Secrets:** The engine loads `session_secret` from PostgreSQL (or falls back to an internal secret in development) for signing 30-day HS256 JWT tokens.
+3. **CORS & Origin Security:** Browser cross-origin access is dynamically locked to your configured dashboard origin (`instance_url`) upon completing the setup wizard.
 4. **HTTPS / Reverse Proxy:** Place Caddy, Nginx, or Cloudflare in front of `:8080` and `:3000` for SSL termination.
