@@ -339,7 +339,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 font-mono">
-                    Leave blank to fallback to the GEMINI_API_KEY environment variable.
+                    Your Google AI Studio API key used for root-cause analysis and automated patch
+                    generation.
                   </p>
                 </div>
 
