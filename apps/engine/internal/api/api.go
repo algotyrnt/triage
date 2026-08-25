@@ -27,6 +27,7 @@ type Config struct {
 	ASTManager  *ast.Manager
 	ASTCache    *ast.ASTCache
 	ASTFetcher  *ast.OnDemandFetcher
+	EventBroker *EventBroker
 }
 
 // Server encapsulates HTTP routes and middleware for the Triage Engine.
@@ -37,6 +38,7 @@ type Server struct {
 	astManager  *ast.Manager
 	astCache    *ast.ASTCache
 	astFetcher  *ast.OnDemandFetcher
+	eventBroker *EventBroker
 	appSlug     string
 }
 
@@ -51,6 +53,9 @@ func NewServer(cfg Config) *Server {
 	if cfg.ASTFetcher == nil {
 		cfg.ASTFetcher = ast.NewOnDemandFetcher()
 	}
+	if cfg.EventBroker == nil {
+		cfg.EventBroker = NewEventBroker()
+	}
 
 	return &Server{
 		db:          cfg.DB,
@@ -59,6 +64,7 @@ func NewServer(cfg Config) *Server {
 		astManager:  cfg.ASTManager,
 		astCache:    cfg.ASTCache,
 		astFetcher:  cfg.ASTFetcher,
+		eventBroker: cfg.EventBroker,
 	}
 }
 
@@ -83,6 +89,7 @@ func (s *Server) ResolveEngineURL(r *http.Request) string {
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	// Core routes
 	mux.HandleFunc("/health", s.withMiddleware(s.HandleHealth))
+	mux.HandleFunc("/api/v1/events/stream", s.withMiddleware(s.HandleEventsStream))
 	mux.HandleFunc("/api/v1/telemetry", s.withMiddleware(s.HandleTelemetry))
 	mux.HandleFunc("/api/v1/ast/index", s.withMiddleware(s.HandleASTIndex))
 	mux.HandleFunc("/api/v1/incidents", s.withMiddleware(s.HandleIncidents))
