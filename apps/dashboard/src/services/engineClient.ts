@@ -179,10 +179,12 @@ export class EngineClient {
     repo: string,
     rootDir?: string,
     ownerUsername?: string,
+    projectContext?: string,
   ): Promise<{
     success: boolean;
     repo: string;
     root_dir?: string;
+    context?: string;
     api_key: string;
     key_masked?: string;
   }> {
@@ -193,12 +195,39 @@ export class EngineClient {
         repo,
         root_dir: rootDir || '',
         owner_username: ownerUsername || '',
+        context: projectContext || '',
       }),
     });
     if (!res.ok) {
       throw new Error(`Failed to create project: ${await res.text()}`);
     }
     return await res.json();
+  }
+
+  async updateProjectContext(
+    owner: string,
+    repo: string,
+    rootDir?: string,
+    projectContext?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${this.baseUrl}/projects/context`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          owner,
+          repo,
+          root_dir: rootDir || '',
+          context: projectContext || '',
+        }),
+      });
+      if (!res.ok) {
+        return { success: false, error: await res.text() };
+      }
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
   }
 
   async detectGoModules(

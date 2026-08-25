@@ -149,6 +149,7 @@ export interface Project {
   repo: string;
   root_dir?: string;
   installation_id?: number;
+  context?: string;
   api_key_masked?: string;
   created_at?: string;
 }
