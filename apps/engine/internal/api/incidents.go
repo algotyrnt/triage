@@ -314,6 +314,13 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	// 2. Generate updated file content using Gemini
 	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
 
+	var projectContext string
+	if s.db != nil && owner != "" && repo != "" {
+		if proj, err := s.db.GetProjectByOwnerRepo(r.Context(), owner, repo, rootDir); err == nil && proj != nil {
+			projectContext = proj.Context
+		}
+	}
+
 	patchCode := req.PatchCode
 	if patchCode == "" {
 		patchCode = inc.SuggestedPatch
@@ -337,6 +344,7 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 			patchCode,
 			llmAPIKey,
 			llmModelName,
+			projectContext,
 		)
 		if err != nil {
 			slog.Warn("Gemini apply fix failed, falling back to patch text", "error", err)
@@ -449,6 +457,7 @@ func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request
 		RawStackTrace  string `json:"rawStackTrace"`
 		TriggeringFile string `json:"triggeringFile"`
 		ASTCode        string `json:"astCode"`
+		ProjectContext string `json:"projectContext,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -470,7 +479,7 @@ func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request
 		delimitedSnippet = fmt.Sprintf("```go\n%s\n```", delimitedSnippet)
 	}
 
-	analysis, err := llm.AnalyzeCrash(analysisCtx, req.RawStackTrace, delimitedSnippet, llmAPIKey, llmModelName)
+	analysis, err := llm.AnalyzeCrash(analysisCtx, req.RawStackTrace, delimitedSnippet, llmAPIKey, llmModelName, req.ProjectContext)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("AI Analysis failed: %v", err), http.StatusInternalServerError)
 		return
@@ -497,6 +506,7 @@ func (s *Server) HandleGeminiGeneratePatch(w http.ResponseWriter, r *http.Reques
 		ASTCode        string `json:"astCode"`
 		RootCause      string `json:"rootCause,omitempty"`
 		StackTrace     string `json:"stackTrace,omitempty"`
+		ProjectContext string `json:"projectContext,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -522,6 +532,7 @@ func (s *Server) HandleGeminiGeneratePatch(w http.ResponseWriter, r *http.Reques
 		req.RootCause,
 		llmAPIKey,
 		llmModelName,
+		req.ProjectContext,
 	)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Patch generation failed: %v", err), http.StatusInternalServerError)
