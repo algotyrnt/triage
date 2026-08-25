@@ -42,6 +42,7 @@ Go HTTP Server (your app)
 ## Key Highlights
 
 - **Multi-File Package AST Slicing:** Extracts the exact crashing function alongside cross-file receiver structs, referenced types, constructors, and package helpers using Go's standard `go/parser` and `go/ast`. Eliminates >90% of token overhead while providing 100% semantic clarity.
+- **Domain-Aware AI Triage:** Attach optional architectural context, domain rules, and ledger invariants during onboarding or project settings. Gemini AI automatically incorporates this context to ensure root-cause analyses and patch suggestions adhere to your business boundaries.
 - **Sub-0.02ms Client Latency:** Bounded 4-goroutine worker pool with a 1,000-job buffer asynchronously dispatches telemetry without blocking user HTTP requests.
 - **Engine-Driven OAuth & RBAC:** Zero frontend secret exposure. The Go engine performs GitHub OAuth code exchanges, manages user identity, issues signed 30-day HS256 JWTs, and enforces permissions across `Owner`, `Admin`, `Developer`, and `Viewer` tiers.
 - **Automated Bugfix Pull Requests:** 1-click Pull Request generation directly from the Studio Dashboard. The engine creates a dedicated fix branch, applies the patch via Gemini AI, commits the changes, and opens a linked PR on GitHub.
