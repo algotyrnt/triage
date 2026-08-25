@@ -47,6 +47,7 @@ Go HTTP Server (your app)
 - **Automated Bugfix Pull Requests:** 1-click Pull Request generation directly from the Studio Dashboard. The engine creates a dedicated fix branch, applies the patch via Gemini AI, commits the changes, and opens a linked PR on GitHub.
 - **Automated GitHub Issue Filing:** Automatically creates GitHub issues with formatted AST code blocks, raw stack traces, Gemini diagnostic summaries, and triage labels.
 - **Multi-Project & Monorepo Support:** Track multiple Go repositories and monorepos from a single dashboard with an instant project switcher. Includes automatic Go submodule detection (`go.mod` discovery) and path normalization.
+- **Real-Time Live Telemetry (SSE):** Unidirectional Server-Sent Events stream freshly intercepted panics and state changes directly into the Studio Dashboard with automatic keep-alive heartbeats and zero page reloads.
 - **Direct Gemini AI Endpoints:** Dedicated REST APIs for on-demand crash analysis (`/api/v1/gemini/analyze-panic`) and unified diff patch generation (`/api/v1/gemini/generate-patch`).
 - **Dynamic Origin-Restricted CORS:** Protects proprietary AST context and stack traces by locking down browser access strictly to your configured dashboard domain.
 - **Single-Container Self-Hosting:** Deploy the engine and dashboard effortlessly with Docker Compose or pre-built GHCR images.
