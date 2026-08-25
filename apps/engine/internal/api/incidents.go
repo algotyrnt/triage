@@ -200,6 +200,11 @@ func (s *Server) HandleCreateIncidentIssue(w http.ResponseWriter, r *http.Reques
 	}
 
 	_ = s.db.UpdateIncidentIssue(r.Context(), inc.ID, issueURL, issueNum)
+	inc.GitHubIssueURL = issueURL
+	inc.GitHubIssueNumber = issueNum
+	if s.eventBroker != nil {
+		s.eventBroker.Publish("incident_updated", inc)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -416,6 +421,12 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 
 	// 7. Update Incident record in database
 	_ = s.db.UpdateIncidentPR(r.Context(), inc.ID, prURL, prNumber, patchCode)
+	inc.GitHubPRURL = prURL
+	inc.GitHubPRNumber = prNumber
+	inc.SuggestedPatch = patchCode
+	if s.eventBroker != nil {
+		s.eventBroker.Publish("incident_updated", inc)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,

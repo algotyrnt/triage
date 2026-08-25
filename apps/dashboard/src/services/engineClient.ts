@@ -55,6 +55,16 @@ export class EngineClient {
     return `${this.baseUrl}/telemetry`;
   }
 
+  getEventsStreamUrl(): string {
+    const token =
+      this.authToken ||
+      (typeof window !== 'undefined' ? localStorage.getItem('triage_session') : null);
+    if (token) {
+      return `${this.baseUrl}/events/stream?token=${encodeURIComponent(token)}`;
+    }
+    return `${this.baseUrl}/events/stream`;
+  }
+
   setAuthToken(token: string | null) {
     this.authToken = token;
   }

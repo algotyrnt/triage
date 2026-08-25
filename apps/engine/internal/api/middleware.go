@@ -139,7 +139,7 @@ type contextKey string
 
 const userClaimsContextKey contextKey = "user_claims"
 
-// getUserClaims extracts the verified UserClaims from the request context or Authorization header.
+// getUserClaims extracts the verified UserClaims from the request context, Authorization header, or URL query token.
 func (s *Server) getUserClaims(r *http.Request) *UserClaims {
 	if r == nil {
 		return nil
@@ -150,9 +150,15 @@ func (s *Server) getUserClaims(r *http.Request) *UserClaims {
 		}
 	}
 
+	tokenStr := ""
 	authHeader := r.Header.Get("Authorization")
 	if strings.HasPrefix(authHeader, "Bearer ") {
-		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
+	} else if qToken := r.URL.Query().Get("token"); qToken != "" {
+		tokenStr = qToken
+	}
+
+	if tokenStr != "" {
 		secret := s.getSessionSecret(r.Context())
 		if claims, err := ParseAndVerifyUserJWT(tokenStr, secret); err == nil {
 			return claims

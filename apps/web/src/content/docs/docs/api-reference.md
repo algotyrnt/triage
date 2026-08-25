@@ -59,6 +59,53 @@ Receives panic telemetry payloads dispatched asynchronously by the Go SDK middle
 
 ---
 
+## Real-Time Event Streaming (SSE)
+
+### `GET /api/v1/events/stream`
+
+Streams live telemetry events, new panic incidents, and incident updates to connected dashboard clients using standard **Server-Sent Events (SSE)**.
+
+**Headers:**
+
+- `Accept: text/event-stream`
+- `Authorization: Bearer <JWT>` _(optional, if session token is not provided via query)_
+
+**Query Parameters:**
+
+- `token` _(optional)_: JWT session token when connecting from browser `EventSource` (which cannot send custom headers).
+
+**Response (200 OK — `text/event-stream`):**
+
+The stream maintains a continuous HTTP connection with periodic 15-second heartbeat comments (`: keepalive\n\n`) to prevent proxy timeouts.
+
+#### Event Types:
+
+##### 1. Initial Handshake (`connected`)
+
+Sent immediately when a client establishes a connection:
+
+```json
+data: {"type":"connected","timestamp":"2026-08-25T14:30:00Z"}
+```
+
+##### 2. Incident Ingested (`incident_created`)
+
+Dispatched immediately when a runtime Go panic is intercepted and recorded:
+
+```json
+data: {"type":"incident_created","data":{"id":"INC-8094","title":"nil pointer dereference","status":"CRITICAL","file":"handlers/payment.go","line":28,"created_at":"2026-08-25T14:30:05Z"},"timestamp":"2026-08-25T14:30:05Z"}
+```
+
+##### 3. Incident Updated (`incident_updated`)
+
+Dispatched when an automated GitHub Issue or Pull Request is attached to an incident:
+
+```json
+data: {"type":"incident_updated","data":{"id":"INC-8094","github_issue_url":"https://github.com/myorg/payments-service/issues/42","github_pr_url":"https://github.com/myorg/payments-service/pull/43"},"timestamp":"2026-08-25T14:30:10Z"}
+```
+
+---
+
 ## Incidents Management
 
 ### `GET /api/v1/incidents`

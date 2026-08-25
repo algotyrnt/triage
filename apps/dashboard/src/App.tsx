@@ -224,6 +224,58 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     bootstrap();
   }, []);
 
+  // Subscribe to real-time telemetry events via Server-Sent Events (SSE)
+  React.useEffect(() => {
+    if (isBootstrapping || currentScreen === 'login' || currentScreen === 'setup') {
+      return;
+    }
+
+    let eventSource: EventSource | null = null;
+    try {
+      const streamUrl = engineClient.getEventsStreamUrl();
+      eventSource = new EventSource(streamUrl);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.type === 'incident_created' && payload.data) {
+            const newIncidents = mapIncidents([payload.data]);
+            if (newIncidents.length > 0) {
+              const newInc = newIncidents[0];
+              setIncidents((prev) => {
+                if (prev.some((i) => i.id === newInc.id)) {
+                  return prev.map((i) => (i.id === newInc.id ? newInc : i));
+                }
+                return [newInc, ...prev];
+              });
+              showToast(`🚨 Panic intercepted in ${newInc.triggeringFile}`, 'error');
+            }
+          } else if (payload.type === 'incident_updated' && payload.data) {
+            const updatedIncidents = mapIncidents([payload.data]);
+            if (updatedIncidents.length > 0) {
+              const updated = updatedIncidents[0];
+              setIncidents((prev) => prev.map((inc) => (inc.id === updated.id ? updated : inc)));
+            }
+          }
+        } catch (e) {
+          logger.warn('Failed to parse SSE payload:', e);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        logger.debug('SSE connection event / reconnecting:', err);
+      };
+    } catch (e) {
+      logger.warn('Failed to initialize EventSource:', e);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [isBootstrapping, currentScreen, currentUser]);
+
   // Selected incident object
   const selectedIncident = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
 

@@ -61,7 +61,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     engineClient.getStats().then((data) => {
       if (data) setStats(data);
     });
-  }, []);
+  }, [incidents.length]);
 
   const codeSnippets = {
     'main.go': `package main

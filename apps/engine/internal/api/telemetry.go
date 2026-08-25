@@ -464,6 +464,9 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		if err := s.db.SaveIncident(r.Context(), inc); err != nil {
 			slog.Warn("failed to persist incident to database", "error", err, "incident_id", incidentID)
 		}
+		if s.eventBroker != nil {
+			s.eventBroker.Publish("incident_created", inc)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, TelemetryResponse{
