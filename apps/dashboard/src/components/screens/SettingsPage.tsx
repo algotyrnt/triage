@@ -68,12 +68,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const repoOwner = parts[0] || 'algotyrnt';
   const repoName = parts[1] || activeRepo;
   const [serviceRootDir, setServiceRootDir] = useState(activeRootDir);
+  const [projectContext, setProjectContext] = useState('');
   const [generalSaved, setGeneralSaved] = useState(false);
   const [savingGeneral, setSavingGeneral] = useState(false);
 
   useEffect(() => {
     setServiceRootDir(activeRootDir);
   }, [activeRootDir]);
+
+  useEffect(() => {
+    engineClient.getProjects().then((projects) => {
+      const match = projects.find(
+        (p: any) =>
+          p.owner === repoOwner &&
+          p.repo === repoName &&
+          (p.root_dir || '') === (serviceRootDir || ''),
+      );
+      if (match && match.context) {
+        setProjectContext(match.context);
+      }
+    });
+  }, [repoOwner, repoName, serviceRootDir]);
 
   // Danger Zone delete modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -681,6 +696,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </p>
                 </div>
 
+                <div className="space-y-1.5 pt-1">
+                  <label className="font-bold text-slate-800 block">
+                    Project Context &amp; Architectural Description (Domain-Aware AI Triage):
+                  </label>
+                  <textarea
+                    value={projectContext}
+                    onChange={(e) => setProjectContext(e.target.value)}
+                    rows={4}
+                    placeholder="e.g. High-throughput payment gateway processing Stripe and crypto webhooks with strict idempotency and database transaction rollbacks."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-sans text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-black"
+                  />
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    Domain rules, business invariants, and architecture passed to Gemini AI to
+                    enrich panic crash diagnosis and patch generation.
+                  </p>
+                </div>
+
                 <div className="pt-2">
                   <button
                     type="button"
@@ -688,7 +720,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     onClick={async () => {
                       setSavingGeneral(true);
                       try {
-                        await engineClient.createProject(activeRepo, serviceRootDir, repoOwner);
+                        await engineClient.createProject(
+                          activeRepo,
+                          serviceRootDir,
+                          repoOwner,
+                          projectContext,
+                        );
                         setGeneralSaved(true);
                         setTimeout(() => setGeneralSaved(false), 2500);
                       } catch (err) {

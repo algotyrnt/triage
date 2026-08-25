@@ -22,6 +22,7 @@ import {
   Layers,
   Terminal,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 
 interface ProjectsPageProps {
@@ -343,14 +344,23 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
                     </span>
                   </div>
 
-                  {/* Module / Subdirectory Badge */}
-                  <div className="flex items-center gap-2 text-xs font-mono">
+                  {/* Module / Subdirectory Badge & Domain Context Badge */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
                     <div className="flex items-center gap-1 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-sm text-slate-700 text-[11px] truncate max-w-full">
                       <Layers className="w-3 h-3 text-slate-500 shrink-0" />
                       <span className="truncate">
                         {project.root_dir ? `Module: ${project.root_dir}/` : 'Root: / (Default)'}
                       </span>
                     </div>
+                    {project.context && (
+                      <div
+                        className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-sm text-indigo-700 text-[10px] font-semibold truncate max-w-full"
+                        title={project.context}
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-indigo-600 shrink-0" />
+                        <span className="truncate">Domain Context</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* API Key Box */}
