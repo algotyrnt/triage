@@ -96,6 +96,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/incidents/create-issue", s.withMiddleware(s.HandleCreateIncidentIssue))
 	mux.HandleFunc("/api/v1/incidents/create-pr", s.withMiddleware(s.HandleCreateIncidentPR))
 	mux.HandleFunc("/api/v1/projects", s.withMiddleware(s.HandleProjects))
+	mux.HandleFunc("/api/v1/projects/context", s.withMiddleware(s.HandleUpdateProjectContext))
 	mux.HandleFunc("/api/v1/stats", s.withMiddleware(s.HandleStats))
 	mux.HandleFunc("/api/v1/repos/detect-modules", s.withMiddleware(s.HandleDetectModules))
 
