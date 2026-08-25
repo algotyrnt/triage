@@ -266,10 +266,12 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 
 	var repoID string
 	var installationID int64
+	var projectContext string
 
 	if s.db != nil && req.APIKey != "" {
 		if repoRecord, err := s.db.GetRepositoryByAPIKey(r.Context(), req.APIKey); err == nil && repoRecord != nil {
 			repoID = repoRecord.ID
+			projectContext = repoRecord.Context
 			if req.Owner == "" {
 				req.Owner = repoRecord.Owner
 			}
@@ -294,12 +296,21 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		if projects, err := s.db.GetProjects(r.Context()); err == nil && len(projects) > 0 {
 			req.Owner = projects[0].Owner
 			req.Repo = projects[0].Repo
+			if projectContext == "" {
+				projectContext = projects[0].Context
+			}
 			if rootDir == "" {
 				rootDir = projects[0].RootDir
 			}
 			if installationID == 0 {
 				installationID = projects[0].InstallationID
 			}
+		}
+	}
+
+	if projectContext == "" && s.db != nil && req.Owner != "" && req.Repo != "" {
+		if proj, err := s.db.GetProjectByOwnerRepo(r.Context(), req.Owner, req.Repo, rootDir); err == nil && proj != nil {
+			projectContext = proj.Context
 		}
 	}
 
@@ -341,7 +352,7 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 			delimitedAST = fmt.Sprintf("```go\n%s\n```", delimitedAST)
 		}
 
-		analysis, err = llm.AnalyzeCrash(analysisCtx, req.StackTrace, delimitedAST, llmAPIKey, llmModelName)
+		analysis, err = llm.AnalyzeCrash(analysisCtx, req.StackTrace, delimitedAST, llmAPIKey, llmModelName, projectContext)
 		if err != nil {
 			slog.Warn("Gemini root cause analysis skipped", "error", err)
 		}

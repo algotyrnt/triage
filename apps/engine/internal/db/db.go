@@ -73,6 +73,7 @@ type Repository struct {
 	Repo           string    `json:"repo"`
 	RootDir        string    `json:"root_dir,omitempty"`
 	InstallationID int64     `json:"installation_id"`
+	Context        string    `json:"context,omitempty"`
 	APIKeyMasked   string    `json:"api_key_masked,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }
@@ -134,6 +135,7 @@ func NewDB(ctx context.Context, databaseURL string) (*DB, error) {
 	}
 
 	_, _ = pool.Exec(ctx, `
+		ALTER TABLE repositories ADD COLUMN IF NOT EXISTS context TEXT NOT NULL DEFAULT '';
 		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS github_pr_url TEXT;
 		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS github_pr_number INT;
 		ALTER TABLE incidents ADD COLUMN IF NOT EXISTS suggested_patch TEXT;
@@ -279,7 +281,7 @@ func (db *DB) GetIncidentByID(ctx context.Context, id string) (*Incident, error)
 	return &inc, nil
 }
 
-func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUsername string) (string, string, error) {
+func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUsername string, projectContext ...string) (string, string, error) {
 	if db.Pool == nil {
 		return "", "", fmt.Errorf("PostgreSQL pool uninitialized")
 	}
@@ -289,11 +291,18 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 	tupleHash := sha256.Sum256([]byte(tupleStr))
 	repoID := fmt.Sprintf("repo_%s", hex.EncodeToString(tupleHash[:16]))
 
+	contextStr := ""
+	if len(projectContext) > 0 {
+		contextStr = projectContext[0]
+	}
+
 	_, err := db.Pool.Exec(ctx, `
-		INSERT INTO repositories (id, owner, repo, root_dir, installation_id)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (owner, repo, root_dir) DO UPDATE SET root_dir = EXCLUDED.root_dir
-	`, repoID, owner, repo, cleanRootDir, 1001)
+		INSERT INTO repositories (id, owner, repo, root_dir, installation_id, context)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (owner, repo, root_dir) DO UPDATE SET
+			root_dir = EXCLUDED.root_dir,
+			context = CASE WHEN EXCLUDED.context != '' THEN EXCLUDED.context ELSE repositories.context END
+	`, repoID, owner, repo, cleanRootDir, 1001, contextStr)
 	if err != nil {
 		return "", "", err
 	}
@@ -324,12 +333,25 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 	return rawKey, repoID, nil
 }
 
+func (db *DB) UpdateProjectContext(ctx context.Context, owner, repo, rootDir, projectContext string) error {
+	if db.Pool == nil {
+		return fmt.Errorf("PostgreSQL pool uninitialized")
+	}
+	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE repositories
+		SET context = $4
+		WHERE owner = $1 AND repo = $2 AND COALESCE(root_dir, '') = $3
+	`, owner, repo, cleanRootDir, projectContext)
+	return err
+}
+
 func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	if db.Pool == nil {
 		return []Repository{}, nil
 	}
 	query := `
-		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id,
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id, COALESCE(r.context, ''),
 		       COALESCE((
 		           SELECT k.key_masked
 		           FROM api_keys k
@@ -351,7 +373,7 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 	var repos []Repository
 	for rows.Next() {
 		var r Repository
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.APIKeyMasked, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.Context, &r.APIKeyMasked, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
@@ -366,7 +388,7 @@ func (db *DB) GetProjectByOwnerRepo(ctx context.Context, owner, repo, rootDir st
 	cleanRootDir := strings.Trim(strings.TrimSpace(rootDir), "/")
 	var r Repository
 	err := db.Pool.QueryRow(ctx, `
-		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id,
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id, COALESCE(r.context, ''),
 		       COALESCE((
 		           SELECT k.key_masked
 		           FROM api_keys k
@@ -379,7 +401,7 @@ func (db *DB) GetProjectByOwnerRepo(ctx context.Context, owner, repo, rootDir st
 		FROM repositories r
 		WHERE r.owner = $1 AND r.repo = $2 AND COALESCE(r.root_dir, '') = $3
 		LIMIT 1
-	`, owner, repo, cleanRootDir).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.APIKeyMasked, &r.CreatedAt)
+	`, owner, repo, cleanRootDir).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.Context, &r.APIKeyMasked, &r.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -521,12 +543,12 @@ func (db *DB) GetRepositoryByAPIKey(ctx context.Context, key string) (*Repositor
 
 	var r Repository
 	err := db.Pool.QueryRow(ctx, `
-		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id, r.created_at
+		SELECT r.id, r.owner, r.repo, COALESCE(r.root_dir, ''), r.installation_id, COALESCE(r.context, ''), r.created_at
 		FROM api_keys k
 		JOIN repositories r ON k.repository_id = r.id
 		WHERE k.key_hash = $1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at > NOW())
 		LIMIT 1
-	`, keyHash).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.CreatedAt)
+	`, keyHash).Scan(&r.ID, &r.Owner, &r.Repo, &r.RootDir, &r.InstallationID, &r.Context, &r.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

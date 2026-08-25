@@ -44,6 +44,7 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 ### The Triage Solution
 
 - **Multi-File Package AST Slicing:** Using Go's standard `go/parser` and `go/ast` packages, Triage isolates the exact crashing function along with referenced struct definitions, constructors, and helper functions across package files.
+- **Domain-Aware AI Triage:** Enriches Gemini LLM prompts with optional architectural context and business invariants, ensuring diagnoses and generated patches respect your service boundaries.
 - **>90% Token Reduction:** Instead of sending entire repositories or 2,000-line source files, Triage delivers a selectively pruned multi-file context to Gemini AI, reducing AI diagnostic costs to less than $0.0001 per incident.
 - **Sub-0.02ms Client Latency:** Telemetry is handed off to an asynchronous 4-worker pool backed by a 1,000-job queue. HTTP responses return immediately with zero blockage.
 - **Automated Bugfix Pull Requests:** Creates dedicated fix branches, synthesizes clean fixes via Gemini AI, commits the changes, and opens a GitHub Pull Request with 1 click.

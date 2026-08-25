@@ -341,7 +341,12 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     }
   };
 
-  const handleProjectSetup = async (repo: string, apiKey: string, rootDir?: string) => {
+  const handleProjectSetup = async (
+    repo: string,
+    apiKey: string,
+    rootDir?: string,
+    projectContext?: string,
+  ) => {
     setActiveRepo(repo);
     setActiveRootDir(rootDir || '');
     let finalKey = apiKey;
@@ -352,7 +357,12 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     const storageKey = `triage_key_${owner}_${repoName}_${cleanRoot}`;
 
     try {
-      const res = await engineClient.createProject(repo, rootDir, currentUser?.username);
+      const res = await engineClient.createProject(
+        repo,
+        rootDir,
+        currentUser?.username,
+        projectContext,
+      );
       if (res && res.api_key) {
         finalKey = res.api_key;
       }

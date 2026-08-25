@@ -252,3 +252,50 @@ func TestJWTAuthAndRBAC(t *testing.T) {
 		t.Fatalf("expected 200 OK for Owner role, got %d", allowedRec.Code)
 	}
 }
+
+func TestProjectsWithContext(t *testing.T) {
+	s := newTestAPIServer()
+
+	// 1. Test POST /api/v1/projects with context
+	body, _ := json.Marshal(map[string]interface{}{
+		"owner":    "myorg",
+		"repo":     "payments-service",
+		"root_dir": "backend",
+		"context":  "High-throughput payment gateway processing Stripe webhooks.",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/projects", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.HandleProjects(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+
+	var createRes struct {
+		Success bool   `json:"success"`
+		Repo    string `json:"repo"`
+		Context string `json:"context"`
+		ApiKey  string `json:"api_key"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&createRes); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !createRes.Success || createRes.Context != "High-throughput payment gateway processing Stripe webhooks." {
+		t.Errorf("unexpected create response: %+v", createRes)
+	}
+
+	// 2. Test PUT /api/v1/projects/context
+	updateBody, _ := json.Marshal(map[string]interface{}{
+		"owner":    "myorg",
+		"repo":     "payments-service",
+		"root_dir": "backend",
+		"context":  "Updated architectural context for payment service.",
+	})
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/v1/projects/context", bytes.NewReader(updateBody))
+	updateRec := httptest.NewRecorder()
+	s.HandleUpdateProjectContext(updateRec, updateReq)
+
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for context update, got %d", updateRec.Code)
+	}
+}

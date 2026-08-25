@@ -33,7 +33,12 @@ import { logger } from '@/services/logger';
 
 interface OnboardingPageProps {
   onNavigate: (screen: ScreenId) => void;
-  onProjectSetup?: (repo: string, apiKey: string, rootDir?: string) => void;
+  onProjectSetup?: (
+    repo: string,
+    apiKey: string,
+    rootDir?: string,
+    projectContext?: string,
+  ) => void;
   currentUser?: { username: string; avatarUrl?: string } | null;
 }
 
@@ -47,6 +52,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const [selectedRepo, setSelectedRepo] = useState('');
   const [customRepoInput, setCustomRepoInput] = useState('');
   const [rootDir, setRootDir] = useState('');
+  const [projectContext, setProjectContext] = useState('');
   const [detectedModules, setDetectedModules] = useState<DetectedModule[]>([]);
   const [loadingModules, setLoadingModules] = useState(false);
   const [generatedKey, setGeneratedKey] = useState('');
@@ -263,7 +269,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     setGeneratingKey(true);
     try {
       const storageKey = `triage_key_${activeOwner}_${activeRepoName}_${rootDir}`;
-      const res = await engineClient.createProject(repo, rootDir, username);
+      const res = await engineClient.createProject(repo, rootDir, username, projectContext);
       if (res && res.api_key) {
         setGeneratedKey(res.api_key);
         localStorage.setItem(storageKey, res.api_key);
@@ -309,7 +315,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
     const key = generatedKey || activeKey;
     const repo = customRepoInput.trim() || selectedRepo;
     if (onProjectSetup) {
-      onProjectSetup(repo, key, rootDir);
+      onProjectSetup(repo, key, rootDir, projectContext);
     } else {
       onNavigate('dashboard');
     }
@@ -898,6 +904,31 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Project Context & Architectural Description */}
+            <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-sm space-y-2 font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Project Context & Architectural Description (Optional)</span>
+                </div>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                  AI Triage Context
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 font-sans">
+                Describe your service's domain rules, architectural boundaries, or critical
+                invariants. Gemini AI incorporates this context when diagnosing crashes and
+                generating patch diffs.
+              </p>
+              <textarea
+                value={projectContext}
+                onChange={(e) => setProjectContext(e.target.value)}
+                rows={3}
+                placeholder="e.g. High-throughput payment gateway processing Stripe and crypto webhooks with strict idempotency and database transaction rollbacks."
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-sm font-sans text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+              />
+            </div>
 
             {/* Scope details */}
             <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-sm space-y-1.5 font-mono text-xs">

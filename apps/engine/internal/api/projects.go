@@ -30,6 +30,7 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 			RootDir       string `json:"root_dir"`
 			ServicePath   string `json:"service_path"`
 			OwnerUsername string `json:"owner_username"`
+			Context       string `json:"context"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid JSON request body", http.StatusBadRequest)
@@ -58,7 +59,7 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 		apiKey := fmt.Sprintf("tr_live_%s_%d", repoName, time.Now().UnixNano())
 		keyMasked := fmt.Sprintf("tr_live_...%s", apiKey[len(apiKey)-4:])
 		if s.db != nil {
-			k, _, err := s.db.CreateProject(r.Context(), owner, repoName, rootDir, req.OwnerUsername)
+			k, _, err := s.db.CreateProject(r.Context(), owner, repoName, rootDir, req.OwnerUsername, req.Context)
 			if err == nil && k != "" {
 				apiKey = k
 				if len(k) >= 4 {
@@ -71,6 +72,7 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 			"success":    true,
 			"repo":       fmt.Sprintf("%s/%s", owner, repoName),
 			"root_dir":   rootDir,
+			"context":    req.Context,
 			"api_key":    apiKey,
 			"key_masked": keyMasked,
 		})
@@ -88,6 +90,51 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"projects": projects})
+}
+
+func (s *Server) HandleUpdateProjectContext(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut && r.Method != http.MethodPost && r.Method != http.MethodPatch {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Owner   string `json:"owner"`
+		Repo    string `json:"repo"`
+		RootDir string `json:"root_dir"`
+		Context string `json:"context"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON request body", http.StatusBadRequest)
+		return
+	}
+
+	owner := req.Owner
+	repoName := req.Repo
+	if strings.Contains(req.Repo, "/") {
+		parts := strings.Split(req.Repo, "/")
+		owner = parts[0]
+		repoName = parts[1]
+	}
+	if owner == "" {
+		owner = "algotyrnt"
+	}
+	rootDir := strings.Trim(strings.TrimSpace(req.RootDir), "/")
+
+	if s.db != nil {
+		if err := s.db.UpdateProjectContext(r.Context(), owner, repoName, rootDir, req.Context); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to update project context: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"owner":    owner,
+		"repo":     repoName,
+		"root_dir": rootDir,
+		"context":  req.Context,
+	})
 }
 
 func (s *Server) HandleProjectKeys(w http.ResponseWriter, r *http.Request) {

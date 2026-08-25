@@ -19,9 +19,9 @@ type AnalysisResult struct {
 	SuggestedFix string `json:"suggested_fix"`
 }
 
-// AnalyzeCrash sends the crash stack trace and isolated AST snippet to the Gemini model
+// AnalyzeCrash sends the crash stack trace, isolated AST snippet, and optional project domain context to Gemini
 // and returns a structured root cause analysis and suggested fix.
-func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName string) (*AnalysisResult, error) {
+func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName string, projectContext ...string) (*AnalysisResult, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("gemini api key is not configured")
 	}
@@ -36,9 +36,13 @@ func AnalyzeCrash(ctx context.Context, stackTrace, astSnippet, apiKey, modelName
 		return nil, fmt.Errorf("failed to initialize Gemini client: %w", err)
 	}
 
-	prompt := fmt.Sprintf(`You are an expert Go backend engineer and automated incident diagnostician.
-Analyze the following Go panic crash telemetry and surrounding Go AST package context (including the crash site, struct/type definitions, constructors, and package helpers).
+	contextSection := ""
+	if len(projectContext) > 0 && strings.TrimSpace(projectContext[0]) != "" {
+		contextSection = fmt.Sprintf("\n### Project & Domain Context:\n%s\n", strings.TrimSpace(projectContext[0]))
+	}
 
+	prompt := fmt.Sprintf(`You are an expert Go backend engineer and automated incident diagnostician.
+Analyze the following Go panic crash telemetry and surrounding Go AST package context (including the crash site, struct/type definitions, constructors, and package helpers).%s
 ### Stack Trace:
 %s
 
@@ -49,7 +53,7 @@ Respond ONLY with a valid JSON object with the following schema:
 {
   "root_cause": "Explanation of what caused the crash",
   "suggested_fix": "Detailed solution or code modification to fix the issue"
-}`, stackTrace, astSnippet)
+}`, contextSection, stackTrace, astSnippet)
 
 	resp, err := client.Models.GenerateContent(ctx, modelName, genai.Text(prompt), &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
@@ -78,8 +82,8 @@ Respond ONLY with a valid JSON object with the following schema:
 	return &analysis, nil
 }
 
-// GeneratePatch sends the crash details, AST context, and analysis to Gemini to generate a unified git diff patch.
-func GeneratePatch(ctx context.Context, file, panicMessage, astSnippet, stackTrace, rootCause, apiKey, modelName string) (string, error) {
+// GeneratePatch sends the crash details, AST context, analysis, and optional project domain context to Gemini to generate a unified git diff patch.
+func GeneratePatch(ctx context.Context, file, panicMessage, astSnippet, stackTrace, rootCause, apiKey, modelName string, projectContext ...string) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("gemini api key is not configured")
 	}
@@ -94,9 +98,13 @@ func GeneratePatch(ctx context.Context, file, panicMessage, astSnippet, stackTra
 		return "", fmt.Errorf("failed to initialize Gemini client: %w", err)
 	}
 
-	prompt := fmt.Sprintf(`You are an expert Go systems engineer and automated patch generator.
-Create a unified git diff patch to resolve the following Go panic crash.
+	contextSection := ""
+	if len(projectContext) > 0 && strings.TrimSpace(projectContext[0]) != "" {
+		contextSection = fmt.Sprintf("\n### Project & Domain Context:\n%s\n", strings.TrimSpace(projectContext[0]))
+	}
 
+	prompt := fmt.Sprintf(`You are an expert Go systems engineer and automated patch generator.
+Create a unified git diff patch to resolve the following Go panic crash.%s
 ### Triggering File:
 %s
 
@@ -115,7 +123,7 @@ Create a unified git diff patch to resolve the following Go panic crash.
 Instructions:
 1. Provide a precise, valid unified diff patch (starting with "--- a/..." and "+++ b/..." with @@ chunk headers) or clear code modification fix.
 2. Only modify what is strictly necessary to guard against nil pointers, bounds errors, or invalid state.
-3. Return ONLY the patch text. Do not wrap in markdown backticks or add introductory commentary.`, file, panicMessage, rootCause, stackTrace, astSnippet)
+3. Return ONLY the patch text. Do not wrap in markdown backticks or add introductory commentary.`, contextSection, file, panicMessage, rootCause, stackTrace, astSnippet)
 
 	resp, err := client.Models.GenerateContent(ctx, modelName, genai.Text(prompt), nil)
 	if err != nil {
@@ -139,7 +147,7 @@ Instructions:
 }
 
 // ApplyFixToFile merges the suggested patch / panic fix into the complete source file and returns the full updated file content.
-func ApplyFixToFile(ctx context.Context, file, currentContent, panicMessage, astSnippet, stackTrace, rootCause, suggestedFix, patch, apiKey, modelName string) (string, error) {
+func ApplyFixToFile(ctx context.Context, file, currentContent, panicMessage, astSnippet, stackTrace, rootCause, suggestedFix, patch, apiKey, modelName string, projectContext ...string) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("gemini api key is not configured")
 	}
@@ -154,9 +162,13 @@ func ApplyFixToFile(ctx context.Context, file, currentContent, panicMessage, ast
 		return "", fmt.Errorf("failed to initialize Gemini client: %w", err)
 	}
 
-	prompt := fmt.Sprintf(`You are an expert Go systems engineer.
-You are tasked with applying a bugfix for a Go panic into the full source code file.
+	contextSection := ""
+	if len(projectContext) > 0 && strings.TrimSpace(projectContext[0]) != "" {
+		contextSection = fmt.Sprintf("\n### Project & Domain Context:\n%s\n", strings.TrimSpace(projectContext[0]))
+	}
 
+	prompt := fmt.Sprintf(`You are an expert Go systems engineer.
+You are tasked with applying a bugfix for a Go panic into the full source code file.%s
 ### File Path:
 %s
 
@@ -178,7 +190,7 @@ You are tasked with applying a bugfix for a Go panic into the full source code f
 Instructions:
 1. Apply the bugfix to the file accurately and cleanly.
 2. Ensure valid Go syntax, correct imports, and proper formatting.
-3. Return ONLY the complete, updated Go file source code. Do NOT wrap in markdown backticks and do NOT add conversational explanations.`, file, panicMessage, rootCause, suggestedFix, patch, currentContent)
+3. Return ONLY the complete, updated Go file source code. Do NOT wrap in markdown backticks and do NOT add conversational explanations.`, contextSection, file, panicMessage, rootCause, suggestedFix, patch, currentContent)
 
 	resp, err := client.Models.GenerateContent(ctx, modelName, genai.Text(prompt), nil)
 	if err != nil {

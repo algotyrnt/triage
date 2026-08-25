@@ -219,6 +219,7 @@ Lists all tracked repositories and configured Go services.
       "repo": "payments-service",
       "root_dir": "backend",
       "installation_id": 12345678,
+      "context": "High-throughput payment gateway processing Stripe webhooks.",
       "api_key_masked": "tr_live_...9042",
       "created_at": "2026-08-15T10:00:00Z"
     }
@@ -230,7 +231,7 @@ Lists all tracked repositories and configured Go services.
 
 ### `POST /api/v1/projects`
 
-Registers a new repository or Go monorepo service and issues an initial API key.
+Registers a new repository or Go monorepo service, saves domain context, and issues an initial API key.
 
 **Request Body:**
 
@@ -239,7 +240,8 @@ Registers a new repository or Go monorepo service and issues an initial API key.
   "owner": "myorg",
   "repo": "payments-service",
   "root_dir": "backend",
-  "owner_username": "octocat"
+  "owner_username": "octocat",
+  "context": "High-throughput payment gateway processing Stripe webhooks."
 }
 ```
 
@@ -250,8 +252,38 @@ Registers a new repository or Go monorepo service and issues an initial API key.
   "success": true,
   "repo": "myorg/payments-service",
   "root_dir": "backend",
+  "context": "High-throughput payment gateway processing Stripe webhooks.",
   "api_key": "tr_live_payments-service_1724123456",
   "key_masked": "tr_live_...3456"
+}
+```
+
+---
+
+### `PUT /api/v1/projects/context`
+
+Updates the architectural and domain context for an existing project.
+
+**Request Body:**
+
+```json
+{
+  "owner": "myorg",
+  "repo": "payments-service",
+  "root_dir": "backend",
+  "context": "Updated architectural context and domain invariants for payment service."
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "owner": "myorg",
+  "repo": "payments-service",
+  "root_dir": "backend",
+  "context": "Updated architectural context and domain invariants for payment service."
 }
 ```
 

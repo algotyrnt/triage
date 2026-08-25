@@ -48,6 +48,23 @@ The Triage Engine enforces the following strict JSON schema via Gemini's `Respon
 
 ---
 
+## Domain-Aware AI Triage & Project Context
+
+To ensure Gemini diagnoses panics with high precision without violating business invariants, Triage supports optional **Project & Architectural Domain Context**.
+
+### How It Works
+
+1. During project onboarding (or later in **Settings > General**), you can provide domain descriptions such as ledger idempotency rules, state machine transitions, concurrency invariants, or database transaction semantics.
+2. When a panic occurs, the engine automatically injects your domain context into the prompt:
+   ```markdown
+   ### Project & Domain Context:
+
+   High-throughput payment gateway processing Stripe and crypto webhooks with strict ledger idempotency and database transaction rollbacks.
+   ```
+3. Gemini uses this context in `AnalyzeCrash`, `GeneratePatch`, and `ApplyFixToFile` to recommend fixes that respect your application's domain logic rather than making generic assumptions.
+
+---
+
 ## Automated File Patching (`ApplyFixToFile`)
 
 When generating a bugfix Pull Request, the engine uses Gemini AI's code reasoning to merge the suggested patch into the latest source file retrieved from GitHub:
