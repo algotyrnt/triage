@@ -100,7 +100,7 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 		"callback_urls": []string{
 			engineURL + "/api/v1/auth/github/callback",
 		},
-		"public": false,
+		"public": true,
 		"default_permissions": map[string]string{
 			"contents":      "write",
 			"issues":        "write",
