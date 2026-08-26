@@ -197,7 +197,7 @@ export const InteractiveSimulator: React.FC = () => {
         </h2>
         <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
           Select a real Go panic scenario below and see how the engine extracts the enclosing AST
-          node, sends it to Gemini AI, and generates actionable fixes.
+          node, sends it to the AI diagnostics engine, and generates actionable fixes.
         </p>
       </div>
 
@@ -276,7 +276,7 @@ export const InteractiveSimulator: React.FC = () => {
                 }`}
               >
                 <Sparkles className="w-3 h-3" />
-                <span>2. Gemini AI</span>
+                <span>2. AI Diagnostics</span>
               </button>
 
               <button
@@ -323,12 +323,12 @@ export const InteractiveSimulator: React.FC = () => {
           </div>
 
           {/* Content Body */}
-          <div className="p-6 font-mono text-xs text-slate-200 min-h-[320px]">
+          <div className="p-6 font-mono text-xs text-slate-200 min-h-80">
             {isSimulating ? (
               <div className="flex flex-col items-center justify-center h-64 space-y-3">
                 <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                 <p className="text-slate-400 font-mono text-xs">
-                  Extracting *ast.FuncDecl and running Gemini AI inference...
+                  Extracting *ast.FuncDecl and running AI diagnostics inference...
                 </p>
               </div>
             ) : (
@@ -364,13 +364,13 @@ export const InteractiveSimulator: React.FC = () => {
                   </div>
                 )}
 
-                {/* TAB 2: Gemini AI */}
+                {/* TAB 2: AI Diagnostics */}
                 {activeTab === 'llm' && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="text-purple-400 font-bold flex items-center gap-2">
                         <Sparkles className="w-4 h-4" />
-                        <span>Gemini AI Structured Diagnosis:</span>
+                        <span>AI Structured Diagnosis:</span>
                       </div>
                       <span className="bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded text-[10px] font-bold">
                         LATENCY: ~180ms

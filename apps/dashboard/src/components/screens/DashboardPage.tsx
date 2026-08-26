@@ -371,6 +371,11 @@ require (
                           <span className="font-bold text-slate-900 group-hover:underline">
                             {incident.id}
                           </span>
+                          {(incident.occurrenceCount ?? 1) > 1 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-purple-50 text-purple-700 border border-purple-200">
+                              {incident.occurrenceCount}x
+                            </span>
+                          )}
                           <span
                             className={`text-[10px] font-bold px-1.5 py-0.2 rounded-sm border ${
                               isCritical

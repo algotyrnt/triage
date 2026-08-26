@@ -41,7 +41,7 @@ export default defineConfig({
           label: 'Engine & Diagnostics',
           items: [
             { label: 'AST Engine & Node Slicing', link: '/docs/ast-engine/' },
-            { label: 'Gemini AI Diagnostics', link: '/docs/gemini-ai/' },
+            { label: 'AI Incident Diagnostics', link: '/docs/ai-diagnostics/' },
             { label: 'GitHub App & Issue Automation', link: '/docs/github-integration/' },
           ],
         },

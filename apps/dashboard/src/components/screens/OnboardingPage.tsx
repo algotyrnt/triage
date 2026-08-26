@@ -918,7 +918,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               </div>
               <p className="text-[11px] text-slate-600 font-sans">
                 Describe your service's domain rules, architectural boundaries, or critical
-                invariants. Gemini AI incorporates this context when diagnosing crashes and
+                invariants. The AI engine incorporates this context when diagnosing crashes and
                 generating patch diffs.
               </p>
               <textarea
@@ -944,7 +944,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                 </div>
                 <div>
                   • <span className="font-semibold text-slate-900">pull_requests:write:</span>{' '}
-                  Enables Gemini automated patch generation comments
+                  Enables automated AI bugfix patch generation
                 </div>
               </div>
             </div>

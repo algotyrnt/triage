@@ -15,6 +15,7 @@ import (
 	"triage/engine/internal/config"
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
+	"triage/engine/internal/llm"
 )
 
 var githubNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_\.\-]+$`)
@@ -125,10 +126,11 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 
 	// Settings & Key management routes
 	mux.HandleFunc("/api/v1/settings/llm", s.withMiddleware(s.HandleSettingsLLM))
+	mux.HandleFunc("/api/v1/settings/llm/test", s.withMiddleware(s.HandleTestLLM))
 	mux.HandleFunc("/api/v1/projects/keys", s.withMiddleware(s.HandleProjectKeys))
 	mux.HandleFunc("/api/v1/projects/keys/revoke", s.withMiddleware(s.HandleRevokeProjectKey))
-	mux.HandleFunc("/api/v1/gemini/analyze-panic", s.withMiddleware(s.HandleGeminiAnalyzePanic))
-	mux.HandleFunc("/api/v1/gemini/generate-patch", s.withMiddleware(s.HandleGeminiGeneratePatch))
+	mux.HandleFunc("/api/v1/llm/analyze-panic", s.withMiddleware(s.HandleLLMAnalyzePanic))
+	mux.HandleFunc("/api/v1/llm/generate-patch", s.withMiddleware(s.HandleLLMGeneratePatch))
 
 	// Root handler: redirect visitors to dashboard if configured, or return engine operational status
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -175,12 +177,18 @@ func (s *Server) ResolveAppURL(ctx context.Context, r ...*http.Request) string {
 	return s.configStore.GetInstanceURL(ctx, r...)
 }
 
-// GetLLMConfig retrieves configured Gemini API key and model name strictly from the database instance configuration.
-func (s *Server) GetLLMConfig(ctx context.Context) (apiKey, modelName string) {
+// GetLLMConfig retrieves the configured LLM provider configuration.
+func (s *Server) GetLLMConfig(ctx context.Context) llm.Config {
 	if s.configStore == nil {
-		return "", ""
+		return llm.Config{}
 	}
 	return s.configStore.GetLLM(ctx)
+}
+
+// GetLLMProvider initializes the active LLM provider from the stored configuration.
+func (s *Server) GetLLMProvider(ctx context.Context) (llm.Provider, error) {
+	cfg := s.GetLLMConfig(ctx)
+	return llm.NewProvider(cfg)
 }
 
 // Helper to respond with JSON

@@ -45,7 +45,7 @@ Triage defines 4 distinct role levels to enforce least-privilege access:
 | **View Incidents & Panic Timeline**              |  ✅   |  ✅   |    ✅     |   ✅   |
 | **Inspect Isolated AST Snippets & Stack Traces** |  ✅   |  ✅   |    ✅     |   ✅   |
 | **Simulate Crashes & Run Diagnostics**           |  ✅   |  ✅   |    ✅     |   ✅   |
-| **Trigger Gemini AI Fixes & Open Bugfix PRs**    |  ✅   |  ✅   |    ✅     |   ❌   |
+| **Trigger AI Fixes & Open Bugfix PRs**           |  ✅   |  ✅   |    ✅     |   ❌   |
 | **Create & Revoke Project API Keys**             |  ✅   |  ✅   |    ❌     |   ❌   |
 | **Add / Delete Projects & Monorepo Modules**     |  ✅   |  ✅   |    ❌     |   ❌   |
 | **Invite Team Members & Modify Roles**           |  ✅   |  ✅   |    ❌     |   ❌   |

@@ -22,8 +22,14 @@ export interface Incident {
   id: string; // e.g. "INC-8094"
   repositoryId?: string;
   repositoryName?: string;
+  fingerprint?: string;
+  occurrenceCount?: number;
+  lastSeenAt?: string;
   title: string; // e.g. "nil pointer dereference in GetProfile()"
   status: IncidentStatus;
+  severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  aiProvider?: string;
+  aiModel?: string;
   triggeringFile: string; // e.g. "pkg/handler/user.go:42"
   triggeringLine: number; // e.g. 42
   latencyMs: number; // e.g. 740
@@ -43,7 +49,7 @@ export interface Incident {
     startLine: number;
     lines: { lineNum: number; content: string; isTriggerLine?: boolean }[];
   };
-  geminiAnalysis?: {
+  aiAnalysis?: {
     rootCause: string;
     explanation: string;
     severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';

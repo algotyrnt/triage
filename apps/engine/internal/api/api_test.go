@@ -299,3 +299,53 @@ func TestProjectsWithContext(t *testing.T) {
 		t.Fatalf("expected 200 OK for context update, got %d", updateRec.Code)
 	}
 }
+
+func TestLLMSettingsAndTestRoute(t *testing.T) {
+	s := newTestAPIServer()
+
+	// 1. GET /api/v1/settings/llm (default should be gemini)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/settings/llm", nil)
+	getRec := httptest.NewRecorder()
+	s.HandleSettingsLLM(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET settings/llm, got %d", getRec.Code)
+	}
+
+	// 2. Test HandleTestLLM with mock OpenAI endpoint
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{"message": map[string]string{"content": "OK"}},
+			},
+		})
+	}))
+	defer mockServer.Close()
+
+	testBody, _ := json.Marshal(map[string]interface{}{
+		"provider": "openai",
+		"api_key":  "sk-test-key",
+		"model":    "gpt-4o",
+		"base_url": mockServer.URL,
+	})
+	testReq := httptest.NewRequest(http.MethodPost, "/api/v1/settings/llm/test", bytes.NewReader(testBody))
+	testRec := httptest.NewRecorder()
+	s.HandleTestLLM(testRec, testReq)
+
+	if testRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for HandleTestLLM, got %d", testRec.Code)
+	}
+
+	var testRes struct {
+		Success   bool   `json:"success"`
+		LatencyMs int64  `json:"latency_ms"`
+		Provider  string `json:"provider"`
+	}
+	if err := json.NewDecoder(testRec.Body).Decode(&testRes); err != nil {
+		t.Fatalf("failed to decode test response: %v", err)
+	}
+	if !testRes.Success || testRes.Provider != "openai" {
+		t.Errorf("unexpected test result: %+v", testRes)
+	}
+}

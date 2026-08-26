@@ -125,7 +125,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
           </h1>
           <p className="text-sm text-slate-600 max-w-2xl">
             Select a project to inspect AST crash symbols, stream runtime panics, and dispatch
-            Gemini AI automated patches.
+            automated AI patches.
           </p>
         </div>
 

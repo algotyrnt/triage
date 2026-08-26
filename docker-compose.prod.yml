@@ -13,7 +13,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-triage_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test:
         [

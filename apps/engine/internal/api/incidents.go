@@ -164,7 +164,7 @@ func (s *Server) HandleCreateIncidentIssue(w http.ResponseWriter, r *http.Reques
 	issueBody.WriteString(fmt.Sprintf("- **Timestamp**: `%s UTC`\n\n", inc.CreatedAt.UTC().Format("2006-01-02 15:04:05")))
 
 	if inc.RootCause != "" {
-		issueBody.WriteString("---\n\n### Root Cause Analysis (Gemini AI)\n")
+		issueBody.WriteString("---\n\n### Root Cause Analysis (AI Engine)\n")
 		issueBody.WriteString(fmt.Sprintf("%s\n\n", inc.RootCause))
 	}
 	appURL := s.ResolveAppURL(r.Context(), r)
@@ -311,8 +311,8 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 		currentFileBytes, currentFileSHA, fetchErr = s.githubApp.FetchFileContent(r.Context(), installationID, owner, repo, "", inc.File)
 	}
 
-	// 2. Generate updated file content using Gemini
-	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
+	// 2. Generate updated file content using active LLM provider
+	llmCfg := s.GetLLMConfig(r.Context())
 
 	var projectContext string
 	if s.db != nil && owner != "" && repo != "" {
@@ -327,27 +327,27 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var updatedContent string
-	if len(currentFileBytes) > 0 && llmAPIKey != "" && llmModelName != "" {
+	if len(currentFileBytes) > 0 && (llmCfg.APIKey != "" || llmCfg.Provider == "ollama" || llmCfg.Provider == "custom") {
 		applyCtx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
-		var err error
-		updatedContent, err = llm.ApplyFixToFile(
-			applyCtx,
-			inc.File,
-			string(currentFileBytes),
-			inc.PanicMessage,
-			inc.ASTSnippet,
-			inc.StackTrace,
-			inc.RootCause,
-			inc.SuggestedFix,
-			patchCode,
-			llmAPIKey,
-			llmModelName,
-			projectContext,
-		)
-		if err != nil {
-			slog.Warn("Gemini apply fix failed, falling back to patch text", "error", err)
+		if provider, pErr := llm.NewProvider(llmCfg); pErr == nil {
+			var err error
+			updatedContent, err = provider.ApplyFixToFile(
+				applyCtx,
+				inc.File,
+				string(currentFileBytes),
+				inc.PanicMessage,
+				inc.ASTSnippet,
+				inc.StackTrace,
+				inc.RootCause,
+				inc.SuggestedFix,
+				patchCode,
+				projectContext,
+			)
+			if err != nil {
+				slog.Warn("LLM apply fix failed, falling back to patch text", "error", err, "provider", llmCfg.Provider)
+			}
 		}
 	}
 
@@ -404,7 +404,7 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	prBody.WriteString(fmt.Sprintf("- **Incident ID**: `%s`\n", inc.ID))
 	prBody.WriteString(fmt.Sprintf("- **Panic Message**: `%s`\n\n", inc.PanicMessage))
 	if inc.RootCause != "" {
-		prBody.WriteString("---\n\n### Gemini AI Root Cause Analysis\n")
+		prBody.WriteString("---\n\n### AI Root Cause Analysis\n")
 		prBody.WriteString(fmt.Sprintf("%s\n\n", inc.RootCause))
 	}
 	if inc.SuggestedFix != "" {
@@ -446,7 +446,7 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleLLMAnalyzePanic(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -464,14 +464,19 @@ func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
-
-	if llmAPIKey == "" || llmModelName == "" {
-		http.Error(w, "Gemini AI is not configured. Please configure your API key and model name in Settings or Setup Wizard.", http.StatusBadRequest)
+	llmCfg := s.GetLLMConfig(r.Context())
+	if llmCfg.APIKey == "" && llmCfg.Provider != "ollama" && llmCfg.Provider != "custom" {
+		http.Error(w, "AI model is not configured. Please configure your LLM provider in Settings or Setup Wizard.", http.StatusBadRequest)
 		return
 	}
 
-	analysisCtx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	provider, err := llm.NewProvider(llmCfg)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to initialize LLM provider (%s): %v", llmCfg.Provider, err), http.StatusInternalServerError)
+		return
+	}
+
+	analysisCtx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 
 	delimitedSnippet := req.ASTCode
@@ -479,7 +484,7 @@ func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request
 		delimitedSnippet = fmt.Sprintf("```go\n%s\n```", delimitedSnippet)
 	}
 
-	analysis, err := llm.AnalyzeCrash(analysisCtx, req.RawStackTrace, delimitedSnippet, llmAPIKey, llmModelName, req.ProjectContext)
+	analysis, err := provider.AnalyzeCrash(analysisCtx, req.RawStackTrace, delimitedSnippet, req.ProjectContext)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("AI Analysis failed: %v", err), http.StatusInternalServerError)
 		return
@@ -494,7 +499,7 @@ func (s *Server) HandleGeminiAnalyzePanic(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (s *Server) HandleGeminiGeneratePatch(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleLLMGeneratePatch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -513,25 +518,28 @@ func (s *Server) HandleGeminiGeneratePatch(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
-
-	if llmAPIKey == "" || llmModelName == "" {
-		http.Error(w, "Gemini AI is not configured. Please configure your API key and model name in Settings or Setup Wizard.", http.StatusBadRequest)
+	llmCfg := s.GetLLMConfig(r.Context())
+	if llmCfg.APIKey == "" && llmCfg.Provider != "ollama" && llmCfg.Provider != "custom" {
+		http.Error(w, "AI model is not configured. Please configure your LLM provider in Settings or Setup Wizard.", http.StatusBadRequest)
 		return
 	}
 
-	patchCtx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	provider, err := llm.NewProvider(llmCfg)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to initialize LLM provider (%s): %v", llmCfg.Provider, err), http.StatusInternalServerError)
+		return
+	}
+
+	patchCtx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	patch, err := llm.GeneratePatch(
+	patch, err := provider.GeneratePatch(
 		patchCtx,
 		req.TriggeringFile,
 		req.PanicMessage,
 		req.ASTCode,
 		req.StackTrace,
 		req.RootCause,
-		llmAPIKey,
-		llmModelName,
 		req.ProjectContext,
 	)
 	if err != nil {

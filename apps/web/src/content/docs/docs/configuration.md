@@ -15,7 +15,7 @@ The engine (`apps/engine`) supports the following environment variables:
 | `PORT`         | `string` | `8080`  | Engine HTTP listen port.                                     |
 | `LOG_LEVEL`    | `string` | `info`  | Engine logging verbosity (`debug`, `info`, `warn`, `error`). |
 
-> **Note:** Ingestion API keys, Gemini AI credentials, GitHub App configs, and the Dashboard origin URL (`instance_url`) are managed and validated strictly through PostgreSQL via the Setup Wizard and Dashboard Settings UI.
+> **Note:** Ingestion API keys, AI provider credentials, GitHub App configs, and the Dashboard origin URL (`instance_url`) are managed and validated strictly through PostgreSQL via the Setup Wizard and Dashboard Settings UI.
 
 ---
 

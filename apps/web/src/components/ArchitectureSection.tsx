@@ -43,8 +43,8 @@ export const ArchitectureSection: React.FC = () => {
     },
     {
       num: '04',
-      title: 'Gemini AI Diagnostics',
-      desc: 'AST code snippet + sanitized panic metadata are sent to Gemini AI for deterministic root-cause analysis and patch generation.',
+      title: 'AI Incident Diagnostics',
+      desc: 'AST code snippet + sanitized panic metadata are sent to the configured AI engine (Gemini, OpenAI, Claude, Ollama) for deterministic root-cause analysis and patch generation.',
       badge: '94% Token Savings',
       icon: <Cpu className="w-5 h-5 text-purple-600" />,
     },

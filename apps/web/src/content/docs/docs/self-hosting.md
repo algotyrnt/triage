@@ -10,8 +10,6 @@ Triage is designed for frictionless self-hosting. You can run the entire platfor
 You can run the official production containers published to GitHub Container Registry (`ghcr.io`):
 
 ```bash
-mkdir -p db
-curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/db/schema.sql -o db/schema.sql
 curl -fsSL https://raw.githubusercontent.com/algotyrnt/triage/main/docker-compose.prod.yml -o docker-compose.prod.yml
 
 POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
@@ -47,16 +45,18 @@ docker run -d \
 
 ---
 
-## Database Migration & Schema
+## Database Auto-Migration & Schema
 
-The PostgreSQL schema is located in `db/schema.sql`. It contains:
+Triage features **zero-config startup auto-migration**. When the Engine connects to PostgreSQL on boot, it automatically verifies and provisions all required tables, columns, and performance indexes using transaction-level advisory locks (`pg_advisory_xact_lock`). No manual migration scripts or CLI tools are required.
+
+The PostgreSQL schema is defined in [`apps/engine/internal/db/schema.sql`](https://github.com/algotyrnt/triage/blob/main/apps/engine/internal/db/schema.sql):
 
 - `users` & `invitations`: RBAC identity and team access tiers (`Owner`, `Admin`, `Developer`, `Viewer`).
-- `repositories`: Configured Go repositories and root directory paths.
-- `incidents`: Captured panics, stack traces, AST context, and AI root causes.
-- `ast_nodes` & `ast_indexes`: Cached and pre-indexed AST function declarations.
-- `api_keys`: Ingestion API key hashes and metadata.
-- `instance_config`: Dynamic settings (GitHub App, Gemini AI key/model, instance URL, session secrets).
+- `repositories`: Configured Go repositories, monorepo root directory submodules, and domain architecture context.
+- `incidents`: Captured panics, SHA-256 crash fingerprints for frequency deduplication (`occurrence_count`, `last_seen_at`), AI provider/model metadata, and generated bugfix patches.
+- `ast_nodes` & `ast_indexes`: Cached and pre-indexed AST function declarations for sub-millisecond symbolication.
+- `api_keys`: Ingestion API key hashes (`tr_live_...`) with constant-time SHA-256 authentication.
+- `instance_config`: Dynamic settings (GitHub App, AI provider credentials, model/base URL, instance URL, session secrets).
 - `github_installations` & `installation_repos`: GitHub App org and repository access maps.
 
 ---

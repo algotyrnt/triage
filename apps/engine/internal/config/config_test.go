@@ -47,9 +47,9 @@ func TestStore_NilDB(t *testing.T) {
 	s := NewStore(nil)
 	ctx := context.Background()
 
-	apiKey, model := s.GetLLM(ctx)
-	if apiKey != "" || model != "" {
-		t.Errorf("expected empty LLM config for nil db, got (%s, %s)", apiKey, model)
+	llmCfg := s.GetLLM(ctx)
+	if llmCfg.APIKey != "" || llmCfg.Model != "" {
+		t.Errorf("expected empty LLM config for nil db, got (%s, %s)", llmCfg.APIKey, llmCfg.Model)
 	}
 
 	if url := s.GetInstanceURL(ctx); url != "" {

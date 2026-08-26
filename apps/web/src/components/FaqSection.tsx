@@ -18,7 +18,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'How does automated Bugfix Pull Request (PR) generation work?',
-    a: 'When an incident is diagnosed, you can click "Generate Fix (PR)" in the Studio Dashboard. The Triage Engine uses Gemini AI to apply the suggested patch cleanly to the target file, creates a new Git branch (e.g. triage/fix-inc...), commits the fix, and opens a Pull Request on GitHub linked to the incident and closing any related GitHub issue.',
+    a: 'When an incident is diagnosed, you can click "Generate Fix (PR)" in the Studio Dashboard. The Triage Engine uses the configured AI model to apply the suggested patch cleanly to the target file, creates a new Git branch (e.g. triage/fix-inc...), commits the fix, and opens a Pull Request on GitHub linked to the incident and closing any related GitHub issue.',
   },
   {
     q: 'Do I need to pre-index all Go code in a database?',
@@ -33,8 +33,8 @@ const FAQS: FaqItem[] = [
     a: 'Yes. The Studio Dashboard includes a Workspace Projects page and Header Project Switcher. You can track multiple microservices, generate project-specific API keys, revoke keys, and filter incidents by repository ID or name.',
   },
   {
-    q: 'Can I use my own Gemini API key or select different models?',
-    a: 'Yes. You can supply your own Google AI Studio API key and configure your preferred Gemini model (such as gemini-1.5-flash or gemini-2.5-flash) directly via the Studio Dashboard setup wizard or Settings page.',
+    q: 'Can I use my own AI API keys or select different providers?',
+    a: 'Yes. Triage supports Google Gemini, OpenAI (GPT-4o, o3-mini), Anthropic Claude (Claude 3.5/3.7), and local/self-hosted models via Ollama and vLLM. You can configure credentials and run live connection latency tests directly via the Studio Dashboard setup wizard or Settings page.',
   },
   {
     q: 'What happens if the Triage Engine is unreachable when a panic occurs?',

@@ -35,9 +35,9 @@ export const FeaturesGrid: React.FC = () => {
     },
     {
       icon: <Cpu className="w-6 h-6 text-purple-600" />,
-      title: 'Gemini AI Diagnostics & Patches',
-      desc: 'Leverages Google Gemini AI with deterministic structured JSON schemas to deliver precise root-cause analysis and unified git diff patches with configurable models.',
-      badge: 'google.golang.org/genai',
+      title: 'Pluggable AI Diagnostics & Patches',
+      desc: 'Leverages multi-provider AI (Google Gemini, OpenAI, Anthropic Claude, and local Ollama/vLLM) with deterministic structured JSON schemas to deliver precise root causes and git diff patches.',
+      badge: 'Multi-Provider LLM',
       tagColor: 'bg-purple-50 text-purple-700 border-purple-200',
     },
     {

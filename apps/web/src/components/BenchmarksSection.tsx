@@ -116,7 +116,7 @@ export const BenchmarksSection: React.FC = () => {
             </div>
 
             <div className="pt-2 text-[11px] text-slate-500 font-sans leading-relaxed">
-              AST slicing cuts noise and prevents prompt saturation while reducing Gemini API costs
+              AST slicing cuts noise and prevents prompt saturation while reducing LLM token costs
               to &lt; $0.0001 per incident.
             </div>
           </div>

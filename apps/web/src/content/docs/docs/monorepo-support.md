@@ -33,7 +33,7 @@ Triage introduces **`root_dir` Path Normalization**:
 
 1. When tracking a service, you specify its `root_dir` (e.g. `services/order-service`).
 2. When a panic occurs, Triage normalizes the path (`root_dir` + `file_path`) before querying GitHub.
-3. When Gemini AI generates a fix or opens a Pull Request, the diff is committed directly to the correct repository path (`services/order-service/pkg/orders/order.go`).
+3. When the AI engine generates a fix or opens a Pull Request, the diff is committed directly to the correct repository path (`services/order-service/pkg/orders/order.go`).
 
 ---
 

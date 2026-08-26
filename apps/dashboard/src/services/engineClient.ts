@@ -135,8 +135,10 @@ export class EngineClient {
   }
 
   async getLlmConfig(): Promise<{
-    gemini_api_key?: string;
-    gemini_model?: string;
+    provider?: string;
+    api_key?: string;
+    model?: string;
+    base_url?: string;
   }> {
     try {
       const res = await fetch(`${this.baseUrl}/settings/llm`, {
@@ -149,16 +151,55 @@ export class EngineClient {
     }
   }
 
-  async updateLlmConfig(apiKey: string, model: string): Promise<boolean> {
+  async updateLlmConfig(config: {
+    provider?: string;
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+  }): Promise<boolean> {
     try {
+      const payload = {
+        provider: config.provider || 'gemini',
+        api_key: config.apiKey || '',
+        model: config.model || '',
+        base_url: config.baseUrl || '',
+      };
       const res = await fetch(`${this.baseUrl}/settings/llm`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify({ gemini_api_key: apiKey, gemini_model: model }),
+        body: JSON.stringify(payload),
       });
       return res.ok;
     } catch {
       return false;
+    }
+  }
+
+  async testLlmConfig(config: {
+    provider?: string;
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+  }): Promise<{ success: boolean; latency_ms?: number; error?: string; provider?: string }> {
+    try {
+      const payload: any = {
+        provider: config.provider || 'gemini',
+        api_key: config.apiKey || '',
+        model: config.model || '',
+        base_url: config.baseUrl || '',
+      };
+      const res = await fetch(`${this.baseUrl}/settings/llm/test`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        return { success: false, error: errText || `HTTP ${res.status}` };
+      }
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Connection test request failed' };
     }
   }
 
@@ -290,15 +331,23 @@ export class EngineClient {
     }
   }
 
-  async saveLlmSetupConfig(apiKey: string, modelName: string): Promise<boolean> {
+  async saveLlmSetupConfig(config: {
+    provider?: string;
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+  }): Promise<boolean> {
     try {
+      const payload = {
+        provider: config.provider || 'gemini',
+        api_key: config.apiKey || '',
+        model: config.model || '',
+        base_url: config.baseUrl || '',
+      };
       const res = await fetch(`${this.baseUrl}/setup/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gemini_api_key: apiKey,
-          gemini_model: modelName,
-        }),
+        body: JSON.stringify(payload),
       });
       return res.ok;
     } catch {
@@ -543,6 +592,7 @@ export class EngineClient {
     rawStackTrace: string;
     triggeringFile: string;
     astCode: string;
+    projectContext?: string;
   }): Promise<{
     success: boolean;
     rootCause?: string;
@@ -552,7 +602,7 @@ export class EngineClient {
     error?: string;
   }> {
     try {
-      const res = await fetch(`${this.baseUrl}/gemini/analyze-panic`, {
+      const res = await fetch(`${this.baseUrl}/llm/analyze-panic`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(params),
@@ -579,9 +629,10 @@ export class EngineClient {
     astCode: string;
     rootCause?: string;
     stackTrace?: string;
+    projectContext?: string;
   }): Promise<{ success: boolean; patch?: string; error?: string }> {
     try {
-      const res = await fetch(`${this.baseUrl}/gemini/generate-patch`, {
+      const res = await fetch(`${this.baseUrl}/llm/generate-patch`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(params),
