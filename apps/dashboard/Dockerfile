@@ -6,8 +6,7 @@ COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile
 
 FROM base AS builder
-ARG APP_VERSION=0.1.0
-ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
+ARG APP_VERSION=dev
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1

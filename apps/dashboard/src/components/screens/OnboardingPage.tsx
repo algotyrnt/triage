@@ -472,9 +472,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
                                   : 'border-slate-300'
                               }`}
                             >
-                              {isSelected && (
-                                <Check className="w-2.5 h-2.5 text-black stroke-3" />
-                              )}
+                              {isSelected && <Check className="w-2.5 h-2.5 text-black stroke-3" />}
                             </div>
                             <div>
                               <span className="font-bold">{repoName}</span>

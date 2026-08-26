@@ -21,11 +21,13 @@ import { SetupWizardPage } from '@/components/screens/SetupWizardPage';
 
 import { engineClient } from '@/services/engineClient';
 import { logger } from '@/services/logger';
-import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { useLatestRelease } from '@/components/useLatestRelease';
+import { AlertTriangle, CheckCircle2, X, BookOpen, ExternalLink, Sparkles } from 'lucide-react';
 
 type ToastVariant = 'success' | 'error';
 
 export default function App({ initialScreen = 'projects' }: { initialScreen?: ScreenId }) {
+  const release = useLatestRelease();
   const [currentScreen, setCurrentScreen] = useState<ScreenId>(initialScreen);
   const [projects, setProjects] = useState<Project[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -547,17 +549,60 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
       </main>
 
       {!isBootstrapping && currentScreen !== 'setup' && currentScreen !== 'login' && (
-        <footer className="border-t border-slate-200 bg-white py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>triage Core Engine Active</span>
-              <span className="text-slate-300">•</span>
-              <span>Zero-Overhead Go Crash Isolation</span>
+        <footer className="border-t border-slate-200 bg-white py-4 font-mono text-xs text-slate-500">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center space-x-2">
+                <span className="font-semibold text-slate-800">Triage Engine</span>
+                <span className="text-[11px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-sm border border-slate-200 font-bold">
+                  {release.engineVersion || 'v0.1.0'}
+                </span>
+              </div>
+
+              {release.hasUpdate && (
+                <a
+                  href={release.releaseUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-sm text-[11px] font-semibold transition-colors cursor-pointer"
+                  title={`Update available: ${release.latestVersion}`}
+                >
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span>Update available: {release.latestVersion}</span>
+                  <ExternalLink className="w-2.5 h-2.5 opacity-75" />
+                </a>
+              )}
             </div>
-            <div>
-              Powered by <span className="text-slate-900 font-medium">Pluggable AI</span> &amp; AST
-              Parser
+
+            <div className="flex items-center space-x-4 text-[11px]">
+              <a
+                href="/docs/overview"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-black transition-colors flex items-center gap-1"
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>Documentation</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
+              <a
+                href="/docs/api-reference"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-black transition-colors flex items-center gap-1"
+              >
+                <span>API Reference</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
+              <a
+                href="https://github.com/algotyrnt/triage"
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-black transition-colors flex items-center gap-1"
+              >
+                <span>GitHub</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
             </div>
           </div>
         </footer>

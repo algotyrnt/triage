@@ -322,6 +322,29 @@ export class EngineClient {
     }
   }
 
+  async getHealth(): Promise<{ status: string; version?: string; database?: string } | null> {
+    try {
+      const rootUrl = this.baseUrl.replace(/\/api\/v1\/?$/, '');
+      const res = await fetch(`${rootUrl}/health`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getEngineVersion(): Promise<string | null> {
+    try {
+      const stats = await this.getStats();
+      if (stats && stats.version) return stats.version;
+      const health = await this.getHealth();
+      if (health && health.version) return health.version;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async getStats(): Promise<any> {
     try {
       const res = await fetch(`${this.baseUrl}/stats`, {
