@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
 import { logger } from '@/services/logger';
+import { ProviderIcon } from '@/components/ProviderIcons';
 
 interface IncidentDetailPageProps {
   incident: Incident;
@@ -286,8 +287,11 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                     AI Structured Root Cause Analysis
                   </span>
                   {incident.aiModel && (
-                    <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm">
-                      {incident.aiModel} ({incident.aiProvider || 'ai'})
+                    <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm inline-flex items-center gap-1">
+                      <ProviderIcon provider={incident.aiProvider} className="w-3 h-3" />
+                      <span>
+                        {incident.aiModel} ({incident.aiProvider || 'ai'})
+                      </span>
                     </span>
                   )}
                 </div>
