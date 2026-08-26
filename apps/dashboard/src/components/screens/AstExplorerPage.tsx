@@ -252,7 +252,7 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
               </button>
             </div>
           ) : (
-            <div className="space-y-1 max-h-[550px] overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-137.5 overflow-y-auto pr-1">
               {filteredFiles.map((file) => {
                 const isSelected = selectedFile?.path === file.path;
                 return (
@@ -349,7 +349,7 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
                 <p>Select a Go file from the tree to inspect AST symbols.</p>
               </div>
             ) : viewMode === 'nodes' ? (
-              <div className="p-4 space-y-4 font-mono text-xs max-h-[600px] overflow-y-auto">
+              <div className="p-4 space-y-4 font-mono text-xs max-h-150 overflow-y-auto">
                 {selectedFile.functions && selectedFile.functions.length > 0 ? (
                   selectedFile.functions.map((fn, idx) => {
                     const snippetKey = `${selectedFile.path}:${fn.name}:${fn.line}`;
@@ -409,7 +409,7 @@ export const AstExplorerPage: React.FC<AstExplorerPageProps> = ({
                 )}
               </div>
             ) : (
-              <div className="p-4 bg-slate-900 text-emerald-400 font-mono text-xs overflow-x-auto max-h-[600px]">
+              <div className="p-4 bg-slate-900 text-emerald-400 font-mono text-xs overflow-x-auto max-h-150">
                 <pre className="text-[11px] leading-relaxed select-all">
                   {JSON.stringify(selectedFile, null, 2)}
                 </pre>

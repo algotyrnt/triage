@@ -127,14 +127,12 @@ check-git-branch:
 .PHONY: release-dry-run
 release-dry-run: check-version-var ## Simulate release workflow without modifying git or pushing
 	@printf "$(COLOR_BOLD)$(COLOR_CYAN)==> Simulating release for $(VERSION)...$(COLOR_RESET)\n"
-	@printf "$(COLOR_YELLOW)[1/4] Running pre-flight checks (lint + test + build)...$(COLOR_RESET)\n"
+	@printf "$(COLOR_YELLOW)[1/3] Running pre-flight checks (lint + test + build)...$(COLOR_RESET)\n"
 	@$(MAKE) check
-	@printf "$(COLOR_YELLOW)[2/4] Simulating packaging web distribution...$(COLOR_RESET)\n"
-	@$(MAKE) package-web VERSION=$(VERSION)
-	@printf "$(COLOR_YELLOW)[3/4] Simulating tag creation:$(COLOR_RESET)\n"
+	@printf "$(COLOR_YELLOW)[2/3] Simulating tag creation:$(COLOR_RESET)\n"
 	@printf "  - Would create git tag: $(COLOR_GREEN)%s$(COLOR_RESET)\n" "$(VERSION)"
 	@printf "  - Would create git tag: $(COLOR_GREEN)sdk/go/%s$(COLOR_RESET)\n" "$(VERSION)"
-	@printf "$(COLOR_YELLOW)[4/4] Simulating remote push:$(COLOR_RESET)\n"
+	@printf "$(COLOR_YELLOW)[3/3] Simulating remote push:$(COLOR_RESET)\n"
 	@printf "  - Would run: git push origin %s\n" "$(VERSION)"
 	@printf "  - Would run: git push origin sdk/go/%s\n" "$(VERSION)"
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)Dry run completed successfully!$(COLOR_RESET)\n"
@@ -162,18 +160,9 @@ push-tags: check-version-var ## Push release tags to origin to trigger CI/CD pip
 	git push origin "sdk/go/$(VERSION)"
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)Pushed tags $(VERSION) and sdk/go/$(VERSION) to origin.$(COLOR_RESET)\n"
 
-.PHONY: sync-version
-sync-version: check-version-var ## Sync version into apps/web and apps/dashboard package.json
-	@RAW_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
-	printf "$(COLOR_CYAN)==> Syncing version $$RAW_VER into package.json files...$(COLOR_RESET)\n"; \
-	$(BUN) -e "['apps/web/package.json', 'apps/dashboard/package.json'].forEach(f => { const fs = require('fs'); const j = JSON.parse(fs.readFileSync(f, 'utf8')); j.version = '$$RAW_VER'; fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n'); })"
-
 .PHONY: release
-release: check-git-branch check-git-clean check-version-var sync-version ## Execute full release: verify, sync version, tag, and push (e.g. make release VERSION=v0.1.1)
+release: check-git-branch check-git-clean check-version-var ## Execute full release: verify, tag, and push (e.g. make release VERSION=v0.1.1)
 	@printf "$(COLOR_BOLD)$(COLOR_CYAN)==> Initiating Triage Release $(VERSION)$(COLOR_RESET)\n"
-	@if ! git diff --quiet apps/web/package.json apps/dashboard/package.json; then \
-		git commit -am "release: bump version to $(VERSION)"; \
-	fi
 	@printf "$(COLOR_YELLOW)[1/3] Running pre-flight verification (lint, test, build)...$(COLOR_RESET)\n"
 	@$(MAKE) check VERSION=$(VERSION)
 	@printf "$(COLOR_YELLOW)[2/3] Creating release tags...$(COLOR_RESET)\n"
@@ -200,17 +189,6 @@ release-major: ## Bump major version and trigger release (e.g. v0.1.0 -> v1.0.0)
 	@NEXT_VERSION=$$(echo "$(LATEST_TAG)" | awk -F. '{v=substr($$1,2); print "v" v+1 ".0.0"}'); \
 	printf "$(COLOR_CYAN)Bumping major version: $(LATEST_TAG) -> $$NEXT_VERSION$(COLOR_RESET)\n"; \
 	$(MAKE) release VERSION=$$NEXT_VERSION
-
-.PHONY: package-web
-package-web: build-web ## Package web distribution bundle tarball
-	@printf "$(COLOR_CYAN)==> Packaging web distribution bundle (triage-web-$(VERSION).tar.gz)...$(COLOR_RESET)\n"
-	@tar -czf "triage-web-$(VERSION).tar.gz" -C apps/web/dist .
-	@printf "$(COLOR_GREEN)Created triage-web-$(VERSION).tar.gz$(COLOR_RESET)\n"
-
-.PHONY: release-bundle
-release-bundle: check-version-var build-engine package-web ## Build all release assets locally (binaries, tarballs, configs)
-	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Release bundle generated successfully:$(COLOR_RESET)\n"
-	@ls -la $(BIN_DIR) triage-web-$(VERSION).tar.gz docker-compose.prod.yml
 
 # ==============================================================================
 # Testing & Quality Assurance
@@ -435,7 +413,6 @@ clean: ## Clean binaries, coverage reports, tarballs, and build artifacts
 	@printf "$(COLOR_CYAN)==> Cleaning build outputs...$(COLOR_RESET)\n"
 	@rm -rf $(BIN_DIR)
 	@rm -rf coverage.out coverage.html coverage-engine.out coverage-sdk.out
-	@rm -f triage-web-*.tar.gz
 	@rm -rf apps/web/dist
 	@rm -rf apps/dashboard/.next
 	@printf "$(COLOR_GREEN)Clean completed.$(COLOR_RESET)\n"

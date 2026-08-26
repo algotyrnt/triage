@@ -184,8 +184,8 @@ When a release is triggered, the pipeline performs the following steps:
    - **Docker Images:** Builds and publishes multi-arch (`linux/amd64`, `linux/arm64`) images to GitHub Container Registry:
      - `ghcr.io/algotyrnt/triage-engine:vX.Y.Z` (and `:latest`)
      - `ghcr.io/algotyrnt/triage-dashboard:vX.Y.Z` (and `:latest`)
-   - **Web / Documentation:** Builds and deploys the documentation site to Cloudflare Pages and creates `triage-web-vX.Y.Z.tar.gz`.
-   - **GitHub Release:** Publishes the official immutable GitHub release with auto-generated release notes and attached assets (`docker-compose.prod.yml` and web distribution tarball).
+   - **Web / Documentation:** Builds and deploys the documentation site live to Cloudflare Pages.
+   - **GitHub Release:** Publishes the official immutable GitHub release with auto-generated release notes and attached production configuration (`docker-compose.prod.yml`).
 
 ---
 
