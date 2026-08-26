@@ -1,0 +1,11 @@
+.git
+.github
+.vscode
+.gemini
+node_modules
+.astro
+dist
+.env*
+!.env.example
+.DS_Store
+*.tsbuildinfo
