@@ -42,8 +42,8 @@ export const SystemStatusPage: React.FC<SystemStatusPageProps> = ({
             System Status & Engine Metrics
           </h1>
           <p className="text-xs text-slate-600 font-sans mt-0.5">
-            Real-time telemetry and service health monitoring across Cloud Run workers, GCS AST
-            Storage, and Gemini.
+            Real-time telemetry and service health monitoring across Engine workers, PostgreSQL, and
+            AI Providers.
           </p>
         </div>
 

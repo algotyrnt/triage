@@ -71,13 +71,13 @@ func main() {
       {/* Hero Section */}
       <section className="py-24 px-4 max-w-5xl mx-auto text-center space-y-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-xs font-semibold">
-          <Sparkles className="w-3.5 h-3.5" /> GO CRASH ISOLATION & GEMINI AI DIAGNOSTICS
+          <Sparkles className="w-3.5 h-3.5" /> GO CRASH ISOLATION & MULTI-PROVIDER AI DIAGNOSTICS
         </div>
 
         <h1 className="text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
           Zero-Latency Go Crash Isolation. <br />
           <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
-            Instant Gemini AI Diagnosis.
+            Instant AI Diagnosis.
           </span>
         </h1>
 
@@ -135,7 +135,7 @@ func main() {
                     }`}
                   >
                     {tab === 'ast' && '1. Func AST'}
-                    {tab === 'llm' && '2. Gemini AI'}
+                    {tab === 'llm' && '2. AI Diagnostics'}
                     {tab === 'raw' && '3. Raw Stack'}
                   </button>
                 ))}
@@ -164,7 +164,7 @@ func main() {
               {activeTab === 'llm' && (
                 <div>
                   <div className="text-emerald-400 font-bold mb-2">
-                    gemini-3.5-flash Structured Diagnosis:
+                    AI Structured Root Cause Diagnosis:
                   </div>
                   <pre className="bg-slate-900 p-4 rounded-md border border-slate-800 leading-relaxed text-emerald-300 overflow-x-auto">
                     {`{
@@ -220,13 +220,10 @@ main.main.func2({0x12995dae8, 0x102893268}, 0x0)
 
           <div className="bg-slate-50 border border-slate-200 p-6 rounded-lg space-y-3 shadow-sm hover:shadow-md transition-shadow">
             <Cpu className="w-8 h-8 text-purple-600" />
-            <h3 className="text-lg font-bold text-slate-900">Gemini 3.5 Flash AI</h3>
+            <h3 className="text-lg font-bold text-slate-900">Pluggable Multi-Provider AI</h3>
             <p className="text-slate-600 text-sm leading-relaxed">
-              Official{' '}
-              <code className="text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
-                google.golang.org/genai
-              </code>{' '}
-              SDK produces guaranteed JSON schema output with root cause and drop-in fixes.
+              Support for Google Gemini, OpenAI (GPT-4o), Anthropic Claude, and local Ollama/vLLM
+              with guaranteed structured JSON output and drop-in git fixes.
             </p>
           </div>
         </div>

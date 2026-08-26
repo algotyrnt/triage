@@ -28,6 +28,11 @@ import {
   Layers,
   Lock,
   Globe,
+  Sparkles,
+  Zap,
+  Cpu,
+  Check,
+  XCircle,
 } from 'lucide-react';
 
 interface SetupWizardPageProps {
@@ -39,12 +44,12 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1: Create App
+  // Step 1: App Manifest
   const [appCreated, setAppCreated] = useState(false);
-
-  // Step 2: Install App
-  const [appInstalled, setAppInstalled] = useState(false);
   const [appSlug, setAppSlug] = useState('');
+
+  // Step 2: App Install
+  const [appInstalled, setAppInstalled] = useState(false);
   const [repos, setRepos] = useState<RepositoryItem[]>([]);
   const [selectedOwnerFilter, setSelectedOwnerFilter] = useState<string>('all');
 
@@ -76,9 +81,19 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
 
   // Step 4: AI Configuration
   const [llmConfigured, setLlmConfigured] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('');
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [llmProvider, setLlmProvider] = useState<
+    'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom'
+  >('gemini');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmModel, setLlmModel] = useState('');
+  const [llmBaseUrl, setLlmBaseUrl] = useState('');
+  const [showLlmKey, setShowLlmKey] = useState(false);
+  const [testingLlm, setTestingLlm] = useState(false);
+  const [llmTestResult, setLlmTestResult] = useState<{
+    success: boolean;
+    latency_ms?: number;
+    error?: string;
+  } | null>(null);
 
   // Step 5: Test
   const [connectionSuccess, setConnectionSuccess] = useState(false);
@@ -121,8 +136,10 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       if (status.llm) {
         setLlmConfigured(true);
         engineClient.getLlmConfig().then((cfg) => {
-          if (cfg.gemini_api_key) setGeminiApiKey(cfg.gemini_api_key);
-          if (cfg.gemini_model) setGeminiModel(cfg.gemini_model);
+          if (cfg.provider) setLlmProvider(cfg.provider as any);
+          if (cfg.api_key) setLlmApiKey(cfg.api_key);
+          if (cfg.model) setLlmModel(cfg.model);
+          if (cfg.base_url) setLlmBaseUrl(cfg.base_url);
         });
       }
 
@@ -218,15 +235,20 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
   };
 
   const handleSaveLlmConfig = async () => {
-    if (!geminiApiKey.trim() || !geminiModel.trim()) {
-      setError('API Key and Model Name are required');
+    if (llmProvider !== 'ollama' && !llmApiKey.trim() && !llmModel.trim()) {
+      setError('API Key or Model Name is required');
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const success = await engineClient.saveLlmSetupConfig(geminiApiKey, geminiModel);
+      const success = await engineClient.saveLlmSetupConfig({
+        provider: llmProvider,
+        apiKey: llmApiKey,
+        model: llmModel,
+        baseUrl: llmBaseUrl,
+      });
       if (success) {
         setLlmConfigured(true);
         setCurrentStep(5);
@@ -237,6 +259,24 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       setError(err.message || 'Failed to save AI configuration');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestLlmConnection = async () => {
+    setTestingLlm(true);
+    setLlmTestResult(null);
+    try {
+      const res = await engineClient.testLlmConfig({
+        provider: llmProvider,
+        apiKey: llmApiKey,
+        model: llmModel,
+        baseUrl: llmBaseUrl,
+      });
+      setLlmTestResult(res);
+    } catch (err: any) {
+      setLlmTestResult({ success: false, error: err?.message || 'Connection test failed' });
+    } finally {
+      setTestingLlm(false);
     }
   };
 
@@ -600,11 +640,11 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
           <div className="space-y-6">
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <Brain className="w-6 h-6" /> AI Configuration
+                <Brain className="w-6 h-6" /> AI Diagnostics & Model Setup
               </h2>
               <p className="text-sm text-slate-600 font-sans">
-                Triage uses Gemini to automatically analyze crashes. Please provide your API
-                credentials to continue.
+                Choose your preferred LLM provider for incident root-cause analysis, AST
+                symbolication, and automated patch synthesis.
               </p>
             </div>
 
@@ -622,53 +662,207 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
+                {/* Provider Selector Cards */}
                 <div className="space-y-2">
                   <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
-                    Gemini API Key
+                    Select AI Provider
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                    {[
+                      {
+                        id: 'gemini',
+                        name: 'Google Gemini',
+                        sub: 'Gemini 2.0 Flash / Pro',
+                        icon: <Sparkles className="w-4 h-4 text-indigo-600" />,
+                      },
+                      {
+                        id: 'openai',
+                        name: 'OpenAI',
+                        sub: 'GPT-4o, o3-mini',
+                        icon: <Zap className="w-4 h-4 text-emerald-600" />,
+                      },
+                      {
+                        id: 'anthropic',
+                        name: 'Anthropic Claude',
+                        sub: 'Claude 3.5 / 3.7 Sonnet',
+                        icon: <Cpu className="w-4 h-4 text-amber-600" />,
+                      },
+                      {
+                        id: 'ollama',
+                        name: 'Local / Ollama',
+                        sub: 'DeepSeek, Qwen',
+                        icon: <Server className="w-4 h-4 text-purple-600" />,
+                      },
+                    ].map((prov) => {
+                      const isSelected = llmProvider === prov.id;
+                      return (
+                        <button
+                          key={prov.id}
+                          type="button"
+                          onClick={() => {
+                            setLlmProvider(prov.id as any);
+                            setLlmTestResult(null);
+                          }}
+                          className={`p-3 rounded-sm border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? 'border-black bg-slate-900 text-white shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className={isSelected ? 'text-white' : ''}>{prov.icon}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs">{prov.name}</div>
+                            <div
+                              className={`text-[10px] truncate ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}
+                            >
+                              {prov.sub}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Base URL for Ollama / Custom */}
+                {(llmProvider === 'ollama' || llmProvider === 'custom') && (
+                  <div className="space-y-1.5 bg-purple-50/60 border border-purple-200 p-3.5 rounded-sm">
+                    <label className="text-xs font-mono font-semibold text-purple-950 uppercase tracking-wider block">
+                      Endpoint Base URL
+                    </label>
+                    <input
+                      type="text"
+                      value={llmBaseUrl}
+                      onChange={(e) => setLlmBaseUrl(e.target.value)}
+                      placeholder="http://localhost:11434/v1"
+                      className="w-full bg-white border border-purple-200 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none focus:border-purple-600"
+                    />
+                  </div>
+                )}
+
+                {/* API Key */}
+                <div className="space-y-2">
+                  <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
+                    {llmProvider === 'gemini'
+                      ? 'Gemini API Key'
+                      : llmProvider === 'openai'
+                        ? 'OpenAI API Key'
+                        : llmProvider === 'anthropic'
+                          ? 'Anthropic API Key'
+                          : 'API Key (Optional for Local Ollama)'}
                   </label>
                   <div className="relative">
                     <input
-                      type={showGeminiKey ? 'text' : 'password'}
-                      value={geminiApiKey}
-                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      type={showLlmKey ? 'text' : 'password'}
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 pr-10 text-sm font-mono focus:outline-none focus:border-black"
-                      placeholder="AIzaSy..."
+                      placeholder={
+                        llmProvider === 'gemini'
+                          ? 'AIzaSy...'
+                          : llmProvider === 'openai'
+                            ? 'sk-proj-...'
+                            : llmProvider === 'anthropic'
+                              ? 'sk-ant-api03-...'
+                              : 'Optional'
+                      }
                     />
                     <button
                       type="button"
-                      onClick={() => setShowGeminiKey(!showGeminiKey)}
+                      onClick={() => setShowLlmKey(!showLlmKey)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 font-mono text-xs"
-                      title={showGeminiKey ? 'Hide Key' : 'Show Key'}
+                      title={showLlmKey ? 'Hide Key' : 'Show Key'}
                     >
-                      {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showLlmKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
+
+                {/* Model Name */}
                 <div className="space-y-2">
                   <label className="text-xs font-mono font-semibold text-slate-700 uppercase tracking-wider">
                     Model Name
                   </label>
                   <input
                     type="text"
-                    value={geminiModel}
-                    onChange={(e) => setGeminiModel(e.target.value)}
+                    value={llmModel}
+                    onChange={(e) => setLlmModel(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-sm font-mono focus:outline-none focus:border-black"
-                    placeholder="e.g. gemini-1.5-flash"
+                    placeholder={
+                      llmProvider === 'gemini'
+                        ? 'e.g. gemini-2.0-flash'
+                        : llmProvider === 'openai'
+                          ? 'e.g. gpt-4o'
+                          : llmProvider === 'anthropic'
+                            ? 'e.g. claude-3-5-sonnet-20241022'
+                            : 'e.g. deepseek-coder-v2'
+                    }
                   />
                 </div>
-                <button
-                  onClick={handleSaveLlmConfig}
-                  disabled={loading}
-                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full"
-                >
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4" />
-                  )}
-                  Save AI Configuration
-                </button>
+
+                {/* Test Result Pill */}
+                {llmTestResult && (
+                  <div
+                    className={`p-3 rounded-sm border flex items-start gap-2 text-xs font-mono ${
+                      llmTestResult.success
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-red-50 border-red-200 text-red-900'
+                    }`}
+                  >
+                    {llmTestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-bold">
+                        {llmTestResult.success
+                          ? `Connection verified successfully (${llmTestResult.latency_ms}ms)`
+                          : 'Connection test failed'}
+                      </div>
+                      {!llmTestResult.success && llmTestResult.error && (
+                        <div className="text-[11px] break-all text-red-800">
+                          {llmTestResult.error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleTestLlmConnection}
+                    disabled={testingLlm}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 border border-slate-200 cursor-pointer disabled:opacity-50"
+                  >
+                    {testingLlm ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    Test Connection
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveLlmConfig}
+                    disabled={loading}
+                    className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 flex-1 cursor-pointer disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    Save AI Configuration
+                  </button>
+                </div>
               </div>
             )}
           </div>

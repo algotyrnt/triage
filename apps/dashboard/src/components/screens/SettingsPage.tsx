@@ -23,6 +23,12 @@ import {
   EyeOff,
   Loader2,
   RefreshCw,
+  Sparkles,
+  Zap,
+  Cpu,
+  Server,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
 import { logger } from '@/services/logger';
@@ -96,11 +102,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const targetRepoName = activeRepo;
 
   // AI settings
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState('');
-  const [showGeminiSecret, setShowGeminiSecret] = useState(false);
+  const [llmProvider, setLlmProvider] = useState<
+    'gemini' | 'openai' | 'anthropic' | 'ollama' | 'custom'
+  >('gemini');
+  const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmModel, setLlmModel] = useState('');
+  const [llmBaseUrl, setLlmBaseUrl] = useState('');
+  const [showLlmSecret, setShowLlmSecret] = useState(false);
   const [aiSaved, setAiSaved] = useState(false);
   const [loadingAi, setLoadingAi] = useState(true);
+  const [testingAi, setTestingAi] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    latency_ms?: number;
+    error?: string;
+  } | null>(null);
 
   const loadProjectKeys = async () => {
     setLoadingKeys(true);
@@ -137,17 +153,42 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
   useEffect(() => {
     engineClient.getLlmConfig().then((cfg) => {
-      if (cfg.gemini_api_key) setGeminiApiKey(cfg.gemini_api_key);
-      if (cfg.gemini_model) setGeminiModel(cfg.gemini_model);
+      if (cfg.provider) setLlmProvider(cfg.provider as any);
+      if (cfg.api_key) setLlmApiKey(cfg.api_key);
+      if (cfg.model) setLlmModel(cfg.model);
+      if (cfg.base_url) setLlmBaseUrl(cfg.base_url);
       setLoadingAi(false);
     });
   }, []);
 
   const handleSaveAiConfig = async () => {
-    const success = await engineClient.updateLlmConfig(geminiApiKey, geminiModel);
+    const success = await engineClient.updateLlmConfig({
+      provider: llmProvider,
+      apiKey: llmApiKey,
+      model: llmModel,
+      baseUrl: llmBaseUrl,
+    });
     if (success) {
       setAiSaved(true);
       setTimeout(() => setAiSaved(false), 2000);
+    }
+  };
+
+  const handleTestAiConfig = async () => {
+    setTestingAi(true);
+    setTestResult(null);
+    try {
+      const res = await engineClient.testLlmConfig({
+        provider: llmProvider,
+        apiKey: llmApiKey,
+        model: llmModel,
+        baseUrl: llmBaseUrl,
+      });
+      setTestResult(res);
+    } catch (err: any) {
+      setTestResult({ success: false, error: err?.message || 'Connection test failed' });
+    } finally {
+      setTestingAi(false);
     }
   };
 
@@ -315,76 +356,244 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         {/* Right Main Content Panel */}
         <div className="lg:col-span-9 space-y-6">
           {activeTab === 'ai' && (
-            <div className="bg-white border border-slate-200 rounded-md overflow-hidden">
+            <div className="bg-white border border-slate-200 rounded-md overflow-hidden font-mono">
               <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-bold text-slate-900 font-mono flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <Brain className="w-4 h-4 text-indigo-600" />
-                    AI Model Configuration
+                    Pluggable AI Diagnostics & Patch Engine
                   </h2>
-                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                    Configure the Gemini API key and model used for automated crash analysis.
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-sans">
+                    Configure your preferred LLM provider for zero-token incident root cause
+                    analysis, automated bugfix diff generation, and domain-aware triage.
                   </p>
                 </div>
               </div>
-              <div className="p-5 space-y-5">
+              <div className="p-5 space-y-6 text-xs">
+                {/* Provider Selector Cards */}
+                <div className="space-y-2">
+                  <label className="font-bold text-slate-800 block">Select AI Provider:</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                    {[
+                      {
+                        id: 'gemini',
+                        name: 'Google Gemini',
+                        sub: 'Gemini 2.0 Flash / Pro',
+                        icon: <Sparkles className="w-4 h-4 text-indigo-600" />,
+                      },
+                      {
+                        id: 'openai',
+                        name: 'OpenAI',
+                        sub: 'GPT-4o, o3-mini, o1',
+                        icon: <Zap className="w-4 h-4 text-emerald-600" />,
+                      },
+                      {
+                        id: 'anthropic',
+                        name: 'Anthropic Claude',
+                        sub: 'Claude 3.5 / 3.7 Sonnet',
+                        icon: <Cpu className="w-4 h-4 text-amber-600" />,
+                      },
+                      {
+                        id: 'ollama',
+                        name: 'Local / Ollama',
+                        sub: 'DeepSeek, Qwen (Air-Gapped)',
+                        icon: <Server className="w-4 h-4 text-purple-600" />,
+                      },
+                    ].map((prov) => {
+                      const isSelected = llmProvider === prov.id;
+                      return (
+                        <button
+                          key={prov.id}
+                          type="button"
+                          onClick={() => {
+                            setLlmProvider(prov.id as any);
+                            setTestResult(null);
+                          }}
+                          className={`p-3 rounded-sm border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? 'border-black bg-slate-900 text-white shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 text-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className={isSelected ? 'text-white' : ''}>{prov.icon}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs">{prov.name}</div>
+                            <div
+                              className={`text-[10px] truncate ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}
+                            >
+                              {prov.sub}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Provider-Specific Base URL (for Ollama / Custom) */}
+                {(llmProvider === 'ollama' || llmProvider === 'custom') && (
+                  <div className="space-y-1.5 bg-purple-50/60 border border-purple-200 p-3.5 rounded-sm">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-purple-950 block">
+                        OpenAI-Compatible Endpoint URL (Base URL):
+                      </label>
+                      <span className="text-[10px] text-purple-700 font-sans">
+                        Self-Hosted / Local
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={llmBaseUrl}
+                      onChange={(e) => setLlmBaseUrl(e.target.value)}
+                      placeholder="http://localhost:11434/v1 (e.g. Ollama, vLLM, LM Studio)"
+                      className="w-full text-xs font-mono border border-purple-200 rounded-sm px-3 py-2 bg-white focus:outline-none focus:border-purple-600"
+                    />
+                    <p className="text-[10px] text-purple-800 font-sans">
+                      Standard OpenAI chat completions compatible endpoint. Defaults to{' '}
+                      <code className="bg-purple-100 px-1 py-0.5 rounded text-purple-900 font-mono">
+                        http://localhost:11434/v1
+                      </code>{' '}
+                      for Ollama.
+                    </p>
+                  </div>
+                )}
+
+                {/* API Key Input */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-800 font-mono">
-                    Gemini API Key
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 block">
+                      {llmProvider === 'gemini'
+                        ? 'Google Gemini API Key'
+                        : llmProvider === 'openai'
+                          ? 'OpenAI API Key'
+                          : llmProvider === 'anthropic'
+                            ? 'Anthropic API Key'
+                            : 'API Key (Optional for Local Ollama)'}
+                    </label>
+                    {llmProvider === 'ollama' && (
+                      <span className="text-[10px] text-slate-500 font-sans">
+                        Optional for local instances
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <input
-                      type={showGeminiSecret ? 'text' : 'password'}
-                      value={geminiApiKey}
-                      onChange={(e) => setGeminiApiKey(e.target.value)}
-                      placeholder="AIzaSy..."
-                      className="w-full text-sm font-mono border border-slate-200 rounded-sm px-3 py-2 pr-12 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      type={showLlmSecret ? 'text' : 'password'}
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
+                      placeholder={
+                        llmProvider === 'gemini'
+                          ? 'AIzaSy...'
+                          : llmProvider === 'openai'
+                            ? 'sk-proj-...'
+                            : llmProvider === 'anthropic'
+                              ? 'sk-ant-api03-...'
+                              : 'Leave blank if local endpoint does not require auth'
+                      }
+                      className="w-full text-xs font-mono border border-slate-200 rounded-sm px-3 py-2 pr-12 bg-white focus:outline-none focus:border-black"
                     />
                     <button
                       type="button"
-                      onClick={() => setShowGeminiSecret(!showGeminiSecret)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 font-mono text-xs"
-                      title={showGeminiSecret ? 'Hide Key' : 'Show Key'}
+                      onClick={() => setShowLlmSecret(!showLlmSecret)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 text-xs"
+                      title={showLlmSecret ? 'Hide Key' : 'Show Key'}
                     >
-                      {showGeminiSecret ? (
-                        <EyeOff className="w-4 h-4" />
+                      {showLlmSecret ? (
+                        <EyeOff className="w-3.5 h-3.5" />
                       ) : (
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-3.5 h-3.5" />
                       )}
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    Your Google AI Studio API key used for root-cause analysis and automated patch
-                    generation.
-                  </p>
                 </div>
 
+                {/* Model Name Input */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-800 font-mono">Model Name</label>
+                  <label className="font-bold text-slate-800 block">Model Name</label>
                   <input
                     type="text"
-                    value={geminiModel}
-                    onChange={(e) => setGeminiModel(e.target.value)}
-                    placeholder="e.g. gemini-1.5-flash or gemini-2.5-pro"
-                    className="w-full text-sm font-mono border border-slate-200 rounded-sm px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    value={llmModel}
+                    onChange={(e) => setLlmModel(e.target.value)}
+                    placeholder={
+                      llmProvider === 'gemini'
+                        ? 'gemini-2.0-flash (default) or gemini-2.5-pro'
+                        : llmProvider === 'openai'
+                          ? 'gpt-4o (default) or o3-mini'
+                          : llmProvider === 'anthropic'
+                            ? 'claude-3-5-sonnet-20241022 (default) or claude-3-7-sonnet-20250219'
+                            : 'deepseek-coder-v2 (default) or qwen2.5-coder:7b'
+                    }
+                    className="w-full text-xs font-mono border border-slate-200 rounded-sm px-3 py-2 bg-white focus:outline-none focus:border-black"
                   />
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    Leave blank to fallback to the GEMINI_MODEL_NAME environment variable.
+                  <p className="text-[10px] text-slate-500 font-sans">
+                    Leave blank to use default model or environment variables (
+                    <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono">
+                      LLM_MODEL
+                    </code>
+                    ).
                   </p>
                 </div>
 
-                <div className="pt-2 flex justify-end">
+                {/* Test Connection Banner */}
+                {testResult && (
+                  <div
+                    className={`p-3 rounded-sm border flex items-start gap-2 text-xs ${
+                      testResult.success
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-red-50 border-red-200 text-red-900'
+                    }`}
+                  >
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-0.5">
+                      <div className="font-bold">
+                        {testResult.success
+                          ? `Connection verified successfully (${testResult.latency_ms}ms)`
+                          : 'Connection test failed'}
+                      </div>
+                      {!testResult.success && testResult.error && (
+                        <div className="text-[11px] font-mono break-all text-red-800">
+                          {testResult.error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
                   <button
+                    type="button"
+                    onClick={handleTestAiConfig}
+                    disabled={testingAi}
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold px-4 py-2 rounded-sm border border-slate-200 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {testingAi ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    <span>{testingAi ? 'Testing Endpoint...' : 'Test Connection'}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={handleSaveAiConfig}
                     disabled={loadingAi}
-                    className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-mono font-medium px-4 py-1.5 rounded-sm transition-colors cursor-pointer"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-black hover:bg-slate-800 text-white text-xs font-bold px-5 py-2 rounded-sm transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {aiSaved ? (
-                      <Check className="w-3.5 h-3.5" />
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
                       <Shield className="w-3.5 h-3.5" />
                     )}
-                    <span>{aiSaved ? 'Saved' : 'Save Configuration'}</span>
+                    <span>{aiSaved ? 'Configuration Saved' : 'Save AI Configuration'}</span>
                   </button>
                 </div>
               </div>
@@ -564,7 +773,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   Outbound Webhook Dispatch Settings
                 </h2>
                 <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                  Triage posts JSON HTTP payloads when crashes are symbolicated or Gemini patches
+                  Triage posts JSON HTTP payloads when crashes are symbolicated or AI patches
                   generated.
                 </p>
               </div>
@@ -708,7 +917,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-sans text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-black"
                   />
                   <p className="text-[11px] text-slate-500 font-mono">
-                    Domain rules, business invariants, and architecture passed to Gemini AI to
+                    Domain rules, business invariants, and architecture passed to the AI engine to
                     enrich panic crash diagnosis and patch generation.
                   </p>
                 </div>

@@ -62,6 +62,12 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         new Date(item.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 19) +
         ' UTC',
       goroutineId: 'goroutine [running]',
+      fingerprint: item.fingerprint || undefined,
+      occurrenceCount: item.occurrence_count || 1,
+      lastSeenAt: item.last_seen_at ? new Date(item.last_seen_at).toUTCString() : undefined,
+      severity: item.severity || 'CRITICAL',
+      aiProvider: item.ai_provider || undefined,
+      aiModel: item.ai_model || undefined,
       panicMessage: item.panic_message,
       rawStackTrace: item.stack_trace,
       githubIssueUrl: item.github_issue_url || undefined,
@@ -81,11 +87,11 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           },
         ],
       },
-      geminiAnalysis: item.root_cause
+      aiAnalysis: item.root_cause
         ? {
             rootCause: item.root_cause,
             explanation: item.root_cause,
-            severity: 'CRITICAL',
+            severity: item.severity || 'CRITICAL',
             recommendedFix: item.suggested_fix,
           }
         : undefined,
@@ -551,7 +557,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               <span>Zero-Overhead Go Crash Isolation</span>
             </div>
             <div>
-              Powered by <span className="text-slate-900 font-medium">Gemini AI</span> &amp; AST
+              Powered by <span className="text-slate-900 font-medium">Pluggable AI</span> &amp; AST
               Parser
             </div>
           </div>

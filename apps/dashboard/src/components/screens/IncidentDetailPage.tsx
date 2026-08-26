@@ -44,7 +44,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
   onNavigate,
 }) => {
   const [analyzing, setAnalyzing] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState(incident.geminiAnalysis);
+  const [aiAnalysis, setAiAnalysis] = useState(incident.aiAnalysis);
   const [patchCode, setPatchCode] = useState<string | null>(incident.suggestedPatch || null);
   const [generatingPatch, setGeneratingPatch] = useState(false);
   const [creatingIssue, setCreatingIssue] = useState(false);
@@ -55,10 +55,10 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
 
   // Reset analysis & patch state when selected incident changes
   useEffect(() => {
-    setAiAnalysis(incident.geminiAnalysis);
+    setAiAnalysis(incident.aiAnalysis);
     setPatchCode(incident.suggestedPatch || null);
     setAnalysisError(null);
-  }, [incident.id, incident.geminiAnalysis, incident.suggestedPatch]);
+  }, [incident.id, incident.aiAnalysis, incident.suggestedPatch]);
 
   const handleCreateIssue = async () => {
     setCreatingIssue(true);
@@ -108,7 +108,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     }
   };
 
-  // Trigger Gemini AI Root Cause Analysis
+  // Trigger AI Root Cause Analysis
   const handleRunAiAnalysis = async () => {
     setAnalyzing(true);
     setAnalysisError(null);
@@ -136,7 +136,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     }
   };
 
-  // Trigger Gemini AI Fix Patch Generator
+  // Trigger AI Fix Patch Generator
   const handleGenerateFixPatch = async () => {
     setGeneratingPatch(true);
     setAnalysisError(null);
@@ -206,6 +206,11 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
             >
               {incident.status}
             </span>
+            {(incident.occurrenceCount ?? 1) > 1 && (
+              <span className="bg-purple-50 text-purple-800 border border-purple-200 text-xs font-mono px-2 py-0.5 rounded-sm font-bold">
+                {incident.occurrenceCount}x Occurrences
+              </span>
+            )}
             {incident.githubIssueNumber && (
               <a
                 href={incident.githubIssueUrl || '#'}
@@ -256,7 +261,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
             className="bg-black hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Sparkles className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : 'text-amber-400'}`} />
-            <span>{analyzing ? 'Running Analysis...' : 'Re-analyze with Gemini AI'}</span>
+            <span>{analyzing ? 'Running Analysis...' : 'Re-analyze with AI'}</span>
           </button>
         </div>
       </div>
@@ -271,15 +276,20 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column (65% -> col-span-8) */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Section 1: Gemini AI Root Cause Analysis */}
+          {/* Section 1: AI Root Cause Analysis */}
           {aiAnalysis && (
             <div className="bg-white border border-slate-200 rounded-sm p-4 space-y-3 font-mono text-xs">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-500" />
                   <span className="font-bold text-slate-900 text-sm">
-                    Gemini AI Structured Root Cause Analysis
+                    AI Structured Root Cause Analysis
                   </span>
+                  {incident.aiModel && (
+                    <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-sm">
+                      {incident.aiModel} ({incident.aiProvider || 'ai'})
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] bg-black text-white px-2 py-0.5 rounded-sm font-bold">
                   SEVERITY: {aiAnalysis.severity}
