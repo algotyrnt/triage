@@ -13,14 +13,17 @@ import (
 
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
+	"triage/engine/internal/llm"
 )
 
 // Keys used in the PostgreSQL instance_config table.
 const (
 	KeyInstanceURL          = "instance_url"
 	KeyAppURL               = "app_url"
-	KeyGeminiAPIKey         = "gemini_api_key"
-	KeyGeminiModel          = "gemini_model"
+	KeyLLMProvider          = "llm_provider"
+	KeyLLMAPIKey            = "llm_api_key"
+	KeyLLMModel             = "llm_model"
+	KeyLLMBaseURL           = "llm_base_url"
 	KeyGitHubAppID          = "github_app_id"
 	KeyGitHubAppSlug        = "github_app_slug"
 	KeyGitHubAppPrivateKey  = "github_app_private_key"
@@ -52,31 +55,59 @@ func NewStore(database *db.DB) *Store {
 	return &Store{db: database}
 }
 
-// GetLLM retrieves configured Gemini API key and model name.
-func (s *Store) GetLLM(ctx context.Context) (apiKey, modelName string) {
-	if s.db == nil || ctx == nil {
-		return "", ""
+// GetLLM retrieves configured LLM provider configuration with database and environment variable fallbacks.
+func (s *Store) GetLLM(ctx context.Context) llm.Config {
+	var cfg llm.Config
+
+	if s.db != nil && ctx != nil {
+		cfg.Provider, _ = s.db.GetInstanceConfig(ctx, KeyLLMProvider)
+		cfg.APIKey, _ = s.db.GetInstanceConfig(ctx, KeyLLMAPIKey)
+		cfg.Model, _ = s.db.GetInstanceConfig(ctx, KeyLLMModel)
+		cfg.BaseURL, _ = s.db.GetInstanceConfig(ctx, KeyLLMBaseURL)
 	}
-	apiKey, _ = s.db.GetInstanceConfig(ctx, KeyGeminiAPIKey)
-	modelName, _ = s.db.GetInstanceConfig(ctx, KeyGeminiModel)
-	return strings.TrimSpace(apiKey), strings.TrimSpace(modelName)
+
+	if cfg.Provider == "" {
+		cfg.Provider = "gemini"
+	}
+
+	return llm.Config{
+		Provider: strings.TrimSpace(cfg.Provider),
+		APIKey:   strings.TrimSpace(cfg.APIKey),
+		Model:    strings.TrimSpace(cfg.Model),
+		BaseURL:  strings.TrimSpace(cfg.BaseURL),
+	}
 }
 
-// SaveLLM persists the Gemini API key and model name.
-func (s *Store) SaveLLM(ctx context.Context, apiKey, modelName string) error {
+// SaveLLM persists the LLM provider configuration.
+func (s *Store) SaveLLM(ctx context.Context, cfg llm.Config) error {
 	if s.db == nil {
 		return nil
 	}
-	if apiKey != "" {
-		if err := s.db.SaveInstanceConfig(ctx, KeyGeminiAPIKey, strings.TrimSpace(apiKey)); err != nil {
+
+	provider := strings.TrimSpace(cfg.Provider)
+	if provider == "" {
+		provider = "gemini"
+	}
+	if err := s.db.SaveInstanceConfig(ctx, KeyLLMProvider, provider); err != nil {
+		return err
+	}
+
+	if cfg.APIKey != "" {
+		if err := s.db.SaveInstanceConfig(ctx, KeyLLMAPIKey, strings.TrimSpace(cfg.APIKey)); err != nil {
 			return err
 		}
 	}
-	if modelName != "" {
-		if err := s.db.SaveInstanceConfig(ctx, KeyGeminiModel, strings.TrimSpace(modelName)); err != nil {
+
+	if cfg.Model != "" {
+		if err := s.db.SaveInstanceConfig(ctx, KeyLLMModel, strings.TrimSpace(cfg.Model)); err != nil {
 			return err
 		}
 	}
+
+	if err := s.db.SaveInstanceConfig(ctx, KeyLLMBaseURL, strings.TrimSpace(cfg.BaseURL)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
