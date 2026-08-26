@@ -143,6 +143,12 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
         if (res && res.url) setInstallUrl(res.url);
       })
       .catch(() => {});
+
+    const handleFocus = () => {
+      loadRepos();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [username]);
 
   // Sync selected repo when filtered list changes
