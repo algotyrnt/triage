@@ -42,19 +42,19 @@ When running or building Go services with the Triage SDK, pass `TRIAGE_API_KEY` 
 ```bash
 # 1. Order Service (:8082)
 cd test-services/order-service
-TRIAGE_API_KEY=tr_live_3f8e1b9c4d2a70e6 go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
 
 # 2. Payment Gateway (:8083)
 cd test-services/payment-gateway
-TRIAGE_API_KEY=tr_live_7c4a0d9e2b1f83a6 go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
 
 # 3. Auth Service (:8084)
 cd test-services/auth-service
-TRIAGE_API_KEY=tr_live_e5d2b8c0a1f947e3 go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
 
 # 4. Simple Service (:8081)
 cd test-services/simple-service
-TRIAGE_API_KEY=tr_live_9a7b2c4e1f8d30a5 go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
 ```
 
 Or when compiling a binary:
