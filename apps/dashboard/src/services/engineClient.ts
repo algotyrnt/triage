@@ -39,12 +39,44 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
+function resolveDefaultBaseUrl(providedUrl?: string): string {
+  if (providedUrl && providedUrl !== 'undefined' && !providedUrl.startsWith('undefined')) {
+    return providedUrl.endsWith('/api/v1')
+      ? providedUrl
+      : `${providedUrl.replace(/\/$/, '')}/api/v1`;
+  }
+
+  const envUrl = (typeof process !== 'undefined' && process.env.TRIAGE_ENGINE_URL) || '';
+
+  if (envUrl && envUrl !== 'undefined' && !envUrl.startsWith('undefined')) {
+    return envUrl.endsWith('/api/v1') ? envUrl : `${envUrl.replace(/\/$/, '')}/api/v1`;
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('triage_engine_url');
+      if (stored && stored !== 'undefined') {
+        return stored.endsWith('/api/v1') ? stored : `${stored.replace(/\/$/, '')}/api/v1`;
+      }
+    } catch {}
+
+    const hostname = window.location.hostname || 'localhost';
+    return `${window.location.protocol}//${hostname}:8080/api/v1`;
+  }
+
+  return 'http://localhost:8080/api/v1';
+}
+
 export class EngineClient {
   private baseUrl: string;
   private authToken: string | null = null;
 
-  constructor(baseUrl: string = `${process.env.TRIAGE_ENGINE_URL}/api/v1`) {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    this.baseUrl = resolveDefaultBaseUrl(baseUrl);
+  }
+
+  setBaseUrl(url: string) {
+    this.baseUrl = resolveDefaultBaseUrl(url);
   }
 
   getBaseUrl(): string {
