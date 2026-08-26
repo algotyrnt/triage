@@ -157,7 +157,6 @@ jobs:
           generate_release_notes: true
           files: |
             docker-compose.prod.yml
-            db/schema.sql
             triage-web-${{ github.ref_name }}.tar.gz
           body: |
             ## Triage ${{ github.ref_name }}
@@ -171,8 +170,6 @@ jobs:
 
             #### Self-Hosting with Docker Compose
             ```bash
-            mkdir -p db
-            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/db/schema.sql" -o db/schema.sql
             curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml" -o docker-compose.prod.yml
 
             POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d

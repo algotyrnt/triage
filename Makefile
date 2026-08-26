@@ -201,7 +201,7 @@ package-web: build-web ## Package web distribution bundle tarball
 .PHONY: release-bundle
 release-bundle: check-version-var build-engine package-web ## Build all release assets locally (binaries, tarballs, configs)
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Release bundle generated successfully:$(COLOR_RESET)\n"
-	@ls -la $(BIN_DIR) triage-web-$(VERSION).tar.gz docker-compose.prod.yml db/schema.sql
+	@ls -la $(BIN_DIR) triage-web-$(VERSION).tar.gz docker-compose.prod.yml
 
 # ==============================================================================
 # Testing & Quality Assurance
