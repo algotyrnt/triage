@@ -11,7 +11,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"triage/engine/internal/api"
@@ -195,8 +194,8 @@ func TestProjectKeysRoutes(t *testing.T) {
 	if !createRes.Success {
 		t.Errorf("expected success=true in create key response")
 	}
-	if !strings.HasPrefix(createRes.Key.RawKey, "tr_live_") {
-		t.Errorf("expected raw_key to have prefix 'tr_live_', got: %s", createRes.Key.RawKey)
+	if len(createRes.Key.RawKey) != 32 {
+		t.Errorf("expected raw_key to be 32 hex chars, got: %s", createRes.Key.RawKey)
 	}
 
 	// 3. Test POST /api/v1/projects/keys/revoke

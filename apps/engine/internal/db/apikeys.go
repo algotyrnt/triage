@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"triage/engine/internal/crypto"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,8 +20,7 @@ func (db *DB) VerifyAPIKey(ctx context.Context, key string) bool {
 	if db.Pool == nil || key == "" {
 		return false
 	}
-	hash := sha256.Sum256([]byte(key))
-	keyHash := hex.EncodeToString(hash[:])
+	keyHash := crypto.HashKey(key)
 
 	var count int
 	err := db.Pool.QueryRow(ctx, "SELECT count(*) FROM api_keys WHERE key_hash = $1 AND (revoked_at IS NULL OR revoked_at > NOW()) AND (expires_at IS NULL OR expires_at > NOW())", keyHash).Scan(&count)
@@ -100,14 +101,9 @@ func (db *DB) CreateAPIKey(ctx context.Context, owner, repo, rootDir, keyName st
 		return nil, err
 	}
 
-	keySuffix := repo
-	if cleanRootDir != "" {
-		keySuffix = fmt.Sprintf("%s_%s", repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
-	}
-	rawKey := fmt.Sprintf("tr_live_%s_%d", keySuffix, time.Now().UnixNano())
-	hash := sha256.Sum256([]byte(rawKey))
-	keyHash := hex.EncodeToString(hash[:])
-	keyMasked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
+	rawKey := crypto.GenerateSecureAPIKey()
+	keyHash := crypto.HashKey(rawKey)
+	keyMasked := crypto.MaskAPIKey(rawKey)
 	keyID := fmt.Sprintf("key_%d", time.Now().UnixNano())
 
 	if keyName == "" {
@@ -159,8 +155,7 @@ func (db *DB) GetRepositoryByAPIKey(ctx context.Context, key string) (*Repositor
 	if db.Pool == nil || key == "" {
 		return nil, fmt.Errorf("PostgreSQL pool uninitialized or key is empty")
 	}
-	hash := sha256.Sum256([]byte(key))
-	keyHash := hex.EncodeToString(hash[:])
+	keyHash := crypto.HashKey(key)
 
 	var r Repository
 	err := db.Pool.QueryRow(ctx, `

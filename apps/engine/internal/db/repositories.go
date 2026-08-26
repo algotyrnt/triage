@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"triage/engine/internal/crypto"
 )
 
 func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUsername string, projectContext ...string) (string, string, error) {
@@ -27,6 +29,7 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 		contextStr = projectContext[0]
 	}
 
+	// Insert or update repository record
 	_, err := db.Pool.Exec(ctx, `
 		INSERT INTO repositories (id, owner, repo, root_dir, installation_id, context)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -37,15 +40,15 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 	if err != nil {
 		return "", "", err
 	}
-
-	keySuffix := repo
-	if cleanRootDir != "" {
-		keySuffix = fmt.Sprintf("%s_%s", repo, strings.ReplaceAll(cleanRootDir, "/", "_"))
+	var existingActiveCount int
+	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM api_keys WHERE repository_id = $1 AND status = 'ACTIVE'`, repoID).Scan(&existingActiveCount)
+	if existingActiveCount > 0 {
+		return "", repoID, nil
 	}
-	rawKey := fmt.Sprintf("tr_live_%s_%d", keySuffix, time.Now().UnixNano())
-	hash := sha256.Sum256([]byte(rawKey))
-	keyHash := hex.EncodeToString(hash[:])
-	keyMasked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
+
+	rawKey := crypto.GenerateSecureAPIKey()
+	keyHash := crypto.HashKey(rawKey)
+	keyMasked := crypto.MaskAPIKey(rawKey)
 	keyID := fmt.Sprintf("key_%d", time.Now().UnixNano())
 
 	keyName := fmt.Sprintf("Key for %s/%s", owner, repo)
