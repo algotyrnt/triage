@@ -913,8 +913,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
 
               <p className="text-red-800 text-[11.5px] leading-relaxed">
-                Deleting this project will permanently remove all AST symbolication caches, webhook
-                audit logs, and API ingestion keys for{' '}
+                Deleting this project will permanently remove all AST symbolication caches, panic
+                incident records, and API ingestion keys for{' '}
                 <strong className="text-red-950 font-bold">{targetRepoName}</strong>. This action
                 cannot be undone.
               </p>
