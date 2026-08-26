@@ -18,9 +18,28 @@ import (
 	"triage/engine/internal/config"
 	"triage/engine/internal/db"
 	"triage/engine/internal/logger"
+	versionPkg "triage/engine/internal/version"
+)
+
+var (
+	// Injected at build time via -ldflags "-X main.version=..."
+	version = ""
+	commit  = ""
+	date    = ""
 )
 
 func main() {
+	if version != "" {
+		versionPkg.Version = version
+	}
+	if commit != "" {
+		versionPkg.Commit = commit
+	}
+	if date != "" {
+		versionPkg.Date = date
+	}
+	currentVersion := versionPkg.Get()
+
 	env, err := config.LoadEnv()
 	if err != nil {
 		slog.Error("fatal: invalid environment configuration", "error", err)
@@ -38,7 +57,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
-	slog.Info("connected engine to PostgreSQL database pool")
+	slog.Info("connected engine to PostgreSQL database pool", "version", currentVersion)
 
 	astManager, err := ast.NewManager(ctx, env.DatabaseURL)
 	if err != nil {
@@ -60,6 +79,7 @@ func main() {
 		ConfigStore: configStore,
 		GitHubApp:   githubApp,
 		ASTManager:  astManager,
+		Version:     currentVersion,
 	})
 
 	mux := http.NewServeMux()
