@@ -247,3 +247,165 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 
 	return count, nil
 }
+
+type ASTSymbolItem struct {
+	Name    string `json:"name"`
+	Line    int    `json:"line"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
+type ASTFileItem struct {
+	Path      string          `json:"path"`
+	Name      string          `json:"name"`
+	Package   string          `json:"package"`
+	Functions []ASTSymbolItem `json:"functions"`
+}
+
+// ListASTFiles queries grouped Go files and their indexed function symbols for a given repository.
+func (m *Manager) ListASTFiles(ctx context.Context, owner, repo string, rootDir ...string) ([]ASTFileItem, error) {
+	if m.pool == nil {
+		return nil, fmt.Errorf("PostgreSQL database is uninitialized")
+	}
+
+	query := `
+		SELECT file_path, COALESCE(function_name, ''), line_number, snippet
+		FROM ast_nodes
+		WHERE owner = $1 AND repo = $2
+		ORDER BY file_path ASC, line_number ASC;
+	`
+	rows, err := m.pool.Query(ctx, query, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	fileMap := make(map[string]*ASTFileItem)
+	var orderedPaths []string
+
+	for rows.Next() {
+		var filePath, funcName, snippet string
+		var lineNum int
+		if err := rows.Scan(&filePath, &funcName, &lineNum, &snippet); err != nil {
+			continue
+		}
+
+		item, exists := fileMap[filePath]
+		if !exists {
+			baseName := filepath.Base(filePath)
+			dirName := filepath.Dir(filePath)
+			pkgName := filepath.Base(dirName)
+			if pkgName == "." || pkgName == "/" {
+				pkgName = "main"
+			}
+			item = &ASTFileItem{
+				Path:      filePath,
+				Name:      baseName,
+				Package:   pkgName,
+				Functions: []ASTSymbolItem{},
+			}
+			fileMap[filePath] = item
+			orderedPaths = append(orderedPaths, filePath)
+		}
+
+		if funcName != "" {
+			item.Functions = append(item.Functions, ASTSymbolItem{
+				Name:    funcName,
+				Line:    lineNum,
+				Snippet: snippet,
+			})
+		}
+	}
+
+	var results []ASTFileItem
+	for _, p := range orderedPaths {
+		results = append(results, *fileMap[p])
+	}
+
+	return results, nil
+}
+
+// ScanLocalASTFiles dynamically parses Go packages within a workspace directory and returns the live AST file tree.
+func ScanLocalASTFiles(workspacePath, rootDir string) ([]ASTFileItem, error) {
+	if workspacePath == "" {
+		workspacePath = "."
+	}
+
+	cleanRootDir := strings.Trim(strings.TrimSpace(filepath.ToSlash(rootDir)), "/")
+	walkPath := workspacePath
+	if cleanRootDir != "" && cleanRootDir != "." {
+		walkPath = filepath.Join(workspacePath, cleanRootDir)
+	}
+
+	statInfo, statErr := os.Stat(walkPath)
+	if statErr != nil {
+		return nil, statErr
+	}
+	if !statInfo.IsDir() {
+		return nil, fmt.Errorf("walk path %s is not a directory", walkPath)
+	}
+
+	pkgDirs := make(map[string]bool)
+	_ = filepath.Walk(walkPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			name := info.Name()
+			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" || name == "dist" || name == "bin" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go") {
+			pkgDirs[filepath.Dir(path)] = true
+		}
+		return nil
+	})
+
+	var results []ASTFileItem
+	for dir := range pkgDirs {
+		fset := token.NewFileSet()
+		filter := func(info os.FileInfo) bool {
+			return strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go")
+		}
+
+		pkgs, parseErr := parser.ParseDir(fset, dir, filter, parser.ParseComments)
+		if parseErr != nil || len(pkgs) == 0 {
+			continue
+		}
+
+		for _, pkg := range pkgs {
+			pkgCtx := NewPackageContext(fset, pkg.Name, pkg.Files)
+			fileMap := make(map[string][]ASTSymbolItem)
+
+			for i := range pkgCtx.Functions {
+				fn := &pkgCtx.Functions[i]
+				types, helpers, vars := pkgCtx.ResolveDependencies(fn)
+				richSnippet := pkgCtx.FormatContext(fn, types, helpers, vars)
+
+				relPath, err := filepath.Rel(workspacePath, fn.FilePath)
+				if err != nil {
+					relPath = fn.FilePath
+				}
+				relPath = filepath.ToSlash(relPath)
+
+				fileMap[relPath] = append(fileMap[relPath], ASTSymbolItem{
+					Name:    fn.Name,
+					Line:    fn.StartLine,
+					Snippet: richSnippet,
+				})
+			}
+
+			for filePath, symbols := range fileMap {
+				results = append(results, ASTFileItem{
+					Path:      filePath,
+					Name:      filepath.Base(filePath),
+					Package:   pkg.Name,
+					Functions: symbols,
+				})
+			}
+		}
+	}
+
+	return results, nil
+}
