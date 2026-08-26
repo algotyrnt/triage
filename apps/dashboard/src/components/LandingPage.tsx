@@ -76,7 +76,7 @@ func main() {
 
         <h1 className="text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
           Zero-Latency Go Crash Isolation. <br />
-          <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
             Instant AI Diagnosis.
           </span>
         </h1>
