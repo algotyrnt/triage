@@ -93,7 +93,7 @@ func (s *Server) HandleSetupManifest(w http.ResponseWriter, r *http.Request) {
 	engineURL := s.ResolveEngineURL(r)
 
 	manifest := map[string]interface{}{
-		"name":         "Triage",
+		"name":         "triage",
 		"url":          req.InstanceURL,
 		"redirect_url": engineURL + "/api/v1/setup/callback",
 		"setup_url":    engineURL + "/api/v1/setup/install/callback",
