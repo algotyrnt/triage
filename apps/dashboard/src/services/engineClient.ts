@@ -345,6 +345,54 @@ export class EngineClient {
     }
   }
 
+  async getASTTree(
+    owner: string,
+    repo: string,
+    rootDir?: string,
+  ): Promise<{ status: string; files: any[]; total: number } | null> {
+    try {
+      const params = new URLSearchParams();
+      if (owner) params.set('owner', owner);
+      if (repo) params.set('repo', repo);
+      if (rootDir) params.set('root_dir', rootDir);
+
+      const res = await fetch(`${this.baseUrl}/ast/tree?${params.toString()}`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async indexAST(
+    owner: string,
+    repo: string,
+    commit = 'main',
+    rootDir = '',
+  ): Promise<{ status: string; indexed_count?: number; error?: string } | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/ast/index`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          owner,
+          repo,
+          commit,
+          root_dir: rootDir,
+        }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
   async getStats(): Promise<any> {
     try {
       const res = await fetch(`${this.baseUrl}/stats`, {
