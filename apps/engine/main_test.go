@@ -236,39 +236,39 @@ func TestCreateIncidentIssueRoute(t *testing.T) {
 	}
 }
 
-func TestGeminiRoutes(t *testing.T) {
+func TestLLMRoutes(t *testing.T) {
 	s := newTestServer()
 
-	// 1. Test POST /api/v1/gemini/analyze-panic missing api key or model
+	// 1. Test POST /api/v1/llm/analyze-panic missing api key or model
 	body, _ := json.Marshal(map[string]string{
 		"panicMessage":   "nil pointer dereference",
 		"triggeringFile": "main.go",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/analyze-panic", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/llm/analyze-panic", bytes.NewBuffer(body))
 	rec := httptest.NewRecorder()
-	s.HandleGeminiAnalyzePanic(rec, req)
+	s.HandleLLMAnalyzePanic(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when Gemini AI is unconfigured, got %d", rec.Code)
+		t.Fatalf("expected status 400 when AI is unconfigured, got %d", rec.Code)
 	}
 
-	// 2. Test POST /api/v1/gemini/generate-patch missing api key
+	// 2. Test POST /api/v1/llm/generate-patch missing api key
 	patchBody, _ := json.Marshal(map[string]string{
 		"triggeringFile": "main.go",
 		"panicMessage":   "nil pointer dereference",
 	})
-	patchReq := httptest.NewRequest(http.MethodPost, "/api/v1/gemini/generate-patch", bytes.NewBuffer(patchBody))
+	patchReq := httptest.NewRequest(http.MethodPost, "/api/v1/llm/generate-patch", bytes.NewBuffer(patchBody))
 	patchRec := httptest.NewRecorder()
-	s.HandleGeminiGeneratePatch(patchRec, patchReq)
+	s.HandleLLMGeneratePatch(patchRec, patchReq)
 
 	if patchRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when GEMINI_API_KEY missing, got %d", patchRec.Code)
+		t.Fatalf("expected status 400 when LLM key missing, got %d", patchRec.Code)
 	}
 
 	// 3. Test method not allowed
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/gemini/generate-patch", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/llm/generate-patch", nil)
 	getRec := httptest.NewRecorder()
-	s.HandleGeminiGeneratePatch(getRec, getReq)
+	s.HandleLLMGeneratePatch(getRec, getReq)
 
 	if getRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
