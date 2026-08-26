@@ -149,7 +149,6 @@ Local `make release`
 GitHub Actions (`release.yml`)
   ├── Warms Go module proxy cache (pkg.go.dev indexing)
   ├── Builds & pushes multi-arch Docker images to GHCR
-  ├── Packages web distribution bundle (`triage-web-vX.Y.Z.tar.gz`)
   ├── Deploys documentation to Cloudflare Pages
   └── Publishes GitHub Release with automated notes and assets
 ```
