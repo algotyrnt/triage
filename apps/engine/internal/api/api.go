@@ -100,6 +100,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/events/stream", s.withMiddleware(s.HandleEventsStream))
 	mux.HandleFunc("/api/v1/telemetry", s.withMiddleware(s.HandleTelemetry))
 	mux.HandleFunc("/api/v1/ast/index", s.withMiddleware(s.HandleASTIndex))
+	mux.HandleFunc("/api/v1/ast/tree", s.withMiddleware(s.HandleASTTree))
 	mux.HandleFunc("/api/v1/incidents", s.withMiddleware(s.HandleIncidents))
 	mux.HandleFunc("/api/v1/incidents/create-issue", s.withMiddleware(s.HandleCreateIncidentIssue))
 	mux.HandleFunc("/api/v1/incidents/create-pr", s.withMiddleware(s.HandleCreateIncidentPR))
