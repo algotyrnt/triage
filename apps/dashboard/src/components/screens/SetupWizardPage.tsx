@@ -564,31 +564,6 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                   )}
                   {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
                 </button>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-sm p-3.5 text-xs font-mono text-slate-600 space-y-1">
-                  <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Installing on GitHub Organizations</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed font-sans">
-                    To install on an organization, GitHub requires the app to allow installations on{' '}
-                    <strong>Any account (Public)</strong>. If your organizations are not listed on
-                    GitHub, open your app in{' '}
-                    <a
-                      href="https://github.com/settings/apps"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline text-black font-semibold font-mono"
-                    >
-                      GitHub App Settings
-                    </a>{' '}
-                    and select <strong>Advanced &rarr; Make public</strong> (or{' '}
-                    <strong>
-                      General &rarr; Where can this app be installed? &rarr; Any account
-                    </strong>
-                    ).
-                  </p>
-                </div>
               </div>
             )}
           </div>
