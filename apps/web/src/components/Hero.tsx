@@ -45,7 +45,7 @@ export const Hero: React.FC = () => {
         <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
           {release.version}
         </span>
-        <span>Go Crash Isolation &amp; Gemini AI Diagnostics</span>
+        <span>Go Crash Isolation &amp; Multi-Provider AI Diagnostics</span>
         <ArrowRight className="w-3 h-3 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
       </a>
 
@@ -53,7 +53,7 @@ export const Hero: React.FC = () => {
       <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] max-w-5xl mx-auto">
         Zero-Latency Go Crash Isolation.{' '}
         <span className="bg-linear-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent block sm:inline">
-          Instant Gemini AI Diagnosis.
+          Instant AI Diagnosis.
         </span>
       </h1>
 
@@ -64,7 +64,7 @@ export const Hero: React.FC = () => {
           defer + recover
         </code>
         . Automatically isolates the crash site and surrounding multi-file package context (struct
-        definitions, constructors, helpers), queries Gemini AI for root causes, and opens automated
+        definitions, constructors, helpers), queries AI models for root causes, and opens automated
         bugfix Pull Requests with drop-in patches.
       </p>
 
@@ -149,8 +149,10 @@ export const Hero: React.FC = () => {
             <Cpu className="w-3.5 h-3.5 text-purple-600" />
             <span>AI Inference</span>
           </div>
-          <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">Gemini AI</div>
-          <div className="text-[11px] text-slate-500 mt-0.5">Structured JSON root-cause</div>
+          <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">
+            Pluggable AI
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">Gemini, OpenAI, Claude, Ollama</div>
         </div>
 
         <div className="bg-white border border-slate-200/80 p-4 rounded-lg shadow-xs hover:border-slate-300 transition-colors">

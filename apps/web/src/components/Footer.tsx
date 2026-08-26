@@ -24,8 +24,8 @@ export const Footer: React.FC = () => {
               <span className="font-bold text-slate-900 text-sm tracking-tight">triage</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Zero-overhead Go panic isolation, on-demand AST slicing, and automated Gemini AI
-              incident triage engine.
+              Zero-overhead Go panic isolation, on-demand AST slicing, and automated AI incident
+              triage engine.
             </p>
             <a
               href={release.releaseUrl}
@@ -65,8 +65,8 @@ export const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a href="/docs/gemini-ai" className="hover:text-black transition-colors">
-                  Gemini AI Diagnostics
+                <a href="/docs/ai-diagnostics" className="hover:text-black transition-colors">
+                  AI Incident Diagnostics
                 </a>
               </li>
             </ul>
@@ -169,7 +169,7 @@ export const Footer: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="text-slate-400">Powered by Gemini AI &amp; Go AST Parser</span>
+            <span className="text-slate-400">Powered by Multi-Provider AI &amp; Go AST Parser</span>
           </div>
         </div>
       </div>
