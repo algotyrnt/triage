@@ -27,6 +27,8 @@ import {
   Building2,
   Lock,
   Globe,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
 import { logger } from '@/services/logger';
@@ -252,13 +254,8 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   };
 
   const [generatingKey, setGeneratingKey] = useState(false);
-
-  const generateNewKey = () => {
-    const hex = Math.random().toString(36).substring(2, 12);
-    const key = `tr_live_${hex}`;
-    setGeneratedKey(key);
-    return key;
-  };
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState(false);
 
   const handleProceedToStep3 = async () => {
     const repo = customRepoInput.trim() || selectedRepo;
@@ -267,43 +264,29 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
       return;
     }
     setGeneratingKey(true);
+    setOnboardingError(null);
     try {
-      const storageKey = `triage_key_${activeOwner}_${activeRepoName}_${rootDir}`;
       const res = await engineClient.createProject(repo, rootDir, username, projectContext);
       if (res && res.api_key) {
         setGeneratedKey(res.api_key);
-        localStorage.setItem(storageKey, res.api_key);
-      } else {
-        const existingStoredKey = localStorage.getItem(storageKey);
-        if (existingStoredKey) {
-          setGeneratedKey(existingStoredKey);
-        } else {
-          const fallback = generateNewKey();
-          localStorage.setItem(storageKey, fallback);
-        }
+      } else if (res && res.key_masked) {
+        setGeneratedKey(res.key_masked);
       }
-    } catch (e) {
+      setCurrentStep(3);
+    } catch (e: any) {
       logger.warn('Project registration warning:', e);
-      const storageKey = `triage_key_${activeOwner}_${activeRepoName}_${rootDir}`;
-      const existingStoredKey = localStorage.getItem(storageKey);
-      if (existingStoredKey) {
-        setGeneratedKey(existingStoredKey);
-      } else if (!generatedKey) {
-        const fallback = generateNewKey();
-        localStorage.setItem(storageKey, fallback);
-      }
+      setOnboardingError(e?.message || 'Failed to connect to Triage engine backend.');
     } finally {
       setGeneratingKey(false);
-      setCurrentStep(3);
     }
   };
 
   const installedCount = filteredRepos.filter((r) => r.installed).length;
-  const activeKey = generatedKey || 'tr_live_fetching_key';
+  const activeKey = generatedKey || '••••••••••••••••••••••••••••••••';
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(activeKey);
+      await navigator.clipboard.writeText(generatedKey || activeKey);
       setCopiedKey(true);
       setTimeout(() => setCopiedKey(false), 2000);
     } catch (e) {
@@ -949,6 +932,13 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
               </div>
             </div>
 
+            {onboardingError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-mono p-3 rounded-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{onboardingError}</span>
+              </div>
+            )}
+
             <div className="flex justify-between items-center pt-2">
               <button
                 onClick={() => setCurrentStep(1)}
@@ -1003,19 +993,34 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
 
               <div className="flex items-center justify-between gap-2 bg-black p-2.5 rounded-sm border border-slate-800">
                 <code className="text-xs text-emerald-400 font-bold tracking-wide select-all break-all">
-                  {activeKey}
+                  {showKey
+                    ? generatedKey || activeKey
+                    : (generatedKey || activeKey).replace(/./g, '•')}
                 </code>
-                <button
-                  onClick={handleCopy}
-                  className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1 rounded-sm border border-slate-700 flex items-center gap-1 shrink-0 font-mono"
-                >
-                  {copiedKey ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                  <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs px-2 py-1 rounded-sm border border-slate-700 flex items-center gap-1 font-mono transition-colors cursor-pointer"
+                    title={showKey ? 'Hide API key' : 'Reveal API key'}
+                    aria-label={showKey ? 'Hide API key' : 'Reveal API key'}
+                  >
+                    {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>{showKey ? 'Hide' : 'Reveal'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-2.5 py-1 rounded-sm border border-slate-700 flex items-center gap-1 shrink-0 font-mono cursor-pointer transition-colors"
+                  >
+                    {copiedKey ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                    <span>{copiedKey ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1038,7 +1043,7 @@ func main() {
 
 	// Wrap HTTP multiplexer with triage panic recovery middleware
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	handler := triage.Middleware("${activeKey}", telemetryURL)(mux)
+	handler := triage.Middleware("${showKey ? generatedKey || activeKey : '••••••••••••••••••••••••••••••••'}", telemetryURL)(mux)
 
 	http.ListenAndServe(":8081", handler)
 }`}

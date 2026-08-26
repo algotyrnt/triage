@@ -62,6 +62,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     variant: 'success' | 'error';
   } | null>(null);
   const [newlyCreatedKeys, setNewlyCreatedKeys] = useState<Record<string, string>>({});
+  const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, boolean>>({});
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
 
   // Webhook settings
@@ -119,13 +120,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     error?: string;
   } | null>(null);
 
+  const toggleRevealKey = (id: string) => {
+    setRevealedKeyIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const loadProjectKeys = async () => {
     setLoadingKeys(true);
     try {
       const fetchedKeys = await engineClient.getProjectKeys(repoOwner, repoName, serviceRootDir);
-      const storageKey = `triage_key_${repoOwner}_${repoName}_${serviceRootDir}`;
-      const localStoredKey = localStorage.getItem(storageKey);
-      const activeOrStoredKey = activeApiKey || localStoredKey;
+      const activeOrStoredKey = activeApiKey;
 
       const merged = fetchedKeys.map((k) => {
         if (newlyCreatedKeys[k.id]) {
@@ -134,7 +137,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         if (
           activeOrStoredKey &&
           k.status === 'ACTIVE' &&
-          activeOrStoredKey.endsWith(k.keyMasked.replace(/^tr_live_\.\.\./, ''))
+          activeOrStoredKey.endsWith(k.keyMasked.replace(/^(\.\.\.|tr_live_\.\.\.)/, ''))
         ) {
           return { ...k, fullKey: activeOrStoredKey };
         }
@@ -215,7 +218,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     const rawToCopy =
       key.fullKey ||
       newlyCreatedKeys[key.id] ||
-      (activeApiKey && activeApiKey.endsWith(key.keyMasked.replace(/^tr_live_\.\.\./, ''))
+      (activeApiKey && activeApiKey.endsWith(key.keyMasked.replace(/^(\.\.\.|tr_live_\.\.\.)/, ''))
         ? activeApiKey
         : key.keyMasked);
     navigator.clipboard.writeText(rawToCopy);
@@ -251,8 +254,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       if (res.success && res.key) {
         const raw = res.key.raw_key || res.key.fullKey;
         if (raw) {
-          const storageKey = `triage_key_${repoOwner}_${repoName}_${serviceRootDir}`;
-          localStorage.setItem(storageKey, raw);
           setNewlyCreatedKeys((prev) => ({ ...prev, [res.key!.id]: raw }));
           if (onKeyUpdated) onKeyUpdated(raw);
         }
@@ -707,13 +708,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <div className="space-y-3">
                   {keysList.map((key) => {
                     const isNewlyCreated = Boolean(newlyCreatedKeys[key.id]);
+                    const isRevealed = Boolean(revealedKeyIds[key.id]);
                     const rawKeyDisplay =
                       key.fullKey ||
                       newlyCreatedKeys[key.id] ||
                       (activeApiKey &&
-                      activeApiKey.endsWith(key.keyMasked.replace(/^tr_live_\.\.\./, ''))
+                      activeApiKey.endsWith(key.keyMasked.replace(/^(\.\.\.|tr_live_\.\.\.)/, ''))
                         ? activeApiKey
                         : null);
+                    const keyString = rawKeyDisplay || key.keyMasked;
+                    const maskedDisplay = keyString.replace(/./g, '•');
 
                     return (
                       <div
@@ -749,10 +753,26 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                         <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-sm border border-slate-200 text-xs">
                           <code className="text-slate-800 font-bold tracking-wide select-all font-mono break-all">
-                            {rawKeyDisplay || key.keyMasked}
+                            {isRevealed ? keyString : maskedDisplay}
                           </code>
                           <div className="flex items-center gap-2 shrink-0">
                             <button
+                              type="button"
+                              onClick={() => toggleRevealKey(key.id)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-2 py-0.5 rounded-sm border border-slate-200 text-[11px] flex items-center gap-1 font-mono cursor-pointer"
+                              title={isRevealed ? 'Hide API key' : 'Reveal API key'}
+                              aria-label={isRevealed ? 'Hide API key' : 'Reveal API key'}
+                            >
+                              {isRevealed ? (
+                                <EyeOff className="w-3 h-3 text-slate-600" />
+                              ) : (
+                                <Eye className="w-3 h-3 text-slate-600" />
+                              )}
+                              <span>{isRevealed ? 'Hide' : 'Reveal'}</span>
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => handleCopyKey(key)}
                               className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-2 py-0.5 rounded-sm border border-slate-200 text-[11px] flex items-center gap-1 font-mono cursor-pointer"
                             >

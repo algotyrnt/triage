@@ -20,6 +20,8 @@ import {
   Terminal,
   RefreshCw,
   FolderGit2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -44,18 +46,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   );
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [showKey, setShowKey] = useState(false);
   const [stats, setStats] = useState<{
     total_incidents: number;
     funcs_indexed: number;
     total_projects: number;
   } | null>(null);
 
-  const parts = activeRepo.split('/');
-  const owner = parts[0] || 'algotyrnt';
-  const repoName = parts[1] || activeRepo;
-  const storageKey = `triage_key_${owner}_${repoName}_${rootDir}`;
-  const localKey = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
-  const apiKey = rawApiKey || localKey || 'tr_live_telemetry_key';
+  const apiKey = rawApiKey || '••••••••••••••••••••••••••••••••';
 
   useEffect(() => {
     engineClient.getStats().then((data) => {
@@ -78,7 +76,7 @@ func main() {
 
 	// Initialize Triage Panic Symbolication Engine
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	handler := triage.Middleware("${apiKey}", telemetryURL)(mux)
+	handler := triage.Middleware("${showKey ? apiKey : '••••••••••••••••••••••••••••••••'}", telemetryURL)(mux)
 
 	log.Println("[INFO] Server listening on :8081...")
 	http.ListenAndServe(":8081", handler)
@@ -94,7 +92,7 @@ import (
 // RecoveryMiddleware wraps HTTP handlers to isolate panics at route boundaries
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	telemetryURL := os.Getenv("TRIAGE_ENGINE_URL")
-	return triage.Middleware("${apiKey}", telemetryURL)(next)
+	return triage.Middleware("${showKey ? apiKey : '••••••••••••••••••••••••••••••••'}", telemetryURL)(next)
 }`,
     'go.mod': `module ${activeRepo}
 
@@ -176,19 +174,38 @@ require (
               <Key className="w-3.5 h-3.5 text-slate-700" />
               <span>Ingestion Key</span>
             </span>
-            <button
-              onClick={handleCopyKey}
-              className="text-slate-600 hover:text-black font-mono text-[11px] underline flex items-center gap-0.5"
-            >
-              {copiedKey ? (
-                <Check className="w-3 h-3 text-emerald-600" />
-              ) : (
-                <Copy className="w-3 h-3" />
-              )}
-              <span>{copiedKey ? 'Copied' : 'Copy'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowKey(!showKey)}
+                className="text-slate-600 hover:text-black font-mono text-[11px] flex items-center gap-0.5 cursor-pointer"
+                title={showKey ? 'Hide key' : 'Reveal key'}
+                aria-label={showKey ? 'Hide key' : 'Reveal key'}
+              >
+                {showKey ? (
+                  <EyeOff className="w-3 h-3 text-slate-500" />
+                ) : (
+                  <Eye className="w-3 h-3 text-slate-500" />
+                )}
+                <span>{showKey ? 'Hide' : 'Show'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyKey}
+                className="text-slate-600 hover:text-black font-mono text-[11px] underline flex items-center gap-0.5 cursor-pointer"
+              >
+                {copiedKey ? (
+                  <Check className="w-3 h-3 text-emerald-600" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+                <span>{copiedKey ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
           </div>
-          <div className="font-mono text-xs font-bold text-slate-900 truncate">{apiKey}</div>
+          <div className="font-mono text-xs font-bold text-slate-900 truncate">
+            {showKey ? apiKey : apiKey.replace(/./g, '•')}
+          </div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
             <span>Env: Production</span>
             <span className="text-emerald-600 font-semibold">Active</span>

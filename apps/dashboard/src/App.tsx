@@ -185,9 +185,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           setActiveRepo(`${owner}/${repo}`);
           setActiveRootDir(rootDir);
 
-          const storageKey = `triage_key_${owner}_${repo}_${rootDir}`;
-          const localStoredKey = localStorage.getItem(storageKey);
-          const keyToUse = localStoredKey || selectedProject.api_key_masked || '';
+          const keyToUse = selectedProject.api_key_masked || '';
           setActiveApiKey(keyToUse);
 
           // Load incidents
@@ -318,9 +316,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     setActiveRepo(`${owner}/${repo}`);
     setActiveRootDir(rootDir);
 
-    const storageKey = `triage_key_${owner}_${repo}_${rootDir}`;
-    const localStoredKey = localStorage.getItem(storageKey);
-    const keyToUse = localStoredKey || project.api_key_masked || '';
+    const keyToUse = project.api_key_masked || '';
     setActiveApiKey(keyToUse);
     setCurrentScreen(targetScreen);
   };
@@ -356,27 +352,28 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     setActiveRepo(repo);
     setActiveRootDir(rootDir || '');
     let finalKey = apiKey;
-    const parts = repo.split('/');
-    const owner = parts[0] || currentUser?.username || 'algotyrnt';
-    const repoName = parts[1] || repo;
     const cleanRoot = rootDir || '';
-    const storageKey = `triage_key_${owner}_${repoName}_${cleanRoot}`;
 
-    try {
-      const res = await engineClient.createProject(
-        repo,
-        rootDir,
-        currentUser?.username,
-        projectContext,
-      );
-      if (res && res.api_key) {
-        finalKey = res.api_key;
+    // Only create project on backend if an API key was not already created during onboarding
+    if (!finalKey || finalKey.includes('•') || finalKey.includes('...')) {
+      try {
+        const res = await engineClient.createProject(
+          repo,
+          rootDir,
+          currentUser?.username,
+          projectContext,
+        );
+        if (res && res.api_key) {
+          finalKey = res.api_key;
+        }
+      } catch (e) {
+        logger.warn('Failed to create project on backend during setup completion', e);
       }
-    } catch {
-      // Fallback to local generated key
     }
-    setActiveApiKey(finalKey);
-    localStorage.setItem(storageKey, finalKey);
+
+    if (finalKey) {
+      setActiveApiKey(finalKey);
+    }
 
     // Refresh projects list
     try {
@@ -388,8 +385,10 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
       logger.warn('Failed to reload projects list', e);
     }
 
+    setCurrentScreen('dashboard');
+
     showToast(
-      `Project ${repo}${cleanRoot ? ` (${cleanRoot})` : ''} setup complete with API Key ${finalKey.substring(0, 12)}...`,
+      `Project ${repo}${cleanRoot ? ` (${cleanRoot})` : ''} setup complete with API Key ${finalKey ? finalKey.substring(0, 12) + '...' : ''}`,
       'success',
     );
   };

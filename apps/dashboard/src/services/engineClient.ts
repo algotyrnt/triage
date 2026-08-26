@@ -514,7 +514,7 @@ export class EngineClient {
       return data.keys.map((k: any) => ({
         id: k.id,
         name: k.name || 'API Key',
-        keyMasked: k.key_masked || 'tr_live_...xxxx',
+        keyMasked: k.key_masked || '...xxxx',
         fullKey: k.raw_key || undefined,
         createdAt: k.created_at ? new Date(k.created_at).toISOString().split('T')[0] : 'Recently',
         lastUsed: 'Recently',
