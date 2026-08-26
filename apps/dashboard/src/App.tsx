@@ -47,56 +47,68 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
   } | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
 
+  const navigate = (screen: ScreenId) => {
+    setCurrentScreen(screen);
+    try {
+      if (screen !== 'login' && screen !== 'setup') {
+        sessionStorage.setItem('triage_active_screen', screen);
+      }
+    } catch {}
+  };
+
   const mapIncidents = (rawIncidents: any[]): Incident[] => {
-    return rawIncidents.map((item: any) => ({
-      id: item.id || `INC-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
-      repositoryId: item.repository_id || '',
-      repositoryName: item.repository_name || '',
-      title: item.title || 'Runtime Go Panic',
-      status: item.status || 'CRITICAL',
-      triggeringFile: `${item.file}:${item.line}`,
-      triggeringLine: item.line,
-      latencyMs: 14,
-      commitHash: '8f3a1b4',
-      branch: 'main',
-      timestamp:
-        new Date(item.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 19) +
-        ' UTC',
-      goroutineId: 'goroutine [running]',
-      fingerprint: item.fingerprint || undefined,
-      occurrenceCount: item.occurrence_count || 1,
-      lastSeenAt: item.last_seen_at ? new Date(item.last_seen_at).toUTCString() : undefined,
-      severity: item.severity || 'CRITICAL',
-      aiProvider: item.ai_provider || undefined,
-      aiModel: item.ai_model || undefined,
-      panicMessage: item.panic_message,
-      rawStackTrace: item.stack_trace,
-      githubIssueUrl: item.github_issue_url || undefined,
-      githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
-      githubPrUrl: item.github_pr_url || undefined,
-      githubPrNumber: item.github_pr_number ? Number(item.github_pr_number) : undefined,
-      suggestedPatch: item.suggested_patch || undefined,
-      astSnippet: {
-        functionName: 'main',
-        file: item.file,
-        startLine: item.line,
-        lines: [
-          {
-            lineNum: item.line,
-            content: item.ast_snippet || item.panic_message,
-            isTriggerLine: true,
-          },
-        ],
-      },
-      aiAnalysis: item.root_cause
-        ? {
-            rootCause: item.root_cause,
-            explanation: item.root_cause,
-            severity: item.severity || 'CRITICAL',
-            recommendedFix: item.suggested_fix,
-          }
-        : undefined,
-    }));
+    if (!Array.isArray(rawIncidents)) return [];
+    return rawIncidents
+      .filter((item: any) => item && (item.id || item.file || item.panic_message))
+      .map((item: any) => ({
+        id: item.id || `INC-${item.fingerprint ? item.fingerprint.substring(0, 8) : 'EVENT'}`,
+        repositoryId: item.repository_id || '',
+        repositoryName: item.repository_name || '',
+        title: item.title || item.panic_message || 'Runtime Go Panic',
+        status: item.status || 'CRITICAL',
+        triggeringFile: item.file ? `${item.file}:${item.line || 1}` : 'unknown:0',
+        triggeringLine: item.line || 1,
+        latencyMs: item.latency_ms || 14,
+        commitHash: item.commit_hash || 'main',
+        branch: item.branch || 'main',
+        timestamp:
+          new Date(item.created_at || Date.now()).toISOString().replace('T', ' ').substring(0, 19) +
+          ' UTC',
+        goroutineId: 'goroutine [running]',
+        fingerprint: item.fingerprint || undefined,
+        occurrenceCount: item.occurrence_count || 1,
+        lastSeenAt: item.last_seen_at ? new Date(item.last_seen_at).toUTCString() : undefined,
+        severity: item.severity || 'CRITICAL',
+        aiProvider: item.ai_provider || undefined,
+        aiModel: item.ai_model || undefined,
+        panicMessage: item.panic_message || item.title || '',
+        rawStackTrace: item.stack_trace || '',
+        githubIssueUrl: item.github_issue_url || undefined,
+        githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
+        githubPrUrl: item.github_pr_url || undefined,
+        githubPrNumber: item.github_pr_number ? Number(item.github_pr_number) : undefined,
+        suggestedPatch: item.suggested_patch || item.suggested_fix || undefined,
+        astSnippet: {
+          functionName: item.function_name || 'main',
+          file: item.file || '',
+          startLine: item.line || 1,
+          lines: [
+            {
+              lineNum: item.line || 1,
+              content: item.ast_snippet || item.panic_message || '',
+              isTriggerLine: true,
+            },
+          ],
+        },
+        aiAnalysis: item.root_cause
+          ? {
+              rootCause: item.root_cause,
+              explanation: item.root_cause,
+              severity: item.severity || 'CRITICAL',
+              recommendedFix: item.suggested_fix || '',
+            }
+          : undefined,
+      }));
   };
 
   // Bootstrap: check setup status, restore session, load data
@@ -109,10 +121,21 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         const setupStep = params.get('setup_step');
         const targetProject = params.get('project');
         const targetScreen = params.get('screen') as ScreenId | null;
+        const isInstalledRedirect = params.get('installed') === 'true';
 
         if (urlToken) {
           localStorage.setItem('triage_session', urlToken);
           engineClient.setAuthToken(urlToken);
+        }
+
+        // Clean up one-time URL query parameters so refresh does not replay them
+        if (
+          urlToken ||
+          isInstalledRedirect ||
+          params.get('setup_error') ||
+          params.get('installed') ||
+          params.get('app_created')
+        ) {
           window.history.replaceState({}, '', window.location.pathname);
         }
 
@@ -146,25 +169,40 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         // Step 3: Check setup status
         const setupStatus = await engineClient.getSetupStatus();
         if (!setupStatus.configured) {
-          setCurrentScreen('setup');
+          navigate('setup');
           setIsBootstrapping(false);
           return;
         }
 
-        if (setupStep) {
-          setCurrentScreen('setup');
+        if (setupStep && !setupStatus.configured) {
+          navigate('setup');
           setIsBootstrapping(false);
           return;
         }
 
         // Step 4: If not authenticated, go to login page
         if (!authenticatedUser) {
-          setCurrentScreen('login');
+          navigate('login');
           setIsBootstrapping(false);
           return;
         }
 
-        // Step 5: Authenticated — Load projects & incidents
+        // Step 5: Authenticated — Determine target screen
+        let savedScreen: ScreenId | null = null;
+        try {
+          savedScreen = sessionStorage.getItem('triage_active_screen') as ScreenId | null;
+        } catch {}
+
+        let screenToOpen: ScreenId = 'projects';
+        if (targetScreen) {
+          screenToOpen = targetScreen;
+        } else if (isInstalledRedirect) {
+          screenToOpen = 'new';
+        } else if (savedScreen && savedScreen !== 'login' && savedScreen !== 'setup') {
+          screenToOpen = savedScreen;
+        }
+
+        // Step 6: Load projects & incidents
         const loadedProjects = await engineClient.getProjects();
         if (loadedProjects && loadedProjects.length > 0) {
           setProjects(loadedProjects);
@@ -185,9 +223,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           const rootDir = selectedProject.root_dir || '';
           setActiveRepo(`${owner}/${repo}`);
           setActiveRootDir(rootDir);
-
-          const keyToUse = selectedProject.api_key_masked || '';
-          setActiveApiKey(keyToUse);
+          setActiveApiKey(selectedProject.api_key_masked || '');
 
           // Load incidents
           const liveIncidents = await engineClient.getIncidents();
@@ -197,31 +233,19 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
             const targetIncidentId = params.get('incident') || params.get('incident_id');
             if (targetIncidentId && mapped.some((i) => i.id === targetIncidentId)) {
               setSelectedIncidentId(targetIncidentId);
-              setCurrentScreen('incident_detail');
+              screenToOpen = 'incident_detail';
             } else if (targetProject) {
-              setCurrentScreen('dashboard');
-            } else if (targetScreen) {
-              setCurrentScreen(targetScreen);
-            } else {
-              // Default landing page is projects overview allowing the user to select
-              setCurrentScreen('projects');
+              screenToOpen = 'dashboard';
             }
-          } else {
-            if (targetProject) {
-              setCurrentScreen('dashboard');
-            } else if (targetScreen) {
-              setCurrentScreen(targetScreen);
-            } else {
-              setCurrentScreen('projects');
-            }
+          } else if (targetProject) {
+            screenToOpen = 'dashboard';
           }
-        } else {
-          // No projects — go to onboarding
-          setCurrentScreen('new');
         }
+
+        navigate(screenToOpen);
       } catch (e) {
         logger.warn('Bootstrap error:', e);
-        setCurrentScreen('login');
+        navigate('login');
       } finally {
         setIsBootstrapping(false);
       }
@@ -235,70 +259,61 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
       return;
     }
 
-    let eventSource: EventSource | null = null;
+    const streamUrl = engineClient.getEventsStreamUrl();
+    let es: EventSource | null = null;
     try {
-      const streamUrl = engineClient.getEventsStreamUrl();
-      eventSource = new EventSource(streamUrl);
-
-      eventSource.onmessage = (event) => {
+      es = new EventSource(streamUrl);
+      es.onmessage = (event) => {
         try {
-          const payload = JSON.parse(event.data);
-          if (payload.type === 'incident_created' && payload.data) {
-            const newIncidents = mapIncidents([payload.data]);
-            if (newIncidents.length > 0) {
-              const newInc = newIncidents[0];
+          if (!event.data) return;
+          const raw = JSON.parse(event.data);
+          if (raw.type === 'incident_created' && raw.data) {
+            const mapped = mapIncidents([raw.data]);
+            if (mapped.length > 0) {
+              const newInc = mapped[0];
               setIncidents((prev) => {
                 if (prev.some((i) => i.id === newInc.id)) {
                   return prev.map((i) => (i.id === newInc.id ? newInc : i));
                 }
                 return [newInc, ...prev];
               });
-              showToast(`🚨 Panic intercepted in ${newInc.triggeringFile}`, 'error');
+              showToast(`New Panic Ingested: ${newInc.triggeringFile}`, 'error');
             }
-          } else if (payload.type === 'incident_updated' && payload.data) {
-            const updatedIncidents = mapIncidents([payload.data]);
-            if (updatedIncidents.length > 0) {
-              const updated = updatedIncidents[0];
-              setIncidents((prev) => prev.map((inc) => (inc.id === updated.id ? updated : inc)));
+          } else if (raw.type === 'incident_updated' && raw.data) {
+            const mapped = mapIncidents([raw.data]);
+            if (mapped.length > 0) {
+              const updated = mapped[0];
+              setIncidents((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
             }
           }
-        } catch (e) {
-          logger.warn('Failed to parse SSE payload:', e);
-        }
+        } catch {}
       };
-
-      eventSource.onerror = (err) => {
-        logger.debug('SSE connection event / reconnecting:', err);
-      };
-    } catch (e) {
-      logger.warn('Failed to initialize EventSource:', e);
-    }
+    } catch {}
 
     return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
+      if (es) es.close();
     };
-  }, [isBootstrapping, currentScreen, currentUser]);
+  }, [isBootstrapping, currentScreen, activeRepo]);
 
-  // Selected incident object
-  const selectedIncident = incidents.find((i) => i.id === selectedIncidentId) || incidents[0];
+  const selectedIncident = incidents.find((i) => i.id === selectedIncidentId);
+
+  const showToast = (message: string, variant: ToastVariant = 'success') => {
+    setToast({ message, variant });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const criticalCount = incidents.filter((i) => i.status === 'CRITICAL').length;
 
-  // Show Toast
-  const showToast = (message: string, variant: ToastVariant = 'success') => {
-    setToast({ message, variant });
-    setTimeout(() => setToast(null), 3500);
-  };
-
-  const handleLoginSuccess = (user: { username: string; avatarUrl?: string }) => {
+  const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
     showToast(`Authenticated as @${user.username} via GitHub`, 'success');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('triage_session');
+    try {
+      sessionStorage.removeItem('triage_active_screen');
+    } catch {}
     engineClient.setAuthToken(null);
     setCurrentUser(null);
     setActiveRepo('');
@@ -306,7 +321,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     setActiveApiKey('');
     setProjects([]);
     setIncidents([]);
-    setCurrentScreen('login');
+    navigate('login');
     showToast('Logged out of Triage Console', 'success');
   };
 
@@ -319,7 +334,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
 
     const keyToUse = project.api_key_masked || '';
     setActiveApiKey(keyToUse);
-    setCurrentScreen(targetScreen);
+    navigate(targetScreen);
   };
 
   const handleRefreshProjects = async () => {
@@ -386,7 +401,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
       logger.warn('Failed to reload projects list', e);
     }
 
-    setCurrentScreen('dashboard');
+    navigate('dashboard');
 
     showToast(
       `Project ${repo}${cleanRoot ? ` (${cleanRoot})` : ''} setup complete with API Key ${finalKey ? finalKey.substring(0, 12) + '...' : ''}`,
@@ -417,7 +432,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
       {!isBootstrapping && currentScreen !== 'setup' && currentScreen !== 'login' && (
         <Header
           currentScreen={currentScreen}
-          onNavigate={(screen) => setCurrentScreen(screen)}
+          onNavigate={navigate}
           criticalCount={criticalCount}
           activeRepo={activeRepo}
           activeRootDir={activeRootDir}
@@ -438,17 +453,15 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           </div>
         ) : (
           <>
-            {currentScreen === 'setup' && (
-              <SetupWizardPage onNavigate={(screen) => setCurrentScreen(screen)} />
-            )}
+            {currentScreen === 'setup' && <SetupWizardPage onNavigate={navigate} />}
 
             {currentScreen === 'login' && (
               <LoginPage
                 onLoginSuccess={(user) => {
                   handleLoginSuccess(user);
-                  setCurrentScreen('new');
+                  navigate('projects');
                 }}
-                onNavigate={(screen) => setCurrentScreen(screen)}
+                onNavigate={navigate}
               />
             )}
 
@@ -457,7 +470,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                 projects={projects}
                 incidents={incidents}
                 onSelectProject={handleSelectProject}
-                onNavigate={(screen) => setCurrentScreen(screen)}
+                onNavigate={navigate}
                 onRefresh={handleRefreshProjects}
                 isRefreshing={isRefreshingProjects}
               />
@@ -466,10 +479,9 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
             {currentScreen === 'new' && (
               <OnboardingPage
                 currentUser={currentUser}
-                onNavigate={(screen) => setCurrentScreen(screen)}
+                onNavigate={navigate}
                 onProjectSetup={(repo, key, rootDir, projectContext) => {
                   handleProjectSetup(repo, key, rootDir, projectContext);
-                  setCurrentScreen('dashboard');
                 }}
               />
             )}
@@ -477,13 +489,13 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
             {currentScreen === 'dashboard' && (
               <DashboardPage
                 incidents={incidents}
-                onNavigate={(screen) => setCurrentScreen(screen)}
+                onNavigate={navigate}
                 activeRepo={activeRepo}
                 rootDir={activeRootDir}
                 apiKey={activeApiKey}
                 onSelectIncident={(id) => {
                   setSelectedIncidentId(id);
-                  setCurrentScreen('incident_detail');
+                  navigate('incident_detail');
                 }}
               />
             )}
@@ -499,7 +511,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                       prev.map((inc) => (inc.id === updated.id ? updated : inc)),
                     )
                   }
-                  onNavigate={(screen) => setCurrentScreen(screen)}
+                  onNavigate={navigate}
                 />
               ) : (
                 <div className="text-center py-16 bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -512,30 +524,23 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
 
             {currentScreen === 'ast' && (
               <AstExplorerPage
-                onNavigate={(screen) => setCurrentScreen(screen)}
+                onNavigate={navigate}
                 activeRepo={activeRepo}
                 activeRootDir={activeRootDir}
               />
             )}
             {currentScreen === 'team' && (
-              <TeamPage
-                currentUser={currentUser}
-                onNavigate={(screen) => setCurrentScreen(screen)}
-              />
+              <TeamPage currentUser={currentUser} onNavigate={navigate} />
             )}
             {currentScreen === 'status' && (
-              <SystemStatusPage
-                onNavigate={(screen) => setCurrentScreen(screen)}
-                health={[]}
-                metrics={[]}
-              />
+              <SystemStatusPage onNavigate={navigate} health={[]} metrics={[]} />
             )}
             {currentScreen === 'settings' && (
               <SettingsPage
                 apiKeys={[]}
                 activeApiKey={activeApiKey}
                 onKeyUpdated={(newKey) => setActiveApiKey(newKey)}
-                onNavigate={(screen) => setCurrentScreen(screen)}
+                onNavigate={navigate}
                 activeRepo={activeRepo}
                 activeRootDir={activeRootDir}
               />
@@ -564,40 +569,31 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                   title={`Update available: ${release.latestVersion}`}
                 >
                   <Sparkles className="w-3 h-3 text-amber-600" />
-                  <span>Update available: {release.latestVersion}</span>
-                  <ExternalLink className="w-2.5 h-2.5 opacity-75" />
+                  <span>Update available: {release.latestVersion} ↗</span>
                 </a>
               )}
             </div>
 
-            <div className="flex items-center space-x-4 text-[11px]">
+            <div className="flex items-center space-x-4">
               <a
                 href="/docs/overview"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-black transition-colors flex items-center gap-1"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
               >
-                <BookOpen className="w-3 h-3" />
-                <span>Documentation</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                Documentation
               </a>
               <a
                 href="/docs/api-reference"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-black transition-colors flex items-center gap-1"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
               >
-                <span>API Reference</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                API Reference
               </a>
               <a
                 href="https://github.com/algotyrnt/triage"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-black transition-colors flex items-center gap-1"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
               >
-                <span>GitHub</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                GitHub ↗
               </a>
             </div>
           </div>
