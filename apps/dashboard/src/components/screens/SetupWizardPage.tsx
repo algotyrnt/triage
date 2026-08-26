@@ -551,18 +551,45 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => handleInstallApp()}
-                disabled={loading}
-                className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ExternalLink className="w-4 h-4" />
-                )}
-                {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
-              </button>
+              <div className="space-y-4">
+                <button
+                  onClick={() => handleInstallApp()}
+                  disabled={loading}
+                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="w-4 h-4" />
+                  )}
+                  {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
+                </button>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-sm p-3.5 text-xs font-mono text-slate-600 space-y-1">
+                  <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Installing on GitHub Organizations</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed font-sans">
+                    To install on an organization, GitHub requires the app to allow installations on{' '}
+                    <strong>Any account (Public)</strong>. If your organizations are not listed on
+                    GitHub, open your app in{' '}
+                    <a
+                      href="https://github.com/settings/apps"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-black font-semibold font-mono"
+                    >
+                      GitHub App Settings
+                    </a>{' '}
+                    and select <strong>Advanced &rarr; Make public</strong> (or{' '}
+                    <strong>
+                      General &rarr; Where can this app be installed? &rarr; Any account
+                    </strong>
+                    ).
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         )}

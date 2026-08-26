@@ -466,8 +466,8 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               <OnboardingPage
                 currentUser={currentUser}
                 onNavigate={(screen) => setCurrentScreen(screen)}
-                onProjectSetup={(repo, key, rootDir) => {
-                  handleProjectSetup(repo, key, rootDir);
+                onProjectSetup={(repo, key, rootDir, projectContext) => {
+                  handleProjectSetup(repo, key, rootDir, projectContext);
                   setCurrentScreen('dashboard');
                 }}
               />
