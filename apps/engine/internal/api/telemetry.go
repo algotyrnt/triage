@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -339,11 +340,11 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	llmAPIKey, llmModelName := s.GetLLMConfig(r.Context())
+	llmCfg := s.GetLLMConfig(r.Context())
 
 	var analysis *llm.AnalysisResult
-	if astSnippet != "" && llmAPIKey != "" && llmModelName != "" {
-		analysisCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	if astSnippet != "" && (llmCfg.APIKey != "" || llmCfg.Provider == "ollama" || llmCfg.Provider == "custom") {
+		analysisCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
 
 		var err error
@@ -352,10 +353,29 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 			delimitedAST = fmt.Sprintf("```go\n%s\n```", delimitedAST)
 		}
 
-		analysis, err = llm.AnalyzeCrash(analysisCtx, req.StackTrace, delimitedAST, llmAPIKey, llmModelName, projectContext)
-		if err != nil {
-			slog.Warn("Gemini root cause analysis skipped", "error", err)
+		if provider, pErr := llm.NewProvider(llmCfg); pErr == nil {
+			analysis, err = provider.AnalyzeCrash(analysisCtx, req.StackTrace, delimitedAST, projectContext)
+			if err != nil {
+				slog.Warn("LLM root cause analysis skipped", "error", err, "provider", llmCfg.Provider)
+			}
 		}
+	}
+
+	title := req.StackTrace
+	if lines := strings.Split(title, "\n"); len(lines) > 0 {
+		title = strings.TrimSpace(lines[0])
+	}
+	if title == "" {
+		title = fmt.Sprintf("Panic at %s:%d", req.File, req.Line)
+	}
+
+	rawFingerprint := fmt.Sprintf("%s:%d:%s", req.File, req.Line, title)
+	fpHash := sha256.Sum256([]byte(rawFingerprint))
+	fingerprint := hex.EncodeToString(fpHash[:16])
+
+	var existingIncident *db.Incident
+	if s.db != nil {
+		existingIncident, _ = s.db.FindActiveIncidentByFingerprint(r.Context(), repoID, fingerprint)
 	}
 
 	var gitHubIssue *GitHubIssue
@@ -365,12 +385,17 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 
 	incidentID := traceID
 	if incidentID == "" {
-		randBytes := make([]byte, 4)
-		_, _ = rand.Read(randBytes)
-		incidentID = fmt.Sprintf("INC-%s", strings.ToUpper(hex.EncodeToString(randBytes)))
+		if existingIncident != nil {
+			incidentID = existingIncident.ID
+		} else {
+			randBytes := make([]byte, 4)
+			_, _ = rand.Read(randBytes)
+			incidentID = fmt.Sprintf("INC-%s", strings.ToUpper(hex.EncodeToString(randBytes)))
+		}
 	}
 
-	if s.githubApp != nil && installationID > 0 && req.Owner != "" && req.Repo != "" {
+	// Only file new GitHub Issue if incident doesn't already exist
+	if existingIncident == nil && s.githubApp != nil && installationID > 0 && req.Owner != "" && req.Repo != "" {
 		panicSummary := req.StackTrace
 		if lines := strings.Split(panicSummary, "\n"); len(lines) > 0 {
 			panicSummary = strings.TrimSpace(lines[0])
@@ -388,7 +413,7 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		issueBody.WriteString(fmt.Sprintf("- **Timestamp**: `%s UTC`\n\n", time.Now().UTC().Format("2006-01-02 15:04:05")))
 
 		if analysis != nil && analysis.RootCause != "" {
-			issueBody.WriteString("---\n\n### Root Cause Analysis (Gemini AI)\n")
+			issueBody.WriteString("---\n\n### Root Cause Analysis (AI Engine)\n")
 			issueBody.WriteString(fmt.Sprintf("%s\n\n", analysis.RootCause))
 		}
 		appURL := s.ResolveAppURL(r.Context(), r)
@@ -432,51 +457,62 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.db != nil {
+		if existingIncident != nil {
+			_ = s.db.IncrementIncidentOccurrence(r.Context(), existingIncident.ID)
+			existingIncident.OccurrenceCount++
+			existingIncident.LastSeenAt = time.Now().UTC()
+			if s.eventBroker != nil {
+				s.eventBroker.Publish("incident_updated", existingIncident)
+			}
+		} else {
+			rootCause := ""
+			suggestedFix := ""
+			severity := "CRITICAL"
+			if analysis != nil {
+				rootCause = analysis.RootCause
+				suggestedFix = analysis.SuggestedFix
+				if analysis.Severity != "" {
+					severity = analysis.Severity
+				}
+			}
 
-		title := req.StackTrace
-		if lines := strings.Split(title, "\n"); len(lines) > 0 {
-			title = strings.TrimSpace(lines[0])
-		}
-		if title == "" {
-			title = fmt.Sprintf("Panic at %s:%d", req.File, req.Line)
-		}
+			issueURL := ""
+			issueNum := 0
+			if gitHubIssue != nil {
+				issueURL = gitHubIssue.HTMLURL
+				issueNum = gitHubIssue.Number
+			}
 
-		rootCause := ""
-		suggestedFix := ""
-		if analysis != nil {
-			rootCause = analysis.RootCause
-			suggestedFix = analysis.SuggestedFix
-		}
+			now := time.Now().UTC()
+			inc := &db.Incident{
+				ID:                incidentID,
+				RepositoryID:      repoID,
+				Fingerprint:       fingerprint,
+				OccurrenceCount:   1,
+				Title:             title,
+				Status:            "CRITICAL",
+				Severity:          severity,
+				AIProvider:        llmCfg.Provider,
+				AIModel:           llmCfg.Model,
+				File:              req.File,
+				Line:              req.Line,
+				PanicMessage:      title,
+				StackTrace:        req.StackTrace,
+				ASTSnippet:        astSnippet,
+				RootCause:         rootCause,
+				SuggestedFix:      suggestedFix,
+				GitHubIssueURL:    issueURL,
+				GitHubIssueNumber: issueNum,
+				CreatedAt:         now,
+				LastSeenAt:        now,
+			}
 
-		issueURL := ""
-		issueNum := 0
-		if gitHubIssue != nil {
-			issueURL = gitHubIssue.HTMLURL
-			issueNum = gitHubIssue.Number
-		}
-
-		inc := &db.Incident{
-			ID:                incidentID,
-			RepositoryID:      repoID,
-			Title:             title,
-			Status:            "CRITICAL",
-			File:              req.File,
-			Line:              req.Line,
-			PanicMessage:      title,
-			StackTrace:        req.StackTrace,
-			ASTSnippet:        astSnippet,
-			RootCause:         rootCause,
-			SuggestedFix:      suggestedFix,
-			GitHubIssueURL:    issueURL,
-			GitHubIssueNumber: issueNum,
-			CreatedAt:         time.Now().UTC(),
-		}
-
-		if err := s.db.SaveIncident(r.Context(), inc); err != nil {
-			slog.Warn("failed to persist incident to database", "error", err, "incident_id", incidentID)
-		}
-		if s.eventBroker != nil {
-			s.eventBroker.Publish("incident_created", inc)
+			if err := s.db.SaveIncident(r.Context(), inc); err != nil {
+				slog.Warn("failed to persist incident to database", "error", err, "incident_id", incidentID)
+			}
+			if s.eventBroker != nil {
+				s.eventBroker.Publish("incident_created", inc)
+			}
 		}
 	}
 

@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"triage/engine/internal/config"
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
+	"triage/engine/internal/llm"
 )
 
 type SetupRepoItem struct {
@@ -34,7 +36,7 @@ func (s *Server) HandleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	appID := ""
 	slug := s.appSlug
 	oauthID := ""
-	apiKey := ""
+	hasLLM := false
 	var hasInstallation bool
 
 	if s.configStore != nil {
@@ -45,7 +47,8 @@ func (s *Server) HandleSetupStatus(w http.ResponseWriter, r *http.Request) {
 			slug = s.configStore.GetGitHubAppSlug(r.Context())
 		}
 		oauthID, _ = s.configStore.GetGitHubOAuth(r.Context())
-		apiKey, _ = s.configStore.GetLLM(r.Context())
+		llmCfg := s.configStore.GetLLM(r.Context())
+		hasLLM = llmCfg.APIKey != "" || llmCfg.Provider == "ollama" || llmCfg.Provider == "custom"
 	}
 	if s.db != nil {
 		inst, _ := s.db.GetInstallation(r.Context())
@@ -58,7 +61,6 @@ func (s *Server) HandleSetupStatus(w http.ResponseWriter, r *http.Request) {
 
 	hasApp := appID != "" || s.githubApp != nil || slug != ""
 	hasOauth := oauthID != ""
-	hasLLM := apiKey != ""
 
 	result := map[string]interface{}{
 		"github_app":   hasApp,
@@ -525,16 +527,28 @@ func (s *Server) HandleSetupLLM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		GeminiAPIKey string `json:"gemini_api_key"`
-		GeminiModel  string `json:"gemini_model"`
+		Provider string `json:"provider"`
+		APIKey   string `json:"api_key"`
+		Model    string `json:"model"`
+		BaseURL  string `json:"base_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
+	provider := req.Provider
+	if provider == "" {
+		provider = "gemini"
+	}
+
 	if s.configStore != nil {
-		_ = s.configStore.SaveLLM(r.Context(), req.GeminiAPIKey, req.GeminiModel)
+		_ = s.configStore.SaveLLM(r.Context(), llm.Config{
+			Provider: provider,
+			APIKey:   req.APIKey,
+			Model:    req.Model,
+			BaseURL:  req.BaseURL,
+		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -542,30 +556,43 @@ func (s *Server) HandleSetupLLM(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) HandleSettingsLLM(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		api := ""
-		model := ""
+		var cfg llm.Config
 		if s.configStore != nil {
-			api, model = s.configStore.GetLLM(r.Context())
+			cfg = s.configStore.GetLLM(r.Context())
 		}
 		writeJSON(w, http.StatusOK, map[string]string{
-			"gemini_api_key": api,
-			"gemini_model":   model,
+			"provider": cfg.Provider,
+			"api_key":  cfg.APIKey,
+			"model":    cfg.Model,
+			"base_url": cfg.BaseURL,
 		})
 		return
 	}
 
 	if r.Method == http.MethodPost {
 		var req struct {
-			GeminiAPIKey string `json:"gemini_api_key"`
-			GeminiModel  string `json:"gemini_model"`
+			Provider string `json:"provider"`
+			APIKey   string `json:"api_key"`
+			Model    string `json:"model"`
+			BaseURL  string `json:"base_url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
+		provider := req.Provider
+		if provider == "" {
+			provider = "gemini"
+		}
+
 		if s.configStore != nil {
-			_ = s.configStore.SaveLLM(r.Context(), req.GeminiAPIKey, req.GeminiModel)
+			_ = s.configStore.SaveLLM(r.Context(), llm.Config{
+				Provider: provider,
+				APIKey:   req.APIKey,
+				Model:    req.Model,
+				BaseURL:  req.BaseURL,
+			})
 		}
 
 		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -573,4 +600,61 @@ func (s *Server) HandleSettingsLLM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (s *Server) HandleTestLLM(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Provider string `json:"provider"`
+		APIKey   string `json:"api_key"`
+		Model    string `json:"model"`
+		BaseURL  string `json:"base_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON request body", http.StatusBadRequest)
+		return
+	}
+
+	providerType := req.Provider
+	if providerType == "" {
+		providerType = "gemini"
+	}
+
+	start := time.Now()
+	testCtx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	provider, err := llm.NewProvider(llm.Config{
+		Provider: providerType,
+		APIKey:   req.APIKey,
+		Model:    req.Model,
+		BaseURL:  req.BaseURL,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to initialize provider: %v", err),
+		})
+		return
+	}
+
+	if err := provider.TestConnection(testCtx); err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Connection test failed: %v", err),
+		})
+		return
+	}
+
+	latencyMs := time.Since(start).Milliseconds()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":    true,
+		"latency_ms": latencyMs,
+		"provider":   providerType,
+		"model":      req.Model,
+	})
 }
