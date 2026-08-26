@@ -9,7 +9,7 @@ Follow this guide to spin up a local Triage stack and capture your first Go cras
 
 - **Go 1.26+**
 - **Docker & Docker Compose**
-- A Google AI Studio API key ([aistudio.google.com](https://aistudio.google.com))
+- An API key for your preferred AI provider (**Google Gemini**, **OpenAI**, **Anthropic Claude**) or a local instance (**Ollama**, **vLLM**)
 
 ---
 
