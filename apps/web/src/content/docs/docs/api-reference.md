@@ -499,7 +499,48 @@ Tests connectivity, validates credentials, and benchmarks latency for an LLM con
 
 ---
 
-## AST Pre-Indexing
+## AST Engine & Explorer
+
+### `GET /api/v1/ast/tree`
+
+Returns the indexed Go symbol tree, packages, files, exported/internal functions, and AST snippets for a repository.
+
+**Query Parameters:**
+
+- `repo` _(required)_: Target repository slug (e.g. `myorg/payments-service` or `algotyrnt/triage`).
+- `root_dir` _(optional)_: Subdirectory path for monorepo Go modules (e.g. `apps/engine` or `backend`).
+
+**Response (200 OK):**
+
+```json
+{
+  "repo": "algotyrnt/triage",
+  "root_dir": "apps/engine",
+  "packages": [
+    {
+      "name": "api",
+      "dir": "internal/api",
+      "files": [
+        {
+          "path": "internal/api/telemetry.go",
+          "functions": [
+            {
+              "name": "HandleTelemetry",
+              "receiver": "*Server",
+              "line": 42,
+              "snippet": "func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {\n\t// ...\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "total_packages": 6,
+  "total_functions": 84
+}
+```
+
+---
 
 ### `POST /api/v1/ast/index`
 
