@@ -13,7 +13,6 @@ import { ProjectsPage } from '@/components/screens/ProjectsPage';
 import { DashboardPage } from '@/components/screens/DashboardPage';
 import { IncidentDetailPage } from '@/components/screens/IncidentDetailPage';
 import { AstExplorerPage } from '@/components/screens/AstExplorerPage';
-import { WebhooksPage } from '@/components/screens/WebhooksPage';
 import { TeamPage } from '@/components/screens/TeamPage';
 import { SystemStatusPage } from '@/components/screens/SystemStatusPage';
 import { SettingsPage } from '@/components/screens/SettingsPage';
@@ -514,12 +513,9 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
             {currentScreen === 'ast' && (
               <AstExplorerPage
                 onNavigate={(screen) => setCurrentScreen(screen)}
-                commitIndexes={[]}
-                astFiles={[]}
+                activeRepo={activeRepo}
+                activeRootDir={activeRootDir}
               />
-            )}
-            {currentScreen === 'webhooks' && (
-              <WebhooksPage onNavigate={(screen) => setCurrentScreen(screen)} logs={[]} />
             )}
             {currentScreen === 'team' && (
               <TeamPage

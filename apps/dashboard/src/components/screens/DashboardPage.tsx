@@ -21,6 +21,7 @@ import {
   EyeOff,
   Search,
   ExternalLink,
+  Settings,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -118,15 +119,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <FolderGit2 className="w-3 h-3 text-slate-500" />
             <span>All Projects</span>
           </button>
-          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-mono px-2.5 py-1 rounded-sm flex items-center gap-2 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-            <span>Engine Operational</span>
-          </div>
           <button
-            onClick={() => onNavigate('status')}
-            className="text-xs font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-sm transition-colors cursor-pointer"
+            onClick={() => onNavigate('ast')}
+            className="text-xs font-mono bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-sm transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            title="AST Syntax Explorer"
           >
-            Metrics
+            <Code2 className="w-3 h-3 text-slate-500" />
+            <span>AST Explorer</span>
+          </button>
+          <button
+            onClick={() => onNavigate('settings')}
+            className="text-xs font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Project Settings"
+          >
+            <Settings className="w-3 h-3 text-slate-600" />
+            <span>Settings</span>
           </button>
         </div>
       </div>

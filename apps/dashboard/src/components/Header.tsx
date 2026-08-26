@@ -7,14 +7,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ScreenId, Project } from '@/types';
 import {
   Terminal,
-  Activity,
   Code2,
-  Webhook,
-  Users,
   Settings,
+  Users,
+  Activity,
   PlusCircle,
   LogIn,
-  AlertTriangle,
   GitBranch,
   FolderGit2,
   ChevronDown,
@@ -69,24 +67,22 @@ export const Header: React.FC<HeaderProps> = ({
     },
     {
       id: 'dashboard',
-      label: 'Project Dashboard',
+      label: 'Dashboard',
       icon: <Terminal className="w-3.5 h-3.5" />,
     },
     {
-      id: 'incident_detail',
-      label: 'Panic Inspector',
-      icon: <AlertTriangle className="w-3.5 h-3.5" />,
+      id: 'ast',
+      label: 'AST Explorer',
+      icon: <Code2 className="w-3.5 h-3.5" />,
     },
-    { id: 'ast', label: 'AST Index', icon: <Code2 className="w-3.5 h-3.5" /> },
     {
-      id: 'webhooks',
-      label: 'Webhooks',
-      icon: <Webhook className="w-3.5 h-3.5" />,
+      id: 'team',
+      label: 'Team',
+      icon: <Users className="w-3.5 h-3.5" />,
     },
-    { id: 'team', label: 'Team', icon: <Users className="w-3.5 h-3.5" /> },
     {
       id: 'status',
-      label: 'Engine Status',
+      label: 'Status',
       icon: <Activity className="w-3.5 h-3.5" />,
     },
     {
@@ -242,12 +238,6 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
           </div>
-
-          {/* Operational Badge */}
-          <div className="hidden lg:flex items-center gap-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-sm text-[11px] font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-            <span>Engine Operational</span>
-          </div>
         </div>
 
         {/* Action Controls */}
@@ -303,7 +293,9 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Screen Navigation Tabs */}
       <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto scrollbar-none py-1">
         {navItems.map((item) => {
-          const isActive = currentScreen === item.id;
+          const isActive =
+            currentScreen === item.id ||
+            (item.id === 'dashboard' && currentScreen === 'incident_detail');
           return (
             <button
               key={item.id}
@@ -316,7 +308,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <span className={isActive ? 'text-black' : 'text-slate-400'}>{item.icon}</span>
               <span>{item.label}</span>
-              {item.id === 'incident_detail' && criticalCount > 0 && (
+              {item.id === 'dashboard' && criticalCount > 0 && (
                 <span className="bg-red-600 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full ml-1 font-bold">
                   {criticalCount}
                 </span>
