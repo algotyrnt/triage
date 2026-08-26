@@ -8,7 +8,6 @@ import { ApiKey, ScreenId } from '@/types';
 import {
   Settings,
   Key,
-  Webhook,
   AlertTriangle,
   Copy,
   Check,
@@ -51,9 +50,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   activeRepo = 'algotyrnt/beacon-app',
   activeRootDir = '',
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'webhooks' | 'ai' | 'danger'>(
-    'ai',
-  );
+  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'ai' | 'danger'>('ai');
   const [keysList, setKeysList] = useState<ApiKey[]>(apiKeys);
   const [loadingKeys, setLoadingKeys] = useState(false);
   const [creatingKey, setCreatingKey] = useState(false);
@@ -64,12 +61,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [newlyCreatedKeys, setNewlyCreatedKeys] = useState<Record<string, string>>({});
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, boolean>>({});
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-
-  // Webhook settings
-  const [webhookUrl, setWebhookUrl] = useState('https://api.beacon-app.dev/v1/triage/webhook');
-  const [webhookSecret, setWebhookSecret] = useState('whsec_demo_XXXXXXXXXXXX');
-  const [showSecret, setShowSecret] = useState(false);
-  const [webhookSaved, setWebhookSaved] = useState(false);
 
   // General settings
   const parts = activeRepo.split('/');
@@ -275,12 +266,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleSaveWebhook = (e: React.FormEvent) => {
-    e.preventDefault();
-    setWebhookSaved(true);
-    setTimeout(() => setWebhookSaved(false), 2500);
-  };
-
   const handleDeleteProject = () => {
     if (deleteConfirmationInput === targetRepoName) {
       alert(`Project ${targetRepoName} deleted.`);
@@ -297,7 +282,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           Project Settings & API Credentials
         </h1>
         <p className="text-xs text-slate-600 font-sans mt-0.5">
-          Configure API ingestion keys, webhook signatures, and project lifecycle boundaries.
+          Configure AI diagnostics, API ingestion telemetry keys, and project settings.
         </p>
       </div>
 
@@ -315,11 +300,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               id: 'keys',
               label: 'API Ingestion Keys',
               icon: <Key className="w-3.5 h-3.5" />,
-            },
-            {
-              id: 'webhooks',
-              label: 'Webhook Endpoint',
-              icon: <Webhook className="w-3.5 h-3.5" />,
             },
             {
               id: 'general',
@@ -799,75 +779,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Tab 2: Webhooks */}
-          {activeTab === 'webhooks' && (
-            <div className="bg-white border border-slate-200 rounded-sm p-4 space-y-4 font-mono text-xs">
-              <div className="border-b border-slate-100 pb-3">
-                <h2 className="text-sm font-bold text-slate-900 font-mono">
-                  Outbound Webhook Dispatch Settings
-                </h2>
-                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                  Triage posts JSON HTTP payloads when crashes are symbolicated or AI patches
-                  generated.
-                </p>
-              </div>
-
-              {webhookSaved && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-sm flex items-center gap-2 text-xs font-bold">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  <span>Webhook endpoint settings saved successfully.</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSaveWebhook} className="space-y-4 text-xs">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block">
-                    Target Webhook Listener URL:
-                  </label>
-                  <input
-                    type="url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block">HMAC Signature Secret:</label>
-                  <div className="relative">
-                    <input
-                      type={showSecret ? 'text' : 'password'}
-                      value={webhookSecret}
-                      onChange={(e) => setWebhookSecret(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 pr-16 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSecret(!showSecret)}
-                      className="absolute right-2 top-2 text-[11px] font-mono text-slate-600 hover:text-black font-bold"
-                    >
-                      {showSecret ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Dispatches include header `X-Triage-Signature: sha256=&lt;hmac&gt;`.
-                  </p>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    className="bg-black hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-sm border border-black transition-colors cursor-pointer"
-                  >
-                    Save Webhook Settings
-                  </button>
-                </div>
-              </form>
             </div>
           )}
 
