@@ -58,9 +58,9 @@ You can track as many independent services as you like from the same GitHub repo
 
 ```
 myorg/platform-monorepo (GitHub Repository)
-    ├── services/auth-service     ──> Tracked as Project 1 (API Key: tr_live_auth_...)
-    ├── services/order-service    ──> Tracked as Project 2 (API Key: tr_live_order_...)
-    └── services/payment-service  ──> Tracked as Project 3 (API Key: tr_live_payment_...)
+    ├── services/auth-service     ──> Tracked as Project 1 (API Key: ...xxxx)
+    ├── services/order-service    ──> Tracked as Project 2 (API Key: ...xxxx)
+    └── services/payment-service  ──> Tracked as Project 3 (API Key: ...xxxx)
 ```
 
 ### Benefits of Service Scoping
@@ -89,7 +89,7 @@ func main() {
 
     // Use the specific API key provisioned for this monorepo service:
     handler := triage.Middleware(
-        "tr_live_orders_1724123456",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )(mux)
 

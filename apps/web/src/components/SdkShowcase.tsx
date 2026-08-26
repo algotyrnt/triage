@@ -28,7 +28,7 @@ func main() {
 
     // Wrap your mux with triage panic isolation middleware
     handler := triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )(mux)
 
@@ -47,7 +47,7 @@ func main() {
 
     // Add triage middleware to chi router stack
     r.Use(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     ))
 
@@ -66,7 +66,7 @@ func main() {
 
     // Wrap gin router with triage panic recovery adapter
     r.Use(gin.WrapH(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )(r)))
 
@@ -85,7 +85,7 @@ func main() {
 
     // Use triage standard HTTP middleware adapter with Echo
     e.Use(echo.WrapMiddleware(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )))
 
@@ -105,7 +105,7 @@ func main() {
 
     // Adapt triage middleware for Fiber fast HTTP stack
     app.Use(adaptor.HTTPMiddleware(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )))
 

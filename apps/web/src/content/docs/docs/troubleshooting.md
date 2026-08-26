@@ -42,7 +42,7 @@ An incident is recorded, but the **AST Context** panel says _"No AST nodes found
 
 ### Checklist
 
-1. **Verify API Key:** Ensure the `tr_live_...` key in your SDK matches an active, unrevoked key in your Triage project settings.
+1. **Verify API Key:** Ensure the API key in your SDK matches an active, unrevoked key in your Triage project settings.
 2. **Check Engine Connectivity:** Test whether your Go app can reach the engine:
    ```bash
    curl -I https://triage.yourcompany.com/health

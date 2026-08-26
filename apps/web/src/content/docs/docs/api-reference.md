@@ -36,7 +36,7 @@ Receives panic telemetry payloads dispatched asynchronously by the Go SDK middle
 
 ```json
 {
-  "api_key": "tr_live_payment_1724123456",
+  "api_key": "your_sample_api_key",
   "commit": "7f8b9e1a2c3d4e5f60718293",
   "file": "handlers/payment.go",
   "line": 28,
@@ -226,7 +226,7 @@ Lists all tracked repositories and configured Go services.
       "root_dir": "backend",
       "installation_id": 12345678,
       "context": "High-throughput payment gateway processing Stripe webhooks.",
-      "api_key_masked": "tr_live_...9042",
+      "api_key_masked": "...xxxx",
       "created_at": "2026-08-15T10:00:00Z"
     }
   ]
@@ -259,8 +259,8 @@ Registers a new repository or Go monorepo service, saves domain context, and iss
   "repo": "myorg/payments-service",
   "root_dir": "backend",
   "context": "High-throughput payment gateway processing Stripe webhooks.",
-  "api_key": "tr_live_payments-service_1724123456",
-  "key_masked": "tr_live_...3456"
+  "api_key": "your_sample_api_key",
+  "key_masked": "...xxxx"
 }
 ```
 
@@ -348,7 +348,7 @@ Lists API keys for a specific project.
     {
       "id": "key_1724123456",
       "name": "Production Service Key",
-      "key_masked": "tr_live_...3456",
+      "key_masked": "...xxxx",
       "status": "ACTIVE",
       "created_at": "2026-08-15T10:00:00Z"
     }

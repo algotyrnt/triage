@@ -55,7 +55,7 @@ The PostgreSQL schema is defined in [`apps/engine/internal/db/schema.sql`](https
 - `repositories`: Configured Go repositories, monorepo root directory submodules, and domain architecture context.
 - `incidents`: Captured panics, SHA-256 crash fingerprints for frequency deduplication (`occurrence_count`, `last_seen_at`), AI provider/model metadata, and generated bugfix patches.
 - `ast_nodes` & `ast_indexes`: Cached and pre-indexed AST function declarations for sub-millisecond symbolication.
-- `api_keys`: Ingestion API key hashes (`tr_live_...`) with constant-time SHA-256 authentication.
+- `api_keys`: Ingestion API key hashes with constant-time SHA-256 authentication.
 - `instance_config`: Dynamic settings (GitHub App, AI provider credentials, model/base URL, instance URL, session secrets).
 - `github_installations` & `installation_repos`: GitHub App org and repository access maps.
 
