@@ -38,7 +38,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The initial
 1. **GitHub App Manifest Creation** (One-click app registration).
 2. **Repository Installation** (Grant access to your Go repositories).
 3. **OAuth Linking** (Configure GitHub login).
-4. **Gemini AI Configuration** (Enter your Google AI Studio API key and preferred model name).
+4. **AI Model Configuration** (Select Google Gemini, OpenAI, Claude, or local Ollama).
 5. **Verification** (Engine self-test).
 
 Once configured, copy your project API key (e.g. `tr_live_...`).
@@ -106,7 +106,7 @@ Now switch back to your Studio Dashboard at **http://localhost:3000**:
 
 1. You will see a new **CRITICAL** incident under your active project.
 2. The isolated `*ast.FuncDecl` code block will be highlighted along with resolved cross-file structs and constructors.
-3. Gemini AI will display the exact root cause and suggested drop-in git patch.
+3. AI diagnostics will display the exact root cause and suggested drop-in git patch.
 4. Click **Generate Fix (PR)** to automatically create a branch and open a verified Pull Request on GitHub.
 
 ---

@@ -1,6 +1,6 @@
 ---
 title: Engine REST API Reference
-description: Complete REST API specification for telemetry ingestion, incidents, GitHub PR/issue automation, projects, and Gemini AI endpoints
+description: Complete REST API specification for telemetry ingestion, incidents, GitHub PR/issue automation, projects, and AI diagnostics endpoints
 ---
 
 All Triage Engine endpoints are served by default on port `:8080`.
@@ -126,8 +126,13 @@ Lists recent recorded incidents with optional filtering by repository ID or repo
       "id": "INC-8094",
       "repository_id": "repo_1a2b3c",
       "repository_name": "myorg/payments-service",
+      "fingerprint": "a3f890b21c4e5d6f",
+      "occurrence_count": 12,
       "title": "nil pointer dereference in ProcessTransaction()",
       "status": "CRITICAL",
+      "severity": "CRITICAL",
+      "ai_provider": "openai",
+      "ai_model": "gpt-4o",
       "file": "handlers/payment.go",
       "line": 28,
       "panic_message": "runtime error: invalid memory address or nil pointer dereference",
@@ -138,7 +143,8 @@ Lists recent recorded incidents with optional filtering by repository ID or repo
       "github_issue_url": "https://github.com/myorg/payments-service/issues/42",
       "github_pr_number": 43,
       "github_pr_url": "https://github.com/myorg/payments-service/pull/43",
-      "created_at": "2026-08-18T14:32:10Z"
+      "created_at": "2026-08-18T14:32:10Z",
+      "last_seen_at": "2026-08-25T19:30:00Z"
     }
   ]
 }
@@ -150,7 +156,7 @@ Lists recent recorded incidents with optional filtering by repository ID or repo
 
 ### `POST /api/v1/incidents/create-issue`
 
-Creates a detailed GitHub Issue on the incident's target repository with AST code snippets, Gemini AI root cause analysis, stack trace, and reproduction links.
+Creates a detailed GitHub Issue on the incident's target repository with AST code snippets, AI root cause analysis, stack trace, and reproduction links.
 
 **Request Body:**
 
@@ -176,7 +182,7 @@ Creates a detailed GitHub Issue on the incident's target repository with AST cod
 
 ### `POST /api/v1/incidents/create-pr`
 
-Generates and opens an automated bugfix Pull Request on GitHub. The engine fetches the target file, synthesizes the fix using Gemini AI, creates a new Git branch (`triage/fix-...`), commits the updated file, and opens a linked Pull Request.
+Generates and opens an automated bugfix Pull Request on GitHub. The engine fetches the target file, synthesizes the fix using the active AI model, creates a new Git branch (`triage/fix-...`), commits the updated file, and opens a linked Pull Request.
 
 **Request Body:**
 
@@ -374,11 +380,11 @@ Revokes a project API key.
 
 ---
 
-## Gemini AI Diagnostics
+## AI Diagnostics & Patch Synthesis
 
-### `POST /api/v1/gemini/analyze-panic`
+### `POST /api/v1/llm/analyze-panic`
 
-Runs on-demand structured root cause analysis on a panic snippet using Google Gemini AI.
+Runs on-demand structured root cause analysis on a panic snippet using the active AI provider (Google Gemini, OpenAI, Anthropic Claude, or local Ollama).
 
 **Request Body:**
 
@@ -405,9 +411,9 @@ Runs on-demand structured root cause analysis on a panic snippet using Google Ge
 
 ---
 
-### `POST /api/v1/gemini/generate-patch`
+### `POST /api/v1/llm/generate-patch`
 
-Generates a unified git diff format patch for a diagnosed crash.
+Generates a unified git diff format patch for a diagnosed crash using the active AI provider.
 
 **Request Body:**
 
@@ -432,16 +438,62 @@ Generates a unified git diff format patch for a diagnosed crash.
 
 ---
 
-### `GET/POST /api/v1/settings/llm`
+### `GET /api/v1/settings/llm`
 
-View or update the active Gemini model and API key configuration.
+View the active LLM provider configuration.
 
-**GET Response (200 OK):**
+**Response (200 OK):**
 
 ```json
 {
-  "gemini_model": "gemini-2.5-flash",
-  "has_api_key": true
+  "provider": "openai",
+  "model": "gpt-4o",
+  "base_url": "",
+  "api_key": "sk-proj-..."
+}
+```
+
+---
+
+### `POST /api/v1/settings/llm`
+
+Update the active LLM provider configuration (Google Gemini, OpenAI, Anthropic Claude, or Local Ollama/vLLM).
+
+**Request Body:**
+
+```json
+{
+  "provider": "ollama",
+  "model": "deepseek-coder-v2",
+  "base_url": "http://localhost:11434/v1",
+  "api_key": ""
+}
+```
+
+---
+
+### `POST /api/v1/settings/llm/test`
+
+Tests connectivity, validates credentials, and benchmarks latency for an LLM configuration without persisting it.
+
+**Request Body:**
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "api_key": "sk-proj-..."
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "latency_ms": 142,
+  "provider": "openai",
+  "model": "gpt-4o"
 }
 ```
 

@@ -8,7 +8,7 @@ Triage connects to GitHub as an official GitHub App to fetch source code for on-
 ## Capabilities
 
 - **On-Demand Source Fetching:** Access private and public repository source code via GitHub Contents API without storing source trees locally.
-- **Automated Issue Creation:** Automatically open issues when new panics occur, populated with AST code blocks, Gemini root-cause analyses, and reproduction details.
+- **Automated Issue Creation:** Automatically open issues when new panics occur, populated with AST code blocks, AI root-cause analyses, and reproduction details.
 - **Automated Bugfix Pull Requests (PRs):** Generate complete bugfix PRs with 1 click directly from the Studio Dashboard or API.
 - **Go Monorepo & Multi-Module Detection:** Automatically detect nested `go.mod` files and normalize paths for multi-service repos.
 - **Engine-Driven OAuth & RBAC:** Secure authentication with zero secret exposure on the frontend. Automatically grants `Owner` to the first user, honors invitations, and issues cryptographically signed JWT sessions.
@@ -49,7 +49,7 @@ When a crash is diagnosed, you can trigger an automated Pull Request from the In
    (with Monorepo path normalization if root_dir is configured)
               │
               ▼
-2. Gemini AI synthesizes bugfix via ApplyFixToFile
+2. AI Engine synthesizes bugfix via ApplyFixToFile
    (preserving existing imports, comments, and style)
               │
               ▼
@@ -89,7 +89,7 @@ A runtime panic was intercepted by **Triage** in `handlers/payment.go:28`.
 
 ---
 
-### Root Cause Analysis (Gemini AI)
+### Root Cause Analysis (AI Engine)
 
 Attempted to evaluate `req.Amount` on an uninitialized nil pointer (`*PaymentPayload`) on line 28.
 

@@ -97,7 +97,7 @@ for tName := range referencedTypeNames {
 
 ## Formatted AST Context Output Example
 
-Here is what the Triage Engine generates and passes to Google Gemini AI:
+Here is what the Triage Engine generates and passes to the configured AI model:
 
 ```go
 // ==============================================================================
@@ -141,7 +141,7 @@ func validateRequest(action string) bool {
 }
 ```
 
-With this complete context, Gemini immediately pinpoints that `UserHandler.Notifier` is `nil` because `NewUserHandler()` left it uninitialized, and proposes the exact fix in `NewUserHandler()` or adds a nil check before dereference.
+With this complete context, the AI model immediately pinpoints that `UserHandler.Notifier` is `nil` because `NewUserHandler()` left it uninitialized, and proposes the exact fix in `NewUserHandler()` or adds a nil check before dereference.
 
 ---
 

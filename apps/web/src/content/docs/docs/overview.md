@@ -1,6 +1,6 @@
 ---
 title: Overview & Concepts
-description: Zero-overhead Go panic isolation, automated GitHub PRs/issues, and Gemini AI incident diagnostics
+description: Zero-overhead Go panic isolation, automated GitHub PRs/issues, and AI incident diagnostics
 ---
 
 Welcome to **triage**—the zero-overhead Go panic isolation tool, automated GitHub issue & bugfix PR engine, and AI diagnostic platform.
@@ -19,7 +19,7 @@ Go HTTP Server (your app)
   │     ├── Receiver struct & type definitions (cross-file)
   │     ├── Related constructors (New<Type>) & package helpers
   │     └── 3-tier cache (In-memory <1.5ms → Postgres pre-index → GitHub on-demand)
-  ├── Gemini AI analysis               → root_cause + suggested_fix + git patch
+  ├── Multi-Provider AI analysis       → root_cause + suggested_fix + git patch
   ├── Persist incident                 (PostgreSQL)
   ├── Automated GitHub Actions
   │     ├── File GitHub Issue with AST snippets & telemetry
@@ -44,10 +44,10 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 ### The Triage Solution
 
 - **Multi-File Package AST Slicing:** Using Go's standard `go/parser` and `go/ast` packages, Triage isolates the exact crashing function along with referenced struct definitions, constructors, and helper functions across package files.
-- **Domain-Aware AI Triage:** Enriches Gemini LLM prompts with optional architectural context and business invariants, ensuring diagnoses and generated patches respect your service boundaries.
-- **>90% Token Reduction:** Instead of sending entire repositories or 2,000-line source files, Triage delivers a selectively pruned multi-file context to Gemini AI, reducing AI diagnostic costs to less than $0.0001 per incident.
+- **Domain-Aware AI Triage:** Enriches LLM prompts with optional architectural context and business invariants, ensuring diagnoses and generated patches respect your service boundaries.
+- **>90% Token Reduction:** Instead of sending entire repositories or 2,000-line source files, Triage delivers a selectively pruned multi-file context to AI models, reducing diagnostic costs to less than $0.0001 per incident.
 - **Sub-0.02ms Client Latency:** Telemetry is handed off to an asynchronous 4-worker pool backed by a 1,000-job queue. HTTP responses return immediately with zero blockage.
-- **Automated Bugfix Pull Requests:** Creates dedicated fix branches, synthesizes clean fixes via Gemini AI, commits the changes, and opens a GitHub Pull Request with 1 click.
+- **Automated Bugfix Pull Requests:** Creates dedicated fix branches, synthesizes clean fixes via the AI engine, commits the changes, and opens a GitHub Pull Request with 1 click.
 - **Automated GitHub Issue Triaging:** Automatically creates GitHub issues with structured root causes, formatted AST code, and drop-in git patches.
 - **Multi-Project & Monorepo Support:** Track multiple Go services from a unified workspace with automatic `go.mod` module discovery and a project switcher in the dashboard header.
 - **Real-Time Telemetry Streaming (SSE):** Unidirectional Server-Sent Events stream newly ingested crashes and incident state updates directly to connected dashboards with zero page reloads.
@@ -58,13 +58,13 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 
 ## Architecture at a Glance
 
-| Component               | Port     | Technology              | Purpose                                                       |
-| :---------------------- | :------- | :---------------------- | :------------------------------------------------------------ |
-| **Go Client SDK**       | Embedded | Go 1.26+                | Non-blocking HTTP middleware with panic recovery              |
-| **Triage Engine**       | `:8080`  | Go 1.26+                | Telemetry ingestion, AST slicing, Gemini AI client, REST APIs |
-| **Studio Dashboard**    | `:3000`  | Next.js 16 (Bun)        | Real-time incident inspector, AST explorer, setup wizard      |
-| **Documentation & Web** | `:4321`  | Astro & Starlight (Bun) | Public landing site and technical reference                   |
-| **PostgreSQL**          | `:5432`  | Postgres 16             | Persistent storage for incidents, API keys, and cache         |
+| Component               | Port     | Technology              | Purpose                                                               |
+| :---------------------- | :------- | :---------------------- | :-------------------------------------------------------------------- |
+| **Go Client SDK**       | Embedded | Go 1.26+                | Non-blocking HTTP middleware with panic recovery                      |
+| **Triage Engine**       | `:8080`  | Go 1.26+                | Telemetry ingestion, AST slicing, Multi-provider AI client, REST APIs |
+| **Studio Dashboard**    | `:3000`  | Next.js 16 (Bun)        | Real-time incident inspector, AST explorer, setup wizard              |
+| **Documentation & Web** | `:4321`  | Astro & Starlight (Bun) | Public landing site and technical reference                           |
+| **PostgreSQL**          | `:5432`  | Postgres 16             | Persistent storage for incidents, API keys, and cache                 |
 
 ---
 
