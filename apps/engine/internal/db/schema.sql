@@ -77,8 +77,13 @@ CREATE TABLE IF NOT EXISTS ast_indexes (
 CREATE TABLE IF NOT EXISTS incidents (
     id                  VARCHAR(64) PRIMARY KEY,
     repository_id       VARCHAR(64) REFERENCES repositories(id) ON DELETE CASCADE,
+    fingerprint         VARCHAR(64),
+    occurrence_count    INT         NOT NULL DEFAULT 1,
     title               TEXT        NOT NULL,
     status              VARCHAR(32) DEFAULT 'CRITICAL',
+    severity            VARCHAR(32) DEFAULT 'CRITICAL',
+    ai_provider         VARCHAR(32),
+    ai_model            VARCHAR(128),
     file                TEXT        NOT NULL,
     line                INT         NOT NULL,
     panic_message       TEXT        NOT NULL,
@@ -91,7 +96,8 @@ CREATE TABLE IF NOT EXISTS incidents (
     github_issue_number INT,
     github_pr_url       TEXT,
     github_pr_number    INT,
-    created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at        TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ---------------------------------------------------------------------------
@@ -146,6 +152,9 @@ CREATE TABLE IF NOT EXISTS github_installations (
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ---------------------------------------------------------------------------
+-- 9. Repository Mappings for GitHub App Installations
+-- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS installation_repos (
     id              VARCHAR(64)  PRIMARY KEY,
     installation_id BIGINT       NOT NULL REFERENCES github_installations(installation_id) ON DELETE CASCADE,
@@ -156,13 +165,17 @@ CREATE TABLE IF NOT EXISTS installation_repos (
 );
 
 -- ---------------------------------------------------------------------------
--- 9. Performance Indexes
+-- 10. Performance Indexes
 -- ---------------------------------------------------------------------------
 
--- Incidents queries (feed filtering & timeline sorting)
+-- Incidents queries (feed filtering, timeline sorting, crash grouping)
 CREATE INDEX IF NOT EXISTS idx_incidents_repo_created ON incidents (repository_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_repo_fingerprint ON incidents (repository_id, fingerprint);
+CREATE INDEX IF NOT EXISTS idx_incidents_repo_file_line ON incidents (repository_id, file, line);
+CREATE INDEX IF NOT EXISTS idx_incidents_last_seen ON incidents (last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_incidents_created_at ON incidents (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents (status);
+CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents (severity);
 
 -- RBAC Identity & Invitations queries
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
