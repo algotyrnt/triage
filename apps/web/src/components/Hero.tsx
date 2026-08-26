@@ -31,16 +31,16 @@ export const Hero: React.FC = () => {
   };
 
   return (
-    <section className="pt-16 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center relative overflow-hidden">
+    <section className="pt-10 pb-14 sm:pt-14 sm:pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center relative overflow-hidden">
       {/* Background ambient accents */}
-      <div className="absolute top-10 left-1/2 -translate-x-1/2 w-3/4 h-72 bg-linear-to-r from-indigo-100/50 via-purple-50/40 to-cyan-100/50 blur-3xl -z-10 rounded-full pointer-events-none" />
+      <div className="absolute top-8 left-1/2 -translate-x-1/2 w-3/4 h-64 bg-linear-to-r from-indigo-100/50 via-purple-50/40 to-cyan-100/50 blur-3xl -z-10 rounded-full pointer-events-none" />
 
       {/* Pill Badge */}
       <a
         href={release.releaseUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-8 transition-colors group"
+        className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/80 text-indigo-700 font-mono text-xs font-semibold shadow-xs mb-6 transition-colors group"
       >
         <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">
           {release.version}
@@ -50,7 +50,7 @@ export const Hero: React.FC = () => {
       </a>
 
       {/* Main Headline */}
-      <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1] max-w-5xl mx-auto">
+      <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-[1.12] max-w-4xl mx-auto">
         Zero-Latency Go Crash Isolation.{' '}
         <span className="bg-linear-to-r from-indigo-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent block sm:inline">
           Instant AI Diagnosis.
@@ -58,9 +58,9 @@ export const Hero: React.FC = () => {
       </h1>
 
       {/* Subtitle / Paragraph */}
-      <p className="mt-6 text-slate-600 text-base sm:text-lg lg:text-xl max-w-3xl mx-auto leading-relaxed font-normal">
+      <p className="mt-5 text-slate-600 text-sm sm:text-base lg:text-lg max-w-3xl mx-auto leading-relaxed font-normal">
         Intercepts Go HTTP server panics non-blockingly using{' '}
-        <code className="text-indigo-800 font-mono bg-indigo-50/70 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold text-sm">
+        <code className="text-indigo-800 font-mono bg-indigo-50/70 px-1.5 py-0.5 rounded border border-indigo-100 font-semibold text-xs sm:text-sm">
           defer + recover
         </code>
         . Automatically isolates the crash site and surrounding multi-file package context (struct
@@ -69,10 +69,10 @@ export const Hero: React.FC = () => {
       </p>
 
       {/* Primary Action Buttons */}
-      <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
         <a
           href="/docs/quickstart"
-          className="bg-black hover:bg-slate-800 text-white font-mono text-xs sm:text-sm font-semibold px-6 py-3.5 rounded-sm flex items-center gap-2.5 shadow-md hover:shadow-lg transition-all"
+          className="bg-black hover:bg-slate-800 text-white font-mono text-xs sm:text-sm font-semibold px-5 py-3 rounded-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
         >
           <span>Get Started in 5 Mins</span>
           <ArrowRight className="w-4 h-4" />
@@ -80,7 +80,7 @@ export const Hero: React.FC = () => {
 
         <a
           href="/docs/self-hosting"
-          className="bg-white hover:bg-slate-50 text-slate-900 font-mono text-xs sm:text-sm font-semibold px-6 py-3.5 rounded-sm border border-slate-300 flex items-center gap-2 shadow-xs transition-all"
+          className="bg-white hover:bg-slate-50 text-slate-900 font-mono text-xs sm:text-sm font-semibold px-5 py-3 rounded-sm border border-slate-300 flex items-center gap-2 shadow-xs transition-all"
         >
           <Server className="w-4 h-4 text-slate-700" />
           <span>Self-Hosting Guide</span>
@@ -88,7 +88,7 @@ export const Hero: React.FC = () => {
 
         <a
           href="/docs/sdk"
-          className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono text-xs sm:text-sm font-semibold px-5 py-3.5 rounded-sm border border-slate-200 flex items-center gap-2 transition-all"
+          className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono text-xs sm:text-sm font-semibold px-5 py-3 rounded-sm border border-slate-200 flex items-center gap-2 transition-all"
         >
           <Terminal className="w-4 h-4 text-slate-600" />
           <span>Go SDK Setup</span>
@@ -96,7 +96,7 @@ export const Hero: React.FC = () => {
       </div>
 
       {/* One-Click Copy Command Box */}
-      <div className="mt-8 max-w-xl mx-auto">
+      <div className="mt-6 max-w-lg mx-auto">
         <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 sm:p-3 flex items-center justify-between font-mono text-xs text-slate-300 shadow-xl">
           <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none pr-2">
             <span className="text-slate-500 select-none">$</span>
@@ -123,10 +123,10 @@ export const Hero: React.FC = () => {
       </div>
 
       {/* Key Metric Highlights Grid */}
-      <div className="mt-14 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+      <div className="mt-10 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-left">
         <div className="bg-white border border-slate-200/80 p-4 rounded-lg shadow-xs hover:border-slate-300 transition-colors">
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-500 uppercase">
-            <Zap className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500 uppercase font-semibold">
+            <Zap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>Overhead</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">
@@ -136,8 +136,8 @@ export const Hero: React.FC = () => {
         </div>
 
         <div className="bg-white border border-slate-200/80 p-4 rounded-lg shadow-xs hover:border-slate-300 transition-colors">
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-500 uppercase">
-            <Code2 className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500 uppercase font-semibold">
+            <Code2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <span>AST Isolation</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">94% Savings</div>
@@ -145,8 +145,8 @@ export const Hero: React.FC = () => {
         </div>
 
         <div className="bg-white border border-slate-200/80 p-4 rounded-lg shadow-xs hover:border-slate-300 transition-colors">
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-500 uppercase">
-            <Cpu className="w-3.5 h-3.5 text-purple-600" />
+          <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500 uppercase font-semibold">
+            <Cpu className="w-3.5 h-3.5 text-purple-600 shrink-0" />
             <span>AI Inference</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">
@@ -156,8 +156,8 @@ export const Hero: React.FC = () => {
         </div>
 
         <div className="bg-white border border-slate-200/80 p-4 rounded-lg shadow-xs hover:border-slate-300 transition-colors">
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-500 uppercase">
-            <ShieldCheck className="w-3.5 h-3.5 text-cyan-600" />
+          <div className="flex items-center gap-1.5 text-xs font-mono text-slate-500 uppercase font-semibold">
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
             <span>Self-Hosting</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-slate-900 tracking-tight">1 Container</div>

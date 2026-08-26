@@ -34,6 +34,7 @@ import {
   Check,
   XCircle,
 } from 'lucide-react';
+import { GeminiIcon, OpenAIIcon, AnthropicIcon, OllamaIcon } from '@/components/ProviderIcons';
 
 interface SetupWizardPageProps {
   onNavigate: (screen: ScreenId) => void;
@@ -550,18 +551,20 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => handleInstallApp()}
-                disabled={loading}
-                className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
-              >
-                {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ExternalLink className="w-4 h-4" />
-                )}
-                {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
-              </button>
+              <div className="space-y-4">
+                <button
+                  onClick={() => handleInstallApp()}
+                  disabled={loading}
+                  className="bg-black hover:bg-slate-800 text-white px-6 py-3 rounded-sm text-sm font-mono font-semibold transition-colors flex items-center justify-center gap-2 w-full cursor-pointer"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="w-4 h-4" />
+                  )}
+                  {loading ? 'Preparing Install...' : 'Install GitHub App on GitHub'}
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -674,25 +677,41 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                         id: 'gemini',
                         name: 'Google Gemini',
                         sub: 'Gemini 2.0 Flash / Pro',
-                        icon: <Sparkles className="w-4 h-4 text-indigo-600" />,
+                        icon: (selected: boolean) => (
+                          <GeminiIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-indigo-600'}`}
+                          />
+                        ),
                       },
                       {
                         id: 'openai',
                         name: 'OpenAI',
                         sub: 'GPT-4o, o3-mini',
-                        icon: <Zap className="w-4 h-4 text-emerald-600" />,
+                        icon: (selected: boolean) => (
+                          <OpenAIIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-emerald-600'}`}
+                          />
+                        ),
                       },
                       {
                         id: 'anthropic',
                         name: 'Anthropic Claude',
                         sub: 'Claude 3.5 / 3.7 Sonnet',
-                        icon: <Cpu className="w-4 h-4 text-amber-600" />,
+                        icon: (selected: boolean) => (
+                          <AnthropicIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-amber-600'}`}
+                          />
+                        ),
                       },
                       {
                         id: 'ollama',
                         name: 'Local / Ollama',
                         sub: 'DeepSeek, Qwen',
-                        icon: <Server className="w-4 h-4 text-purple-600" />,
+                        icon: (selected: boolean) => (
+                          <OllamaIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-purple-600'}`}
+                          />
+                        ),
                       },
                     ].map((prov) => {
                       const isSelected = llmProvider === prov.id;
@@ -711,7 +730,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className={isSelected ? 'text-white' : ''}>{prov.icon}</span>
+                            <span>{prov.icon(isSelected)}</span>
                             {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                           </div>
                           <div>

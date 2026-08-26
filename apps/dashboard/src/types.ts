@@ -11,7 +11,6 @@ export type ScreenId =
   | 'dashboard'
   | 'incident_detail'
   | 'ast'
-  | 'webhooks'
   | 'team'
   | 'status'
   | 'settings';
@@ -98,19 +97,6 @@ export interface AstCommitIndex {
   totalFunctionsCount: number;
   status: 'INDEXED' | 'PARSING' | 'FAILED';
   indexedAt: string;
-}
-
-export interface WebhookLog {
-  id: string;
-  status: 'SUCCESS' | 'UNAUTHORIZED' | 'ERROR';
-  statusCode: number; // e.g. 200, 401, 502
-  eventType: 'panic.ingested' | 'ast.reindexed' | 'alert.triggered';
-  sourceIp: string;
-  timestamp: string;
-  latencyMs: number;
-  headers: Record<string, string>;
-  requestBody: string;
-  responseBody: string;
 }
 
 export interface TeamMember {

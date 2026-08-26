@@ -31,7 +31,7 @@ func main() {
 
 	// Wrap handler with triage panic isolation middleware
 	handler := triage.Middleware(
-		"tr_live_your_api_key",
+		"your_sample_api_key",
 		"https://triage.yourcompany.com/api/v1/telemetry",
 	)(mux)
 
@@ -59,7 +59,7 @@ The Triage SDK is designed with **zero client-side configuration boilerplate**. 
 mux := http.NewServeMux()
 mux.HandleFunc("/process", processHandler)
 
-handler := triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")(mux)
+handler := triage.Middleware("your_sample_api_key", "http://localhost:8080/api/v1/telemetry")(mux)
 http.ListenAndServe(":8080", handler)
 ```
 
@@ -67,7 +67,7 @@ http.ListenAndServe(":8080", handler)
 
 ```go
 r := chi.NewRouter()
-r.Use(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry"))
+r.Use(triage.Middleware("your_sample_api_key", "http://localhost:8080/api/v1/telemetry"))
 
 r.Get("/items", getItemsHandler)
 http.ListenAndServe(":8080", r)
@@ -78,7 +78,7 @@ http.ListenAndServe(":8080", r)
 ```go
 r := gin.New()
 // Use Gin's WrapH helper to adapt standard http.Handler middleware
-r.Use(gin.WrapH(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")(r)))
+r.Use(gin.WrapH(triage.Middleware("your_sample_api_key", "http://localhost:8080/api/v1/telemetry")(r)))
 
 r.GET("/api/users", handleUsers)
 r.Run(":8080")
@@ -88,7 +88,7 @@ r.Run(":8080")
 
 ```go
 e := echo.New()
-e.Use(echo.WrapMiddleware(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")))
+e.Use(echo.WrapMiddleware(triage.Middleware("your_sample_api_key", "http://localhost:8080/api/v1/telemetry")))
 
 e.GET("/ping", handlePing)
 e.Start(":8080")
@@ -98,7 +98,7 @@ e.Start(":8080")
 
 ```go
 app := fiber.New()
-app.Use(adaptor.HTTPMiddleware(triage.Middleware("tr_live_key", "http://localhost:8080/api/v1/telemetry")))
+app.Use(adaptor.HTTPMiddleware(triage.Middleware("your_sample_api_key", "http://localhost:8080/api/v1/telemetry")))
 
 app.Get("/stats", handleStats)
 app.Listen(":8080")

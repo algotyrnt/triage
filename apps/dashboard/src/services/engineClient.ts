@@ -39,12 +39,44 @@ export interface EngineStatus {
   latencyMs: number;
 }
 
+function resolveDefaultBaseUrl(providedUrl?: string): string {
+  if (providedUrl && providedUrl !== 'undefined' && !providedUrl.startsWith('undefined')) {
+    return providedUrl.endsWith('/api/v1')
+      ? providedUrl
+      : `${providedUrl.replace(/\/$/, '')}/api/v1`;
+  }
+
+  const envUrl = (typeof process !== 'undefined' && process.env.TRIAGE_ENGINE_URL) || '';
+
+  if (envUrl && envUrl !== 'undefined' && !envUrl.startsWith('undefined')) {
+    return envUrl.endsWith('/api/v1') ? envUrl : `${envUrl.replace(/\/$/, '')}/api/v1`;
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('triage_engine_url');
+      if (stored && stored !== 'undefined') {
+        return stored.endsWith('/api/v1') ? stored : `${stored.replace(/\/$/, '')}/api/v1`;
+      }
+    } catch {}
+
+    const hostname = window.location.hostname || 'localhost';
+    return `${window.location.protocol}//${hostname}:8080/api/v1`;
+  }
+
+  return 'http://localhost:8080/api/v1';
+}
+
 export class EngineClient {
   private baseUrl: string;
   private authToken: string | null = null;
 
-  constructor(baseUrl: string = `${process.env.TRIAGE_ENGINE_URL}/api/v1`) {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl?: string) {
+    this.baseUrl = resolveDefaultBaseUrl(baseUrl);
+  }
+
+  setBaseUrl(url: string) {
+    this.baseUrl = resolveDefaultBaseUrl(url);
   }
 
   getBaseUrl(): string {
@@ -290,6 +322,77 @@ export class EngineClient {
     }
   }
 
+  async getHealth(): Promise<{ status: string; version?: string; database?: string } | null> {
+    try {
+      const rootUrl = this.baseUrl.replace(/\/api\/v1\/?$/, '');
+      const res = await fetch(`${rootUrl}/health`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getEngineVersion(): Promise<string | null> {
+    try {
+      const stats = await this.getStats();
+      if (stats && stats.version) return stats.version;
+      const health = await this.getHealth();
+      if (health && health.version) return health.version;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async getASTTree(
+    owner: string,
+    repo: string,
+    rootDir?: string,
+  ): Promise<{ status: string; files: any[]; total: number } | null> {
+    try {
+      const params = new URLSearchParams();
+      if (owner) params.set('owner', owner);
+      if (repo) params.set('repo', repo);
+      if (rootDir) params.set('root_dir', rootDir);
+
+      const res = await fetch(`${this.baseUrl}/ast/tree?${params.toString()}`, {
+        headers: this.getAuthHeaders(),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async indexAST(
+    owner: string,
+    repo: string,
+    commit = 'main',
+    rootDir = '',
+  ): Promise<{ status: string; indexed_count?: number; error?: string } | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/ast/index`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          owner,
+          repo,
+          commit,
+          root_dir: rootDir,
+        }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
   async getStats(): Promise<any> {
     try {
       const res = await fetch(`${this.baseUrl}/stats`, {
@@ -482,7 +585,7 @@ export class EngineClient {
       return data.keys.map((k: any) => ({
         id: k.id,
         name: k.name || 'API Key',
-        keyMasked: k.key_masked || 'tr_live_...xxxx',
+        keyMasked: k.key_masked || '...xxxx',
         fullKey: k.raw_key || undefined,
         createdAt: k.created_at ? new Date(k.created_at).toISOString().split('T')[0] : 'Recently',
         lastUsed: 'Recently',

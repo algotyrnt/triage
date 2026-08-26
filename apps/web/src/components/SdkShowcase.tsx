@@ -28,7 +28,7 @@ func main() {
 
     // Wrap your mux with triage panic isolation middleware
     handler := triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )(mux)
 
@@ -47,7 +47,7 @@ func main() {
 
     // Add triage middleware to chi router stack
     r.Use(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     ))
 
@@ -66,7 +66,7 @@ func main() {
 
     // Wrap gin router with triage panic recovery adapter
     r.Use(gin.WrapH(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )(r)))
 
@@ -85,7 +85,7 @@ func main() {
 
     // Use triage standard HTTP middleware adapter with Echo
     e.Use(echo.WrapMiddleware(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )))
 
@@ -105,7 +105,7 @@ func main() {
 
     // Adapt triage middleware for Fiber fast HTTP stack
     app.Use(adaptor.HTTPMiddleware(triage.Middleware(
-        "tr_live_key_9042",
+        "your_sample_api_key",
         "https://triage.yourcompany.com/api/v1/telemetry",
     )))
 
@@ -123,18 +123,18 @@ func main() {
   return (
     <section
       id="sdk"
-      className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20"
+      className="py-14 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-16"
     >
       {/* Header */}
-      <div className="text-center max-w-3xl mx-auto space-y-3">
+      <div className="text-center max-w-3xl mx-auto space-y-2.5 sm:space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
           <Terminal className="w-3.5 h-3.5 text-indigo-600" />
           <span>GO SDK INTEGRATION</span>
         </div>
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
           Integrate with Any Go Router in Under 60 Seconds
         </h2>
-        <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
+        <p className="text-slate-600 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
           Triage works as standard Go{' '}
           <code className="text-indigo-700 font-mono">http.Handler</code> middleware. Drop it into
           your existing HTTP routers without refactoring.
@@ -142,7 +142,7 @@ func main() {
       </div>
 
       {/* Code Showcase Window */}
-      <div className="mt-12 max-w-4xl mx-auto bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+      <div className="mt-10 sm:mt-12 max-w-5xl mx-auto bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
         {/* Router tabs */}
         <div className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-none">

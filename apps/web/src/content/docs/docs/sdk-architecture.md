@@ -66,7 +66,7 @@ The SDK dispatches the following JSON payload to `POST /api/v1/telemetry`:
 
 ```json
 {
-  "api_key": "tr_live_key_9042",
+  "api_key": "your_sample_api_key",
   "commit": "7f8b9e1a2c3d4e5f60718293",
   "file": "handlers/payment.go",
   "line": 28,

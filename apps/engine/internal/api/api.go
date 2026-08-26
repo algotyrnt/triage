@@ -16,6 +16,7 @@ import (
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
 	"triage/engine/internal/llm"
+	"triage/engine/internal/version"
 )
 
 var githubNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_\.\-]+$`)
@@ -29,6 +30,7 @@ type Config struct {
 	ASTCache    *ast.ASTCache
 	ASTFetcher  *ast.OnDemandFetcher
 	EventBroker *EventBroker
+	Version     string
 }
 
 // Server encapsulates HTTP routes and middleware for the Triage Engine.
@@ -41,6 +43,7 @@ type Server struct {
 	astFetcher  *ast.OnDemandFetcher
 	eventBroker *EventBroker
 	appSlug     string
+	version     string
 }
 
 // NewServer initializes a new API server with the provided dependencies.
@@ -57,6 +60,9 @@ func NewServer(cfg Config) *Server {
 	if cfg.EventBroker == nil {
 		cfg.EventBroker = NewEventBroker()
 	}
+	if cfg.Version == "" {
+		cfg.Version = version.Get()
+	}
 
 	return &Server{
 		db:          cfg.DB,
@@ -66,6 +72,7 @@ func NewServer(cfg Config) *Server {
 		astCache:    cfg.ASTCache,
 		astFetcher:  cfg.ASTFetcher,
 		eventBroker: cfg.EventBroker,
+		version:     cfg.Version,
 	}
 }
 
@@ -93,6 +100,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/events/stream", s.withMiddleware(s.HandleEventsStream))
 	mux.HandleFunc("/api/v1/telemetry", s.withMiddleware(s.HandleTelemetry))
 	mux.HandleFunc("/api/v1/ast/index", s.withMiddleware(s.HandleASTIndex))
+	mux.HandleFunc("/api/v1/ast/tree", s.withMiddleware(s.HandleASTTree))
 	mux.HandleFunc("/api/v1/incidents", s.withMiddleware(s.HandleIncidents))
 	mux.HandleFunc("/api/v1/incidents/create-issue", s.withMiddleware(s.HandleCreateIncidentIssue))
 	mux.HandleFunc("/api/v1/incidents/create-pr", s.withMiddleware(s.HandleCreateIncidentPR))

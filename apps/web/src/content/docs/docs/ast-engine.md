@@ -156,9 +156,19 @@ Triage handles this transparently:
 
 ---
 
-## Pre-Indexing (Optional)
+## Interactive AST Explorer & Symbol Tree
 
-While Triage resolves AST nodes dynamically on demand, you can also pre-index entire repositories via the API:
+The Studio Dashboard includes a dedicated **AST Explorer** workspace (`/ast`):
+
+- **Package Hierarchy & Symbols:** Browse live Go packages, source files, and declared functions with their method receivers and line positions.
+- **Syntax Snippet Inspector:** Click any function symbol to instantly view its parsed AST syntax snippet formatted with syntax highlighting.
+- **1-Click Re-indexing:** Trigger on-demand package re-indexing directly from the Studio UI to refresh symbols after pushing commits.
+
+---
+
+## Pre-Indexing via API (Optional)
+
+While Triage resolves AST nodes dynamically on demand, you can also pre-index entire repositories via the REST API:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/ast/index \

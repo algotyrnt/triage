@@ -60,25 +60,25 @@ export const ArchitectureSection: React.FC = () => {
   return (
     <section
       id="architecture"
-      className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-20"
+      className="py-14 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-16"
     >
       {/* Title */}
-      <div className="text-center max-w-3xl mx-auto space-y-3">
+      <div className="text-center max-w-3xl mx-auto space-y-2.5 sm:space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
           <Layers className="w-3.5 h-3.5 text-indigo-600" />
           <span>ZERO-OVERHEAD ARCHITECTURE</span>
         </div>
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
           How Triage Delivers Sub-Millisecond Panic Isolation
         </h2>
-        <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
+        <p className="text-slate-600 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
           Designed from the ground up for high-throughput production Go microservices without
           background database pre-indexing.
         </p>
       </div>
 
       {/* Architecture Flow Visual Grid */}
-      <div className="mt-14 grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+      <div className="mt-10 sm:mt-12 grid grid-cols-1 md:grid-cols-5 gap-3.5 sm:gap-4 relative">
         {steps.map((step, idx) => (
           <div
             key={step.num}

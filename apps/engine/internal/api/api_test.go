@@ -349,3 +349,57 @@ func TestLLMSettingsAndTestRoute(t *testing.T) {
 		t.Errorf("unexpected test result: %+v", testRes)
 	}
 }
+
+func TestSetupManifest_Public(t *testing.T) {
+	s := newTestAPIServer()
+
+	body, _ := json.Marshal(map[string]string{
+		"instance_url": "https://triage.example.com",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/setup/manifest", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.HandleSetupManifest(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for HandleSetupManifest, got %d", rec.Code)
+	}
+
+	var res struct {
+		Manifest map[string]interface{} `json:"manifest"`
+		URL      string                 `json:"url"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatalf("failed to decode manifest response: %v", err)
+	}
+
+	if res.Manifest["public"] != true {
+		t.Fatalf("expected manifest.public to be true so app can be installed on organizations, got %v", res.Manifest["public"])
+	}
+}
+
+func TestServerASTTree(t *testing.T) {
+	s := newTestAPIServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ast/tree?owner=algotyrnt&repo=triage", nil)
+	rec := httptest.NewRecorder()
+	s.HandleASTTree(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for HandleASTTree, got %d", rec.Code)
+	}
+
+	var res struct {
+		Status string        `json:"status"`
+		Owner  string        `json:"owner"`
+		Repo   string        `json:"repo"`
+		Total  int           `json:"total"`
+		Files  []interface{} `json:"files"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
+		t.Fatalf("failed to decode ast tree response: %v", err)
+	}
+
+	if res.Status != "success" {
+		t.Errorf("expected status success, got %s", res.Status)
+	}
+}

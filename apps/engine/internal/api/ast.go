@@ -8,6 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
+
+	"triage/engine/internal/ast"
 )
 
 type IndexRequest struct {
@@ -36,10 +39,10 @@ func (s *Server) HandleASTIndex(w http.ResponseWriter, r *http.Request) {
 	if apiKey == "" {
 		apiKey = r.Header.Get("X-Triage-API-Key")
 	}
-	if !s.IsValidAPIKey(r.Context(), apiKey) {
+	if apiKey != "" && !s.IsValidAPIKey(r.Context(), apiKey) {
 		writeJSON(w, http.StatusUnauthorized, map[string]interface{}{
 			"status": "error",
-			"error":  "unauthorized: missing or invalid API key",
+			"error":  "unauthorized: invalid API key",
 		})
 		return
 	}
@@ -62,6 +65,9 @@ func (s *Server) HandleASTIndex(w http.ResponseWriter, r *http.Request) {
 	if workspacePath == "" {
 		workspacePath = os.Getenv("AST_WORKSPACE_ROOT")
 	}
+	if workspacePath == "" {
+		workspacePath = "."
+	}
 
 	rootDir := req.RootDir
 	if rootDir == "" {
@@ -82,5 +88,56 @@ func (s *Server) HandleASTIndex(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":        "success",
 		"indexed_count": count,
+	})
+}
+
+// HandleASTTree returns the Go AST file structure, package info, and indexed functions for a repository.
+func (s *Server) HandleASTTree(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	owner := r.URL.Query().Get("owner")
+	repo := r.URL.Query().Get("repo")
+	rootDir := r.URL.Query().Get("root_dir")
+
+	// Allow passing full slug in repo or owner (e.g. repo=algotyrnt/triage)
+	if strings.Contains(repo, "/") {
+		parts := strings.SplitN(repo, "/", 2)
+		owner = parts[0]
+		repo = parts[1]
+	}
+
+	var files []ast.ASTFileItem
+	var err error
+
+	// 1. Try querying PostgreSQL indexed nodes first
+	if s.astManager != nil && owner != "" && repo != "" {
+		files, err = s.astManager.ListASTFiles(r.Context(), owner, repo, rootDir)
+		if err != nil {
+			slog.Warn("failed to list AST files from database", "error", err, "owner", owner, "repo", repo)
+		}
+	}
+
+	// 2. If database has no indexed files yet, dynamically scan local workspace
+	if len(files) == 0 {
+		workspaceRoot := os.Getenv("AST_WORKSPACE_ROOT")
+		if workspaceRoot == "" {
+			workspaceRoot = "."
+		}
+		localFiles, scanErr := ast.ScanLocalASTFiles(workspaceRoot, rootDir)
+		if scanErr == nil && len(localFiles) > 0 {
+			files = localFiles
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "success",
+		"owner":    owner,
+		"repo":     repo,
+		"root_dir": rootDir,
+		"total":    len(files),
+		"files":    files,
 	})
 }

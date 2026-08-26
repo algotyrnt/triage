@@ -23,6 +23,8 @@ import {
   Terminal,
   ShieldCheck,
   Sparkles,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 interface ProjectsPageProps {
@@ -45,6 +47,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'critical' | 'healthy'>('all');
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+  const [revealedProjects, setRevealedProjects] = useState<Record<string, boolean>>({});
 
   // Helper to get incidents for a specific project
   const getProjectIncidents = (project: Project): Incident[] => {
@@ -63,11 +66,14 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
     });
   };
 
-  // Helper to get active API key for a project (local storage fallback if masked)
+  // Helper to get active API key for a project
   const getProjectKey = (project: Project): string => {
-    const storageKey = `triage_key_${project.owner}_${project.repo}_${project.root_dir || ''}`;
-    const local = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
-    return local || project.api_key_masked || 'tr_live_...key';
+    return project.api_key_masked || '...xxxx';
+  };
+
+  const toggleRevealProjectKey = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setRevealedProjects((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleCopyKey = (e: React.MouseEvent, project: Project) => {
@@ -310,8 +316,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             const projectIncs = getProjectIncidents(project);
             const critCount = projectIncs.filter((i) => i.status === 'CRITICAL').length;
             const projectKey = getProjectKey(project);
+            const projectId =
+              project.id || `${project.owner}/${project.repo}/${project.root_dir || ''}`;
+            const isRevealed = Boolean(revealedProjects[projectId]);
             const isKeyCopied = copiedKeyId === (project.id || `${project.owner}/${project.repo}`);
             const repoSlug = `${project.owner}/${project.repo}`;
+            const maskedKeyDisplay = projectKey.replace(/./g, '•');
 
             return (
               <div
@@ -370,21 +380,38 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
                         <Key className="w-3 h-3 text-slate-600" />
                         <span>Telemetry Key</span>
                       </span>
-                      <button
-                        onClick={(e) => handleCopyKey(e, project)}
-                        className="text-slate-600 hover:text-black text-[10px] underline flex items-center gap-0.5 cursor-pointer"
-                        title="Copy Ingestion API Key"
-                      >
-                        {isKeyCopied ? (
-                          <Check className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                        <span>{isKeyCopied ? 'Copied' : 'Copy'}</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => toggleRevealProjectKey(e, projectId)}
+                          className="text-slate-600 hover:text-black text-[10px] flex items-center gap-0.5 cursor-pointer"
+                          title={isRevealed ? 'Hide API Key' : 'Reveal API Key'}
+                          aria-label={isRevealed ? 'Hide API Key' : 'Reveal API Key'}
+                        >
+                          {isRevealed ? (
+                            <EyeOff className="w-3 h-3 text-slate-500" />
+                          ) : (
+                            <Eye className="w-3 h-3 text-slate-500" />
+                          )}
+                          <span>{isRevealed ? 'Hide' : 'Show'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyKey(e, project)}
+                          className="text-slate-600 hover:text-black text-[10px] underline flex items-center gap-0.5 cursor-pointer"
+                          title="Copy Ingestion API Key"
+                        >
+                          {isKeyCopied ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                          <span>{isKeyCopied ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
                     </div>
                     <div className="text-xs font-bold text-slate-800 truncate select-all">
-                      {projectKey}
+                      {isRevealed ? projectKey : maskedKeyDisplay}
                     </div>
                   </div>
                 </div>

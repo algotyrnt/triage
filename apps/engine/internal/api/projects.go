@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"triage/engine/internal/crypto"
 	"triage/engine/internal/db"
 )
 
@@ -56,16 +57,29 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 		}
 		rootDir = strings.Trim(strings.TrimSpace(rootDir), "/")
 
-		apiKey := fmt.Sprintf("tr_live_%s_%d", repoName, time.Now().UnixNano())
-		keyMasked := fmt.Sprintf("tr_live_...%s", apiKey[len(apiKey)-4:])
+		apiKey := ""
+		keyMasked := ""
 		if s.db != nil {
-			k, _, err := s.db.CreateProject(r.Context(), owner, repoName, rootDir, req.OwnerUsername, req.Context)
-			if err == nil && k != "" {
+			k, repoID, err := s.db.CreateProject(r.Context(), owner, repoName, rootDir, req.OwnerUsername, req.Context)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Failed to create project: %v", err), http.StatusInternalServerError)
+				return
+			}
+			if k != "" {
 				apiKey = k
-				if len(k) >= 4 {
-					keyMasked = fmt.Sprintf("tr_live_...%s", k[len(k)-4:])
+				keyMasked = crypto.MaskAPIKey(k)
+			} else if repoID != "" {
+				keys, _ := s.db.GetAPIKeys(r.Context(), owner, repoName, rootDir)
+				for _, existingKey := range keys {
+					if existingKey.Status == "ACTIVE" {
+						keyMasked = existingKey.KeyMasked
+						break
+					}
 				}
 			}
+		} else {
+			apiKey = crypto.GenerateSecureAPIKey()
+			keyMasked = crypto.MaskAPIKey(apiKey)
 		}
 
 		writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -193,8 +207,8 @@ func (s *Server) HandleProjectKeys(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if s.db == nil {
-			rawKey := fmt.Sprintf("tr_live_%s_%d", repoName, time.Now().UnixNano())
-			masked := fmt.Sprintf("tr_live_...%s", rawKey[len(rawKey)-4:])
+			rawKey := crypto.GenerateSecureAPIKey()
+			masked := crypto.MaskAPIKey(rawKey)
 			writeJSON(w, http.StatusOK, map[string]interface{}{
 				"success": true,
 				"key": map[string]interface{}{

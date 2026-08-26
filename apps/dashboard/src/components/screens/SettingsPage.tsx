@@ -8,7 +8,6 @@ import { ApiKey, ScreenId } from '@/types';
 import {
   Settings,
   Key,
-  Webhook,
   AlertTriangle,
   Copy,
   Check,
@@ -32,6 +31,7 @@ import {
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
 import { logger } from '@/services/logger';
+import { GeminiIcon, OpenAIIcon, AnthropicIcon, OllamaIcon } from '@/components/ProviderIcons';
 
 interface SettingsPageProps {
   apiKeys?: ApiKey[];
@@ -50,9 +50,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   activeRepo = 'algotyrnt/beacon-app',
   activeRootDir = '',
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'webhooks' | 'ai' | 'danger'>(
-    'ai',
-  );
+  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'ai' | 'danger'>('ai');
   const [keysList, setKeysList] = useState<ApiKey[]>(apiKeys);
   const [loadingKeys, setLoadingKeys] = useState(false);
   const [creatingKey, setCreatingKey] = useState(false);
@@ -61,13 +59,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     variant: 'success' | 'error';
   } | null>(null);
   const [newlyCreatedKeys, setNewlyCreatedKeys] = useState<Record<string, string>>({});
+  const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, boolean>>({});
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-
-  // Webhook settings
-  const [webhookUrl, setWebhookUrl] = useState('https://api.beacon-app.dev/v1/triage/webhook');
-  const [webhookSecret, setWebhookSecret] = useState('whsec_demo_XXXXXXXXXXXX');
-  const [showSecret, setShowSecret] = useState(false);
-  const [webhookSaved, setWebhookSaved] = useState(false);
 
   // General settings
   const parts = activeRepo.split('/');
@@ -118,13 +111,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     error?: string;
   } | null>(null);
 
+  const toggleRevealKey = (id: string) => {
+    setRevealedKeyIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const loadProjectKeys = async () => {
     setLoadingKeys(true);
     try {
       const fetchedKeys = await engineClient.getProjectKeys(repoOwner, repoName, serviceRootDir);
-      const storageKey = `triage_key_${repoOwner}_${repoName}_${serviceRootDir}`;
-      const localStoredKey = localStorage.getItem(storageKey);
-      const activeOrStoredKey = activeApiKey || localStoredKey;
+      const activeOrStoredKey = activeApiKey;
 
       const merged = fetchedKeys.map((k) => {
         if (newlyCreatedKeys[k.id]) {
@@ -133,7 +128,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
         if (
           activeOrStoredKey &&
           k.status === 'ACTIVE' &&
-          activeOrStoredKey.endsWith(k.keyMasked.replace(/^tr_live_\.\.\./, ''))
+          activeOrStoredKey.endsWith(k.keyMasked.replace(/^(\.\.\.|tr_live_\.\.\.)/, ''))
         ) {
           return { ...k, fullKey: activeOrStoredKey };
         }
@@ -214,7 +209,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     const rawToCopy =
       key.fullKey ||
       newlyCreatedKeys[key.id] ||
-      (activeApiKey && activeApiKey.endsWith(key.keyMasked.replace(/^tr_live_\.\.\./, ''))
+      (activeApiKey && activeApiKey.endsWith(key.keyMasked.replace(/^(\.\.\.|tr_live_\.\.\.)/, ''))
         ? activeApiKey
         : key.keyMasked);
     navigator.clipboard.writeText(rawToCopy);
@@ -250,8 +245,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       if (res.success && res.key) {
         const raw = res.key.raw_key || res.key.fullKey;
         if (raw) {
-          const storageKey = `triage_key_${repoOwner}_${repoName}_${serviceRootDir}`;
-          localStorage.setItem(storageKey, raw);
           setNewlyCreatedKeys((prev) => ({ ...prev, [res.key!.id]: raw }));
           if (onKeyUpdated) onKeyUpdated(raw);
         }
@@ -273,12 +266,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     }
   };
 
-  const handleSaveWebhook = (e: React.FormEvent) => {
-    e.preventDefault();
-    setWebhookSaved(true);
-    setTimeout(() => setWebhookSaved(false), 2500);
-  };
-
   const handleDeleteProject = () => {
     if (deleteConfirmationInput === targetRepoName) {
       alert(`Project ${targetRepoName} deleted.`);
@@ -295,7 +282,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           Project Settings & API Credentials
         </h1>
         <p className="text-xs text-slate-600 font-sans mt-0.5">
-          Configure API ingestion keys, webhook signatures, and project lifecycle boundaries.
+          Configure AI diagnostics, API ingestion telemetry keys, and project settings.
         </p>
       </div>
 
@@ -313,11 +300,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               id: 'keys',
               label: 'API Ingestion Keys',
               icon: <Key className="w-3.5 h-3.5" />,
-            },
-            {
-              id: 'webhooks',
-              label: 'Webhook Endpoint',
-              icon: <Webhook className="w-3.5 h-3.5" />,
             },
             {
               id: 'general',
@@ -379,25 +361,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         id: 'gemini',
                         name: 'Google Gemini',
                         sub: 'Gemini 2.0 Flash / Pro',
-                        icon: <Sparkles className="w-4 h-4 text-indigo-600" />,
+                        icon: (selected: boolean) => (
+                          <GeminiIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-indigo-600'}`}
+                          />
+                        ),
                       },
                       {
                         id: 'openai',
                         name: 'OpenAI',
                         sub: 'GPT-4o, o3-mini, o1',
-                        icon: <Zap className="w-4 h-4 text-emerald-600" />,
+                        icon: (selected: boolean) => (
+                          <OpenAIIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-emerald-600'}`}
+                          />
+                        ),
                       },
                       {
                         id: 'anthropic',
                         name: 'Anthropic Claude',
                         sub: 'Claude 3.5 / 3.7 Sonnet',
-                        icon: <Cpu className="w-4 h-4 text-amber-600" />,
+                        icon: (selected: boolean) => (
+                          <AnthropicIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-amber-600'}`}
+                          />
+                        ),
                       },
                       {
                         id: 'ollama',
                         name: 'Local / Ollama',
                         sub: 'DeepSeek, Qwen (Air-Gapped)',
-                        icon: <Server className="w-4 h-4 text-purple-600" />,
+                        icon: (selected: boolean) => (
+                          <OllamaIcon
+                            className={`w-4 h-4 ${selected ? 'text-white' : 'text-purple-600'}`}
+                          />
+                        ),
                       },
                     ].map((prov) => {
                       const isSelected = llmProvider === prov.id;
@@ -416,7 +414,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className={isSelected ? 'text-white' : ''}>{prov.icon}</span>
+                            <span>{prov.icon(isSelected)}</span>
                             {isSelected && <Check className="w-3.5 h-3.5 text-white" />}
                           </div>
                           <div>
@@ -690,13 +688,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <div className="space-y-3">
                   {keysList.map((key) => {
                     const isNewlyCreated = Boolean(newlyCreatedKeys[key.id]);
+                    const isRevealed = Boolean(revealedKeyIds[key.id]);
                     const rawKeyDisplay =
                       key.fullKey ||
                       newlyCreatedKeys[key.id] ||
                       (activeApiKey &&
-                      activeApiKey.endsWith(key.keyMasked.replace(/^tr_live_\.\.\./, ''))
+                      activeApiKey.endsWith(key.keyMasked.replace(/^(\.\.\.|tr_live_\.\.\.)/, ''))
                         ? activeApiKey
                         : null);
+                    const keyString = rawKeyDisplay || key.keyMasked;
+                    const maskedDisplay = keyString.replace(/./g, '•');
 
                     return (
                       <div
@@ -732,10 +733,26 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
                         <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-sm border border-slate-200 text-xs">
                           <code className="text-slate-800 font-bold tracking-wide select-all font-mono break-all">
-                            {rawKeyDisplay || key.keyMasked}
+                            {isRevealed ? keyString : maskedDisplay}
                           </code>
                           <div className="flex items-center gap-2 shrink-0">
                             <button
+                              type="button"
+                              onClick={() => toggleRevealKey(key.id)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-2 py-0.5 rounded-sm border border-slate-200 text-[11px] flex items-center gap-1 font-mono cursor-pointer"
+                              title={isRevealed ? 'Hide API key' : 'Reveal API key'}
+                              aria-label={isRevealed ? 'Hide API key' : 'Reveal API key'}
+                            >
+                              {isRevealed ? (
+                                <EyeOff className="w-3 h-3 text-slate-600" />
+                              ) : (
+                                <Eye className="w-3 h-3 text-slate-600" />
+                              )}
+                              <span>{isRevealed ? 'Hide' : 'Reveal'}</span>
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => handleCopyKey(key)}
                               className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-2 py-0.5 rounded-sm border border-slate-200 text-[11px] flex items-center gap-1 font-mono cursor-pointer"
                             >
@@ -762,75 +779,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   })}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Tab 2: Webhooks */}
-          {activeTab === 'webhooks' && (
-            <div className="bg-white border border-slate-200 rounded-sm p-4 space-y-4 font-mono text-xs">
-              <div className="border-b border-slate-100 pb-3">
-                <h2 className="text-sm font-bold text-slate-900 font-mono">
-                  Outbound Webhook Dispatch Settings
-                </h2>
-                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                  Triage posts JSON HTTP payloads when crashes are symbolicated or AI patches
-                  generated.
-                </p>
-              </div>
-
-              {webhookSaved && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-sm flex items-center gap-2 text-xs font-bold">
-                  <Check className="w-4 h-4 text-emerald-600" />
-                  <span>Webhook endpoint settings saved successfully.</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSaveWebhook} className="space-y-4 text-xs">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block">
-                    Target Webhook Listener URL:
-                  </label>
-                  <input
-                    type="url"
-                    value={webhookUrl}
-                    onChange={(e) => setWebhookUrl(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block">HMAC Signature Secret:</label>
-                  <div className="relative">
-                    <input
-                      type={showSecret ? 'text' : 'password'}
-                      value={webhookSecret}
-                      onChange={(e) => setWebhookSecret(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 pr-16 bg-slate-50 border border-slate-200 rounded-sm font-mono focus:bg-white focus:outline-none focus:border-black"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSecret(!showSecret)}
-                      className="absolute right-2 top-2 text-[11px] font-mono text-slate-600 hover:text-black font-bold"
-                    >
-                      {showSecret ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-500">
-                    Dispatches include header `X-Triage-Signature: sha256=&lt;hmac&gt;`.
-                  </p>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="submit"
-                    className="bg-black hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-sm border border-black transition-colors cursor-pointer"
-                  >
-                    Save Webhook Settings
-                  </button>
-                </div>
-              </form>
             </div>
           )}
 
@@ -965,8 +913,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
 
               <p className="text-red-800 text-[11.5px] leading-relaxed">
-                Deleting this project will permanently remove all AST symbolication caches, webhook
-                audit logs, and API ingestion keys for{' '}
+                Deleting this project will permanently remove all AST symbolication caches, panic
+                incident records, and API ingestion keys for{' '}
                 <strong className="text-red-950 font-bold">{targetRepoName}</strong>. This action
                 cannot be undone.
               </p>

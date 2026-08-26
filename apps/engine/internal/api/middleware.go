@@ -92,7 +92,7 @@ func (s *Server) withMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 		duration := time.Since(start)
 
-		if duration > 500*time.Millisecond {
+		if duration > 500*time.Millisecond && r.URL.Path != "/api/v1/events/stream" {
 			slog.Warn("slow HTTP request detected",
 				"method", r.Method,
 				"path", r.URL.Path,

@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
 
   return (
     <footer className="border-t border-slate-200 bg-white text-slate-600 font-sans">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Column 1: Brand & Tagline */}
           <div className="space-y-4 md:col-span-1">
@@ -154,7 +154,7 @@ export const Footer: React.FC = () => {
         </div>
 
         {/* Bottom copyright */}
-        <div className="mt-12 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-3">
+        <div className="mt-8 pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-3">
           <div>
             Created by{' '}
             <a
@@ -166,10 +166,6 @@ export const Footer: React.FC = () => {
               Punjitha Bandara (algotyrnt)
             </a>
             . Licensed under Apache 2.0.
-          </div>
-
-          <div className="flex items-center gap-4">
-            <span className="text-slate-400">Powered by Multi-Provider AI &amp; Go AST Parser</span>
           </div>
         </div>
       </div>

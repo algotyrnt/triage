@@ -23,7 +23,7 @@ func main() {
     mux.HandleFunc("/api/process", processData)
 
     // Wrap handler with triage panic isolation middleware
-    handler := triage.Middleware("tr_live_key_9042")(mux)
+    handler := triage.Middleware("your_sample_api_key")(mux)
     http.ListenAndServe(":8081", handler)
 }`;
 

@@ -9,7 +9,7 @@ Follow this guide to spin up a local Triage stack and capture your first Go cras
 
 - **Go 1.26+**
 - **Docker & Docker Compose**
-- A Google AI Studio API key ([aistudio.google.com](https://aistudio.google.com))
+- An API key for your preferred AI provider (**Google Gemini**, **OpenAI**, **Anthropic Claude**) or a local instance (**Ollama**, **vLLM**)
 
 ---
 
@@ -41,7 +41,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The initial
 4. **AI Model Configuration** (Select Google Gemini, OpenAI, Claude, or local Ollama).
 5. **Verification** (Engine self-test).
 
-Once configured, copy your project API key (e.g. `tr_live_...`).
+Once configured, copy your project API key (e.g. `...xxxx`).
 
 ---
 
@@ -74,7 +74,7 @@ func main() {
 
 	// Wrap mux with Triage middleware:
 	handler := triage.Middleware(
-		"tr_live_your_api_key",
+		"your_sample_api_key",
 		"http://localhost:8080/api/v1/telemetry",
 	)(mux)
 
@@ -91,7 +91,7 @@ Run your Go application (using `-trimpath` to generate production-accurate relat
 ```bash
 # Run test-services/simple-service on :8081 with your API key
 cd test-services/simple-service
-TRIAGE_API_KEY=tr_live_your_key go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
 ```
 
 In another terminal, trigger the crash:

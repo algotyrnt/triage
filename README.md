@@ -90,7 +90,7 @@ func main() {
 
 	// Wrap your standard http.Handler with Triage panic middleware:
 	handler := triage.Middleware(
-		"tr_live_your_api_key",
+		"your_sample_api_key",
 		"http://localhost:8080/api/v1/telemetry",
 	)(mux)
 

@@ -15,6 +15,7 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "ok",
+		"version":  s.version,
 		"database": dbStatus,
 	})
 }
@@ -22,6 +23,7 @@ func (s *Server) HandleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleStats(w http.ResponseWriter, r *http.Request) {
 	stats := map[string]interface{}{
 		"status":          "healthy",
+		"version":         s.version,
 		"total_incidents": 0,
 		"funcs_indexed":   1420,
 	}
@@ -29,6 +31,7 @@ func (s *Server) HandleStats(w http.ResponseWriter, r *http.Request) {
 	if s.db != nil {
 		if dbStats, err := s.db.GetStats(r.Context()); err == nil {
 			stats = dbStats
+			stats["version"] = s.version
 		}
 	}
 

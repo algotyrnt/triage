@@ -115,7 +115,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build Astro Web Application
-        run: make build-web
+        run: make build-web VERSION=${{ github.ref_name }}
 
       - name: Package Web Distribution Tarball
         run: tar -czf "triage-web-${{ github.ref_name }}.tar.gz" -C apps/web/dist .

@@ -162,11 +162,20 @@ push-tags: check-version-var ## Push release tags to origin to trigger CI/CD pip
 	git push origin "sdk/go/$(VERSION)"
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)Pushed tags $(VERSION) and sdk/go/$(VERSION) to origin.$(COLOR_RESET)\n"
 
+.PHONY: sync-version
+sync-version: check-version-var ## Sync version into apps/web and apps/dashboard package.json
+	@RAW_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
+	printf "$(COLOR_CYAN)==> Syncing version $$RAW_VER into package.json files...$(COLOR_RESET)\n"; \
+	$(BUN) -e "['apps/web/package.json', 'apps/dashboard/package.json'].forEach(f => { const fs = require('fs'); const j = JSON.parse(fs.readFileSync(f, 'utf8')); j.version = '$$RAW_VER'; fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n'); })"
+
 .PHONY: release
-release: check-git-branch check-git-clean check-version-var ## Execute full release: verify, tag, and push (e.g. make release VERSION=v0.1.1)
+release: check-git-branch check-git-clean check-version-var sync-version ## Execute full release: verify, sync version, tag, and push (e.g. make release VERSION=v0.1.1)
 	@printf "$(COLOR_BOLD)$(COLOR_CYAN)==> Initiating Triage Release $(VERSION)$(COLOR_RESET)\n"
+	@if ! git diff --quiet apps/web/package.json apps/dashboard/package.json; then \
+		git commit -am "release: bump version to $(VERSION)"; \
+	fi
 	@printf "$(COLOR_YELLOW)[1/3] Running pre-flight verification (lint, test, build)...$(COLOR_RESET)\n"
-	@$(MAKE) check
+	@$(MAKE) check VERSION=$(VERSION)
 	@printf "$(COLOR_YELLOW)[2/3] Creating release tags...$(COLOR_RESET)\n"
 	@$(MAKE) tag VERSION=$(VERSION)
 	@printf "$(COLOR_YELLOW)[3/3] Pushing tags to remote...$(COLOR_RESET)\n"
@@ -319,8 +328,8 @@ build-sdk: ## Build & verify Go SDK
 
 .PHONY: build-web
 build-web: ## Build Astro web documentation & landing page
-	@printf "$(COLOR_CYAN)==> Building Astro Web bundle...$(COLOR_RESET)\n"
-	@cd apps/web && $(BUN) run build
+	@printf "$(COLOR_CYAN)==> Building Astro Web bundle ($(VERSION))...$(COLOR_RESET)\n"
+	@cd apps/web && PUBLIC_TRIAGE_VERSION=$(VERSION) $(BUN) run build
 
 .PHONY: deploy-web
 deploy-web: build-web ## Deploy Astro web site to Cloudflare via Wrangler
@@ -329,8 +338,8 @@ deploy-web: build-web ## Deploy Astro web site to Cloudflare via Wrangler
 
 .PHONY: build-dashboard
 build-dashboard: ## Build Next.js Studio Dashboard
-	@printf "$(COLOR_CYAN)==> Building Next.js Dashboard...$(COLOR_RESET)\n"
-	@cd apps/dashboard && $(BUN) run build
+	@printf "$(COLOR_CYAN)==> Building Next.js Dashboard ($(VERSION))...$(COLOR_RESET)\n"
+	@cd apps/dashboard && NEXT_PUBLIC_TRIAGE_VERSION=$(VERSION) $(BUN) run build
 
 # ==============================================================================
 # Docker & Containers
