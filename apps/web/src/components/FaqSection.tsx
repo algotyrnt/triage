@@ -46,47 +46,52 @@ export const FaqSection: React.FC = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
-    <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto border-t border-slate-200">
-      <div className="text-center max-w-3xl mx-auto space-y-3">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
-          <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
-          <span>FREQUENTLY ASKED QUESTIONS</span>
+    <section
+      id="faq"
+      className="py-14 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-200 scroll-mt-16"
+    >
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center space-y-2.5 sm:space-y-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-mono text-xs font-semibold">
+            <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
+            <span>FREQUENTLY ASKED QUESTIONS</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
+            Everything You Need to Know
+          </h2>
+          <p className="text-slate-600 text-sm sm:text-base leading-relaxed max-w-2xl mx-auto">
+            Common architectural and operational questions regarding Triage panic isolation.
+          </p>
         </div>
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Everything You Need to Know
-        </h2>
-        <p className="text-slate-600 text-sm sm:text-base leading-relaxed">
-          Common architectural and operational questions regarding Triage panic isolation.
-        </p>
-      </div>
 
-      <div className="mt-12 space-y-3">
-        {FAQS.map((faq, idx) => {
-          const isOpen = openIndex === idx;
-          return (
-            <div
-              key={idx}
-              className="border border-slate-200 rounded-lg bg-white overflow-hidden transition-all"
-            >
-              <button
-                onClick={() => setOpenIndex(isOpen ? null : idx)}
-                className="w-full px-6 py-4 text-left flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
+        <div className="mt-10 sm:mt-12 space-y-3">
+          {FAQS.map((faq, idx) => {
+            const isOpen = openIndex === idx;
+            return (
+              <div
+                key={idx}
+                className="border border-slate-200 rounded-lg bg-white overflow-hidden transition-all"
               >
-                <span className="font-bold text-slate-900 text-sm sm:text-base">{faq.q}</span>
-                {isOpen ? (
-                  <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                <button
+                  onClick={() => setOpenIndex(isOpen ? null : idx)}
+                  className="w-full px-6 py-4 text-left flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
+                >
+                  <span className="font-bold text-slate-900 text-sm sm:text-base">{faq.q}</span>
+                  {isOpen ? (
+                    <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                  )}
+                </button>
+                {isOpen && (
+                  <div className="px-6 pb-5 pt-1 text-slate-600 text-sm leading-relaxed border-t border-slate-100 font-normal">
+                    {faq.a}
+                  </div>
                 )}
-              </button>
-              {isOpen && (
-                <div className="px-6 pb-5 pt-1 text-slate-600 text-sm leading-relaxed border-t border-slate-100 font-normal">
-                  {faq.a}
-                </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

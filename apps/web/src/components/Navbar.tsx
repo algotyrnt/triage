@@ -38,14 +38,14 @@ export const Navbar: React.FC = () => {
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-mono text-slate-600 font-medium">
-          <a href="#features" className="hover:text-black transition-colors">
-            Features
+          <a href="#simulator" className="hover:text-black transition-colors">
+            Simulator
           </a>
           <a href="#architecture" className="hover:text-black transition-colors">
             Architecture
           </a>
-          <a href="#simulator" className="hover:text-black transition-colors">
-            Simulator
+          <a href="#features" className="hover:text-black transition-colors">
+            Features
           </a>
           <a href="#sdk" className="hover:text-black transition-colors">
             Go SDK
@@ -96,11 +96,11 @@ export const Navbar: React.FC = () => {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-3 font-mono text-xs shadow-xl">
           <a
-            href="#features"
+            href="#simulator"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
-            Features
+            Simulator
           </a>
           <a
             href="#architecture"
@@ -110,11 +110,11 @@ export const Navbar: React.FC = () => {
             Architecture
           </a>
           <a
-            href="#simulator"
+            href="#features"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
-            Simulator
+            Features
           </a>
           <a
             href="#sdk"
