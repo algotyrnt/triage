@@ -99,7 +99,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
 
   web:
-    name: Build, Package & Deploy Web
+    name: Build & Deploy Web
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -117,15 +117,6 @@ jobs:
       - name: Build Astro Web Application
         run: make build-web VERSION=${{ github.ref_name }}
 
-      - name: Package Web Distribution Tarball
-        run: tar -czf "triage-web-${{ github.ref_name }}.tar.gz" -C apps/web/dist .
-
-      - name: Upload Web Distribution Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: triage-web-${{ github.ref_name }}.tar.gz
-
       - name: Deploy Web to Cloudflare Pages
         working-directory: apps/web
         env:
@@ -141,12 +132,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Download Web Distribution Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: ./
-
       - name: Create Draft Release & Upload Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -157,7 +142,6 @@ jobs:
           generate_release_notes: true
           files: |
             docker-compose.prod.yml
-            triage-web-${{ github.ref_name }}.tar.gz
           body: |
             ## Triage ${{ github.ref_name }}
 
