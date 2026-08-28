@@ -4,16 +4,7 @@
  */
 
 export type ScreenId =
-  | 'projects'
-  | 'setup'
-  | 'login'
-  | 'new'
-  | 'dashboard'
-  | 'incident_detail'
-  | 'ast'
-  | 'team'
-  | 'status'
-  | 'settings';
+  'projects' | 'setup' | 'login' | 'new' | 'dashboard' | 'incident_detail' | 'team' | 'settings';
 
 export type IncidentStatus = 'OPEN' | 'RESOLVED';
 
@@ -57,48 +48,6 @@ export interface Incident {
   suggestedPatch?: string;
 }
 
-export type AstNodeKind =
-  | 'FuncDecl'
-  | 'TypeSpec'
-  | 'FieldList'
-  | 'BlockStmt'
-  | 'AssignStmt'
-  | 'CallExpr'
-  | 'SelectorExpr'
-  | 'ReturnStmt';
-
-export interface AstNode {
-  id: string;
-  name: string;
-  kind: AstNodeKind;
-  pos: number;
-  end: number;
-  line: number;
-  signature?: string;
-  receiver?: string;
-  children?: AstNode[];
-}
-
-export interface AstFile {
-  path: string;
-  name: string;
-  isDir?: boolean;
-  totalFuncs?: number;
-  totalLines?: number;
-  sizeBytes?: number;
-  nodes?: AstNode[];
-  children?: AstFile[];
-}
-
-export interface AstCommitIndex {
-  commitHash: string;
-  branch: string;
-  parsedFilesCount: number;
-  totalFunctionsCount: number;
-  status: 'INDEXED' | 'PARSING' | 'FAILED';
-  indexedAt: string;
-}
-
 export interface TeamMember {
   id: string;
   name: string;
@@ -118,21 +67,6 @@ export interface ApiKey {
   createdAt: string;
   lastUsed?: string;
   status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
-}
-
-export interface MetricHourly {
-  hourLabel: string; // e.g. "08:00"
-  panicCount: number;
-  avgLatencyMs: number;
-  astIndexTimeMs: number;
-}
-
-export interface SystemHealthComponent {
-  name: string;
-  service: string;
-  status: 'OPERATIONAL' | 'DEGRADED' | 'DOWN';
-  latency: string;
-  detail: string;
 }
 
 export interface Project {

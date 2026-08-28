@@ -549,7 +549,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
           {/* Related Incidents Navigator */}
           <div className="bg-white border border-slate-200 rounded-sm p-4 space-y-3">
             <div className="font-bold text-slate-900 border-b border-slate-100 pb-2">
-              All Ingested Repository Crashes
+              All Ingested Crashes for Selected Project
             </div>
 
             <div className="space-y-1.5">

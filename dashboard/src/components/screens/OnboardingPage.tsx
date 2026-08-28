@@ -25,8 +25,6 @@ import {
   Building2,
   Lock,
   Globe,
-  Eye,
-  EyeOff,
   BookOpen,
 } from 'lucide-react';
 import { engineClient } from '@/services/engineClient';
@@ -66,7 +64,6 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
   const [installUrl, setInstallUrl] = useState<string>('');
   const [generatingKey, setGeneratingKey] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
-  const [showKey, setShowKey] = useState(true);
 
   const username = currentUser?.username || 'algotyrnt';
 
@@ -739,21 +736,9 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({
 
               <div className="flex items-center justify-between gap-2 bg-black p-2.5 rounded-sm border border-slate-800">
                 <code className="text-xs text-emerald-400 font-bold tracking-wide select-all break-all">
-                  {showKey
-                    ? generatedKey || activeKey
-                    : (generatedKey || activeKey).replace(/./g, '•')}
+                  {generatedKey || activeKey}
                 </code>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs px-2 py-1 rounded-sm border border-slate-700 flex items-center gap-1 font-mono transition-colors cursor-pointer"
-                    title={showKey ? 'Hide API key' : 'Reveal API key'}
-                    aria-label={showKey ? 'Hide API key' : 'Reveal API key'}
-                  >
-                    {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>{showKey ? 'Hide' : 'Reveal'}</span>
-                  </button>
                   <button
                     type="button"
                     onClick={handleCopy}

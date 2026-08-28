@@ -330,7 +330,6 @@ export class EngineClient {
       id: k.id,
       name: k.name || 'API Key',
       keyMasked: k.key_masked || '...xxxx',
-      fullKey: k.raw_key || undefined,
       createdAt: k.created_at ? new Date(k.created_at).toISOString().split('T')[0] : 'Recently',
       lastUsed: 'Recently',
       status: (k.status === 'REVOKED' ? 'REVOKED' : 'ACTIVE') as 'ACTIVE' | 'REVOKED',
@@ -403,33 +402,6 @@ export class EngineClient {
       fallback: { modules: fallback },
     });
     return Array.isArray(res.modules) && res.modules.length > 0 ? res.modules : fallback;
-  }
-
-  async getASTTree(
-    owner: string,
-    repo: string,
-    rootDir?: string,
-  ): Promise<{ status: string; files: any[]; total: number } | null> {
-    return this.request('/ast/tree', {
-      params: { owner, repo, root_dir: rootDir },
-      fallback: null,
-    });
-  }
-
-  async indexAST(
-    owner: string,
-    repo: string,
-    commit = 'main',
-    rootDir = '',
-  ): Promise<{ status: string; indexed_count?: number; error?: string } | null> {
-    try {
-      return await this.request('/ast/index', {
-        method: 'POST',
-        body: JSON.stringify({ owner, repo, commit, root_dir: rootDir }),
-      });
-    } catch (err: any) {
-      return { status: 'error', error: err.message };
-    }
   }
 
   // ---------------------------------------------------------------------------

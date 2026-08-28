@@ -7,10 +7,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ScreenId, Project } from '@/types';
 import {
   Terminal,
-  Code2,
   Settings,
   Users,
-  Activity,
   PlusCircle,
   LogIn,
   GitBranch,
@@ -24,7 +22,8 @@ import {
 interface HeaderProps {
   currentScreen: ScreenId;
   onNavigate: (screen: ScreenId) => void;
-  criticalCount: number;
+  openCount?: number;
+  criticalCount?: number;
   activeRepo?: string;
   activeRootDir?: string;
   projects?: Project[];
@@ -36,6 +35,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   currentScreen,
   onNavigate,
+  openCount,
   criticalCount,
   activeRepo = 'algotyrnt/triage',
   activeRootDir = '',
@@ -44,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onLogout,
 }) => {
+  const displayOpenCount = openCount !== undefined ? openCount : criticalCount || 0;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [switcherSearch, setSwitcherSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -71,19 +72,9 @@ export const Header: React.FC<HeaderProps> = ({
       icon: <Terminal className="w-3.5 h-3.5" />,
     },
     {
-      id: 'ast',
-      label: 'AST Explorer',
-      icon: <Code2 className="w-3.5 h-3.5" />,
-    },
-    {
       id: 'team',
       label: 'Team',
       icon: <Users className="w-3.5 h-3.5" />,
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      icon: <Activity className="w-3.5 h-3.5" />,
     },
     {
       id: 'settings',
@@ -308,9 +299,9 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <span className={isActive ? 'text-black' : 'text-slate-400'}>{item.icon}</span>
               <span>{item.label}</span>
-              {item.id === 'dashboard' && criticalCount > 0 && (
+              {item.id === 'dashboard' && displayOpenCount > 0 && (
                 <span className="bg-red-600 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full ml-1 font-bold">
-                  {criticalCount}
+                  {displayOpenCount}
                 </span>
               )}
             </button>

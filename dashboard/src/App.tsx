@@ -12,9 +12,7 @@ import { OnboardingPage } from '@/components/screens/OnboardingPage';
 import { ProjectsPage } from '@/components/screens/ProjectsPage';
 import { DashboardPage } from '@/components/screens/DashboardPage';
 import { IncidentDetailPage } from '@/components/screens/IncidentDetailPage';
-import { AstExplorerPage } from '@/components/screens/AstExplorerPage';
 import { TeamPage } from '@/components/screens/TeamPage';
-import { SystemStatusPage } from '@/components/screens/SystemStatusPage';
 import { SettingsPage } from '@/components/screens/SettingsPage';
 import { SetupWizardPage } from '@/components/screens/SetupWizardPage';
 
@@ -285,7 +283,60 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     setTimeout(() => setToast(null), 4000);
   };
 
-  const criticalCount = incidents.filter((i) => i.status === 'OPEN').length;
+  const activeServiceIncidents = React.useMemo(() => {
+    const cleanRepo = activeRepo.toLowerCase();
+    const cleanRoot = (activeRootDir || '').toLowerCase();
+    const activeProject =
+      projects.find((p) => {
+        const slug = `${p.owner}/${p.repo}`.toLowerCase();
+        const pRoot = (p.root_dir || '').toLowerCase();
+        return (slug === cleanRepo || p.repo.toLowerCase() === cleanRepo) && pRoot === cleanRoot;
+      }) ||
+      projects.find((p) => {
+        const slug = `${p.owner}/${p.repo}`.toLowerCase();
+        return slug === cleanRepo || p.repo.toLowerCase() === cleanRepo;
+      });
+
+    const cleanActiveRepo = activeRepo.toLowerCase();
+    const activeRepoName = cleanActiveRepo.includes('/')
+      ? cleanActiveRepo.split('/')[1]
+      : cleanActiveRepo;
+    const cleanRootDir = (activeRootDir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+
+    return incidents.filter((incident) => {
+      if (activeProject?.id && incident.repositoryId) {
+        return incident.repositoryId === activeProject.id;
+      }
+      if (incident.repositoryId && projects.length > 0) {
+        const matchedProj = projects.find((p) => p.id === incident.repositoryId);
+        if (matchedProj) {
+          const projSlug = `${matchedProj.owner}/${matchedProj.repo}`.toLowerCase();
+          const projRoot = (matchedProj.root_dir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+          const repoMatches =
+            projSlug === cleanActiveRepo ||
+            matchedProj.repo.toLowerCase() === cleanActiveRepo ||
+            matchedProj.repo.toLowerCase() === activeRepoName;
+          const rootMatches = projRoot === cleanRootDir;
+          return repoMatches && rootMatches;
+        }
+      }
+      if (incident.repositoryName) {
+        const incRepo = incident.repositoryName.toLowerCase();
+        if (incRepo !== cleanActiveRepo && incRepo !== activeRepoName) return false;
+      }
+      if (cleanRootDir) {
+        const trigFile = (incident.triggeringFile || incident.astSnippet?.file || '').toLowerCase();
+        if (trigFile && !trigFile.startsWith(cleanRootDir + '/') && trigFile !== cleanRootDir) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [incidents, projects, activeRepo, activeRootDir]);
+
+  const activeServiceOpenCount = React.useMemo(() => {
+    return activeServiceIncidents.filter((i) => i.status === 'OPEN').length;
+  }, [activeServiceIncidents]);
 
   const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
@@ -414,7 +465,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         <Header
           currentScreen={currentScreen}
           onNavigate={navigate}
-          criticalCount={criticalCount}
+          openCount={activeServiceOpenCount}
           activeRepo={activeRepo}
           activeRootDir={activeRootDir}
           projects={projects}
@@ -474,6 +525,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                 activeRepo={activeRepo}
                 rootDir={activeRootDir}
                 apiKey={activeApiKey}
+                projects={projects}
                 onSelectIncident={(id) => {
                   setSelectedIncidentId(id);
                   navigate('incident_detail');
@@ -485,7 +537,9 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               (selectedIncident ? (
                 <IncidentDetailPage
                   incident={selectedIncident}
-                  allIncidents={incidents}
+                  allIncidents={
+                    activeServiceIncidents.length > 0 ? activeServiceIncidents : [selectedIncident]
+                  }
                   onSelectIncident={(id) => setSelectedIncidentId(id)}
                   onIncidentUpdated={(updated) =>
                     setIncidents((prev) =>
@@ -503,18 +557,8 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                 </div>
               ))}
 
-            {currentScreen === 'ast' && (
-              <AstExplorerPage
-                onNavigate={navigate}
-                activeRepo={activeRepo}
-                activeRootDir={activeRootDir}
-              />
-            )}
             {currentScreen === 'team' && (
               <TeamPage currentUser={currentUser} onNavigate={navigate} />
-            )}
-            {currentScreen === 'status' && (
-              <SystemStatusPage onNavigate={navigate} health={[]} metrics={[]} />
             )}
             {currentScreen === 'settings' && (
               <SettingsPage
