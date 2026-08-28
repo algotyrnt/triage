@@ -80,7 +80,7 @@ function sanitizeData(data: any, seen = new WeakSet()): any {
 }
 
 class Logger {
-  private isProduction = process.env.NODE_ENV === 'production';
+  private isProduction = import.meta.env?.PROD ?? false;
 
   debug(message: string, ...args: any[]) {
     if (this.isProduction) return;

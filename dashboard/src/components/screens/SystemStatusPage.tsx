@@ -76,15 +76,15 @@ export const SystemStatusPage: React.FC<SystemStatusPageProps> = ({
       ? initialHealth
       : [
           {
-            name: 'Core Engine & Ingress Worker',
-            service: `triage-engine (${engineVersion})`,
+            name: 'Core Server & Ingress Worker',
+            service: `triage (${engineVersion})`,
             status: 'OPERATIONAL',
             latency: '12ms',
             detail: 'Handling zero-overhead crash telemetry and OpenTelemetry trace propagation.',
           },
           {
-            name: 'PostgreSQL Database & AST Nodes',
-            service: 'postgres-16 (pgxpool)',
+            name: 'Database & AST Storage',
+            service: dbStatus === 'connected' ? 'embedded-sqlite / postgres' : 'unconnected',
             status: dbStatus === 'connected' ? 'OPERATIONAL' : 'DEGRADED',
             latency: '4ms',
             detail: `${totalIndexedFuncs.toLocaleString()} AST function symbols indexed in persistent storage.`,

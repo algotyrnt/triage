@@ -46,12 +46,6 @@ function resolveDefaultBaseUrl(providedUrl?: string): string {
       : `${providedUrl.replace(/\/$/, '')}/api/v1`;
   }
 
-  const envUrl = (typeof process !== 'undefined' && process.env.TRIAGE_ENGINE_URL) || '';
-
-  if (envUrl && envUrl !== 'undefined' && !envUrl.startsWith('undefined')) {
-    return envUrl.endsWith('/api/v1') ? envUrl : `${envUrl.replace(/\/$/, '')}/api/v1`;
-  }
-
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('triage_engine_url');
@@ -60,11 +54,11 @@ function resolveDefaultBaseUrl(providedUrl?: string): string {
       }
     } catch {}
 
-    const hostname = window.location.hostname || 'localhost';
-    return `${window.location.protocol}//${hostname}:8080/api/v1`;
+    // In browser (embedded in Go engine or via Vite proxy), relative '/api/v1' works natively
+    return '/api/v1';
   }
 
-  return 'http://localhost:8080/api/v1';
+  return '/api/v1';
 }
 
 export class EngineClient {
