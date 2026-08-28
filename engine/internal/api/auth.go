@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"triage/engine/internal/config"
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
 
@@ -36,11 +37,14 @@ type UserClaims struct {
 
 // GenerateUserJWT issues a standard signed JWT for an authenticated user.
 func GenerateUserJWT(user *db.User, secret string) (string, error) {
-	if secret == "" {
-		secret = "dev-secret-change-me-in-production"
+	if secret == "" || secret == config.InsecureDefaultSecret || len(secret) < 32 {
+		return "", fmt.Errorf("insecure or missing JWT signing secret")
+	}
+	if user == nil {
+		return "", fmt.Errorf("user cannot be nil")
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	claims := UserClaims{
 		UserID:    user.ID,
 		GitHubID:  user.GitHubID,
@@ -62,8 +66,11 @@ func GenerateUserJWT(user *db.User, secret string) (string, error) {
 
 // ParseAndVerifyUserJWT validates the token signature and returns the user claims.
 func ParseAndVerifyUserJWT(tokenString, secret string) (*UserClaims, error) {
-	if secret == "" {
-		secret = "dev-secret-change-me-in-production"
+	if secret == "" || secret == config.InsecureDefaultSecret || len(secret) < 32 {
+		return nil, fmt.Errorf("insecure or missing JWT verification secret")
+	}
+	if strings.TrimSpace(tokenString) == "" {
+		return nil, fmt.Errorf("missing token")
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(t *jwt.Token) (interface{}, error) {
@@ -84,13 +91,17 @@ func ParseAndVerifyUserJWT(tokenString, secret string) (*UserClaims, error) {
 	return nil, fmt.Errorf("invalid token claims")
 }
 
-func (s *Server) getSessionSecret(ctx context.Context) string {
+func (s *Server) getSessionSecret(ctx context.Context) (string, error) {
+	if s.configStore != nil {
+		return s.configStore.GetSessionSecret(ctx)
+	}
 	if s.db != nil && ctx != nil {
-		if secret, _ := s.db.GetInstanceConfig(ctx, "session_secret"); secret != "" {
-			return secret
+		secret, err := s.db.GetInstanceConfig(ctx, config.KeySessionSecret)
+		if err == nil && secret != "" && secret != config.InsecureDefaultSecret && len(secret) >= 32 {
+			return secret, nil
 		}
 	}
-	return "dev-secret-change-me-in-production"
+	return "", fmt.Errorf("session signing secret unconfigured or insecure")
 }
 
 // HandleAuthGitHub starts the secure GitHub OAuth login flow.
@@ -99,14 +110,8 @@ func (s *Server) HandleAuthGitHub(w http.ResponseWriter, r *http.Request) {
 	engineURL := s.ResolveEngineURL(r)
 
 	clientID := ""
-	if s.db != nil {
-		clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
-		if clientID == "" {
-			clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_app_client_id")
-		}
-		if clientID == "" {
-			clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_client_id")
-		}
+	if s.configStore != nil {
+		clientID, _ = s.configStore.GetGitHubOAuth(r.Context())
 	}
 
 	if clientID == "" {
@@ -173,22 +178,8 @@ func (s *Server) HandleAuthGitHubCallback(w http.ResponseWriter, r *http.Request
 
 	clientID := ""
 	clientSecret := ""
-	if s.db != nil {
-		clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_id")
-		if clientID == "" {
-			clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_app_client_id")
-		}
-		if clientID == "" {
-			clientID, _ = s.db.GetInstanceConfig(r.Context(), "github_client_id")
-		}
-
-		clientSecret, _ = s.db.GetInstanceConfig(r.Context(), "github_oauth_client_secret")
-		if clientSecret == "" {
-			clientSecret, _ = s.db.GetInstanceConfig(r.Context(), "github_app_client_secret")
-		}
-		if clientSecret == "" {
-			clientSecret, _ = s.db.GetInstanceConfig(r.Context(), "github_client_secret")
-		}
+	if s.configStore != nil {
+		clientID, clientSecret = s.configStore.GetGitHubOAuth(r.Context())
 	}
 
 	if clientID == "" || clientSecret == "" {
@@ -286,7 +277,13 @@ func (s *Server) HandleAuthGitHubCallback(w http.ResponseWriter, r *http.Request
 	}
 
 	// Issue signed session JWT
-	jwtSecret := s.getSessionSecret(r.Context())
+	jwtSecret, err := s.getSessionSecret(r.Context())
+	if err != nil {
+		slog.Error("failed to obtain session signing secret", "error", err)
+		http.Redirect(w, r, targetAppURL+"?auth=error&reason=secret_unavailable", http.StatusFound)
+		return
+	}
+
 	sessionToken, err := GenerateUserJWT(userRecord, jwtSecret)
 	if err != nil {
 		slog.Error("failed to generate session JWT", "error", err)
@@ -296,8 +293,44 @@ func (s *Server) HandleAuthGitHubCallback(w http.ResponseWriter, r *http.Request
 
 	slog.Info("user authenticated successfully", "username", userRecord.Username, "role", userRecord.Role)
 
-	// Redirect back to Dashboard with token
-	http.Redirect(w, r, targetAppURL+"?token="+url.QueryEscape(sessionToken)+"&auth=success", http.StatusFound)
+	// Issue secure HttpOnly session cookie (SEC-003)
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	http.SetCookie(w, &http.Cookie{
+		Name:     "triage_session",
+		Value:    sessionToken,
+		Path:     "/",
+		MaxAge:   30 * 24 * 3600, // 30-day session
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Redirect back to Dashboard with clean URL (no token in query string)
+	http.Redirect(w, r, targetAppURL+"?auth=success", http.StatusFound)
+}
+
+// HandleAuthLogout invalidates the active session cookie.
+func (s *Server) HandleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	http.SetCookie(w, &http.Cookie{
+		Name:     "triage_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"message": "logged out successfully",
+	})
 }
 
 // HandleAuthMe returns the profile and active role of the authenticated caller.
@@ -307,17 +340,9 @@ func (s *Server) HandleAuthMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-	if tokenStr == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	jwtSecret := s.getSessionSecret(r.Context())
-	claims, err := ParseAndVerifyUserJWT(tokenStr, jwtSecret)
-	if err != nil {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
+	claims := s.getUserClaims(r)
+	if claims == nil {
+		http.Error(w, `{"error":"Unauthorized: Authentication required"}`, http.StatusUnauthorized)
 		return
 	}
 
