@@ -1,14 +1,7 @@
 node_modules
 dist
-dist-bin
-bin
-data
 .astro
 build
 out
-vendor
-.git
-.gemini
 *.tsbuildinfo
-coverage*
 bun.lock

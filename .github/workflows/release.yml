@@ -20,8 +20,9 @@ jobs:
           fetch-depth: 0
 
       - name: Create and Push Go SDK Tag
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          TAG="${{ github.ref_name }}"
           SDK_TAG="sdk/go/${TAG}"
           echo "Processing SDK Tag: $SDK_TAG"
 
@@ -36,27 +37,53 @@ jobs:
           fi
 
       - name: Warm Go Proxy & pkg.go.dev Cache
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          TAG="${{ github.ref_name }}"
           echo "Waiting for upstream ref propagation..."
           sleep 5
           echo "Warming Go module cache for github.com/${{ github.repository }}/sdk/go@$TAG"
           curl -s -f "https://proxy.golang.org/github.com/${{ github.repository }}/sdk/go/@v/${TAG}.info" || true
 
-  docker:
-    name: docker (${{ matrix.image.name }})
+  binaries:
+    name: Build Release Binaries
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image:
-          - name: engine
-            context: ./apps/engine
-            file: ./apps/engine/Dockerfile
-            arg: VERSION
-          - name: dashboard
-            context: ./apps/dashboard
-            file: ./apps/dashboard/Dockerfile
-            arg: APP_VERSION
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          check-latest: false
+          cache: true
+          cache-dependency-path: engine/go.sum
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Dashboard Dependencies
+        working-directory: dashboard
+        run: bun install --frozen-lockfile
+
+      - name: Package Cross-Platform Binaries
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make package VERSION="$VERSION"
+
+      - name: Upload Binaries Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: dist-bin/*
+          retention-days: 1
+
+  docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -78,25 +105,27 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}-${{ matrix.image.name }}
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            latest=auto
           tags: |
-            type=raw,value=${{ github.ref_name }}
-            type=semver,pattern=v{{version}}
-            type=raw,value=latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and Push Multi-Arch Docker Image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.image.context }}
-          file: ${{ matrix.image.file }}
+          context: .
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            ${{ matrix.image.arg }}=${{ github.ref_name }}
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+          cache-from: type=gha,scope=triage
+          cache-to: type=gha,mode=max,scope=triage
 
   web:
     name: Build & Deploy Web
@@ -111,14 +140,17 @@ jobs:
           bun-version: latest
 
       - name: Install Web Dependencies
-        working-directory: apps/web
+        working-directory: web
         run: bun install --frozen-lockfile
 
       - name: Build Astro Web Application
-        run: make build-web VERSION=${{ github.ref_name }}
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make build-web VERSION="$VERSION"
 
       - name: Deploy Web to Cloudflare Pages
-        working-directory: apps/web
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        working-directory: web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -126,11 +158,17 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    needs: [sdk, docker, web]
+    needs: [sdk, binaries, docker, web]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Download Release Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: dist-bin
 
       - name: Create Draft Release & Upload Assets
         uses: softprops/action-gh-release@v2
@@ -141,27 +179,36 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') }}
           generate_release_notes: true
           files: |
-            docker-compose.prod.yml
+            dist-bin/*
           body: |
             ## Triage ${{ github.ref_name }}
 
-            ### Quick Installation
+            ### Server Deployment
 
-            #### Go SDK
+            #### Docker (Preferred & Recommended)
+            Run the official multi-architecture single-container image with embedded SQLite storage and studio dashboard:
+            ```bash
+            docker run -d \
+              --name triage \
+              -p 8080:8080 \
+              -v triage_data:/data \
+              ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            #### Standalone Binary (Alternative)
+            Download the pre-compiled binary for your architecture from the release assets below, extract it, and run:
+            ```bash
+            ./triage --port=8080 --data-dir=./data
+            ```
+
+            ---
+
+            ### Go SDK Middleware
+
+            Add the official panic recovery middleware to your Go service:
             ```bash
             go get github.com/${{ github.repository }}/sdk/go@${{ github.ref_name }}
             ```
-
-            #### Self-Hosting with Docker Compose
-            ```bash
-            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/docker-compose.prod.yml" -o docker-compose.prod.yml
-
-            POSTGRES_PASSWORD=your_secure_password docker compose -f docker-compose.prod.yml up -d
-            ```
-
-            #### Pre-built Docker Images
-            - **Engine**: `docker pull ghcr.io/${{ github.repository }}-engine:${{ github.ref_name }}`
-            - **Dashboard**: `docker pull ghcr.io/${{ github.repository }}-dashboard:${{ github.ref_name }}`
 
       - name: Publish Release
         env:

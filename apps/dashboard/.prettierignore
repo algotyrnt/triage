@@ -1,8 +1,0 @@
-node_modules
-.next
-dist
-out
-build
-*.tsbuildinfo
-next-env.d.ts
-

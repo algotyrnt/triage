@@ -13,6 +13,7 @@ SHELL := /usr/bin/env bash
 # Configuration & Metadata
 # ------------------------------------------------------------------------------
 BIN_DIR         := bin
+DIST_DIR        := dist-bin
 REPO            := github.com/algotyrnt/triage
 RELEASE_BRANCH  ?= main
 ALLOW_DIRTY     ?= 0
@@ -32,9 +33,8 @@ DOCKER          ?= docker
 # Go Build Flags
 LDFLAGS         := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(BUILD_DATE)
 
-# Docker Images
-DOCKER_ENGINE_IMAGE    ?= ghcr.io/algotyrnt/triage-engine
-DOCKER_DASHBOARD_IMAGE ?= ghcr.io/algotyrnt/triage-dashboard
+# Docker Image
+DOCKER_IMAGE    ?= ghcr.io/algotyrnt/triage
 
 # Colors for terminal output
 COLOR_RESET   := \033[0m
@@ -65,7 +65,7 @@ help: ## Show this help message
 			else if (target ~ /^build/) { category = "Build Artifacts"; } \
 			else if (target ~ /^test/) { category = "Testing & QA"; } \
 			else if (target ~ /^(lint|format|fmt|check)/) { category = "Testing & QA"; } \
-			else if (target ~ /^(docker|up|down|logs|prod-up)/) { category = "Docker & Containers"; } \
+			else if (target ~ /^(docker|up|down|logs|prod-up|run|stop)/) { category = "Docker & Containers"; } \
 			else if (target ~ /^(dev|install|deps)/) { category = "Development"; } \
 			else if (target ~ /^clean/) { category = "Utilities"; } \
 			else { category = "General"; } \
@@ -170,7 +170,7 @@ release: check-git-branch check-git-clean check-version-var ## Execute full rele
 	@printf "$(COLOR_YELLOW)[3/3] Pushing tags to remote...$(COLOR_RESET)\n"
 	@$(MAKE) push-tags VERSION=$(VERSION)
 	@printf "\n$(COLOR_BOLD)$(COLOR_GREEN)Release $(VERSION) successfully published!$(COLOR_RESET)\n"
-	@printf "GitHub Actions release pipeline will now build containers and publish the GitHub Release.\n"
+	@printf "GitHub Actions release pipeline will now build containers, cross-compile binaries, and publish the GitHub Release.\n"
 
 .PHONY: release-patch
 release-patch: ## Bump patch version and trigger release (e.g. v0.1.0 -> v0.1.1)
@@ -204,8 +204,9 @@ test: test-engine test-sdk ## Run all Go test suites
 
 .PHONY: test-engine
 test-engine: ## Run Engine unit tests
-	@printf "$(COLOR_CYAN)==> Testing Engine (apps/engine)...$(COLOR_RESET)\n"
-	@cd apps/engine && $(GO) test -v ./...
+	@printf "$(COLOR_CYAN)==> Testing Engine (engine)...$(COLOR_RESET)\n"
+	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
+	@cd engine && $(GO) test -v ./...
 
 .PHONY: test-sdk
 test-sdk: ## Run Go SDK unit tests
@@ -215,7 +216,7 @@ test-sdk: ## Run Go SDK unit tests
 .PHONY: test-coverage
 test-coverage: ## Run tests with code coverage report
 	@printf "$(COLOR_CYAN)==> Running Go tests with coverage profiling...$(COLOR_RESET)\n"
-	@cd apps/engine && $(GO) test -coverprofile=../../coverage-engine.out ./...
+	@cd engine && $(GO) test -coverprofile=../coverage-engine.out ./...
 	@cd sdk/go && $(GO) test -coverprofile=../../coverage-sdk.out ./...
 	@echo "mode: set" > coverage.out
 	@grep -h -v "^mode:" coverage-engine.out coverage-sdk.out >> coverage.out 2>/dev/null || true
@@ -234,13 +235,14 @@ lint-go: lint-engine lint-sdk ## Verify all Go formatting and static analysis
 .PHONY: lint-engine
 lint-engine: ## Verify Engine formatting and vet
 	@printf "$(COLOR_CYAN)==> Checking Engine formatting and vet...$(COLOR_RESET)\n"
-	@UNFORMATTED=$$(gofmt -l apps/engine); \
+	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
+	@UNFORMATTED=$$(gofmt -l engine); \
 	if [ -n "$$UNFORMATTED" ]; then \
-		printf "$(COLOR_RED)[ERROR] Unformatted Go files in apps/engine:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
+		printf "$(COLOR_RED)[ERROR] Unformatted Go files in engine:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
 		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
 		exit 1; \
 	fi
-	@cd apps/engine && $(GO) vet ./...
+	@cd engine && $(GO) vet ./...
 
 .PHONY: lint-sdk
 lint-sdk: ## Verify Go SDK formatting and vet
@@ -256,12 +258,12 @@ lint-sdk: ## Verify Go SDK formatting and vet
 .PHONY: lint-web
 lint-web: ## Check Astro web formatting
 	@printf "$(COLOR_CYAN)==> Checking Web formatting...$(COLOR_RESET)\n"
-	@cd apps/web && $(BUN) run format:check
+	@cd web && $(BUN) run format:check
 
 .PHONY: lint-dashboard
-lint-dashboard: ## Check Next.js dashboard formatting
+lint-dashboard: ## Check Vite dashboard formatting
 	@printf "$(COLOR_CYAN)==> Checking Dashboard formatting...$(COLOR_RESET)\n"
-	@cd apps/dashboard && $(BUN) run format:check
+	@cd dashboard && $(BUN) run format:check
 
 .PHONY: format fmt
 format: format-go format-web format-dashboard ## Auto-format all Go, Web, and Dashboard code
@@ -277,27 +279,35 @@ format-go: ## Auto-format Go code with gofmt
 .PHONY: format-web
 format-web: ## Auto-format Astro web code
 	@printf "$(COLOR_CYAN)==> Formatting Web files...$(COLOR_RESET)\n"
-	@cd apps/web && $(BUN) run format
+	@cd web && $(BUN) run format
 
 .PHONY: format-dashboard
-format-dashboard: ## Auto-format Next.js dashboard code
+format-dashboard: ## Auto-format Vite dashboard code
 	@printf "$(COLOR_CYAN)==> Formatting Dashboard files...$(COLOR_RESET)\n"
-	@cd apps/dashboard && $(BUN) run format
+	@cd dashboard && $(BUN) run format
 
 # ==============================================================================
 # Build Targets
 # ==============================================================================
 
 .PHONY: build
-build: build-engine build-sdk build-web build-dashboard ## Build all components
+build: build-dashboard build-triage build-sdk build-web ## Build all components
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> All components built successfully!$(COLOR_RESET)\n"
 
-.PHONY: build-engine
-build-engine: ## Compile Engine server binary to bin/engine-server
-	@printf "$(COLOR_CYAN)==> Building Engine binary ($(VERSION))...$(COLOR_RESET)\n"
+.PHONY: build-dashboard
+build-dashboard: ## Build Vite Studio Dashboard into Engine embed directory
+	@printf "$(COLOR_CYAN)==> Building Vite Dashboard ($(VERSION))...$(COLOR_RESET)\n"
+	@cd dashboard && $(BUN) run build
+
+.PHONY: build-triage build-engine
+build-triage: ## Compile Triage server binary to bin/triage
+	@printf "$(COLOR_CYAN)==> Building Triage binary ($(VERSION))...$(COLOR_RESET)\n"
 	@mkdir -p $(BIN_DIR)
-	@cd apps/engine && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../../$(BIN_DIR)/engine-server main.go
-	@printf "$(COLOR_GREEN)Built $(BIN_DIR)/engine-server$(COLOR_RESET)\n"
+	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
+	@cd engine && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../$(BIN_DIR)/triage main.go
+	@printf "$(COLOR_GREEN)Built $(BIN_DIR)/triage$(COLOR_RESET)\n"
+
+build-engine: build-triage
 
 .PHONY: build-sdk
 build-sdk: ## Build & verify Go SDK
@@ -307,72 +317,68 @@ build-sdk: ## Build & verify Go SDK
 .PHONY: build-web
 build-web: ## Build Astro web documentation & landing page
 	@printf "$(COLOR_CYAN)==> Building Astro Web bundle ($(VERSION))...$(COLOR_RESET)\n"
-	@cd apps/web && PUBLIC_TRIAGE_VERSION=$(VERSION) $(BUN) run build
+	@cd web && PUBLIC_TRIAGE_VERSION=$(VERSION) $(BUN) run build
 
-.PHONY: deploy-web
-deploy-web: build-web ## Deploy Astro web site to Cloudflare via Wrangler
-	@printf "$(COLOR_CYAN)==> Deploying Web to Cloudflare...$(COLOR_RESET)\n"
-	@cd apps/web && $(BUN) x wrangler deploy
-
-.PHONY: build-dashboard
-build-dashboard: ## Build Next.js Studio Dashboard
-	@printf "$(COLOR_CYAN)==> Building Next.js Dashboard ($(VERSION))...$(COLOR_RESET)\n"
-	@cd apps/dashboard && NEXT_PUBLIC_TRIAGE_VERSION=$(VERSION) $(BUN) run build
+.PHONY: package
+package: build-dashboard ## Cross-compile release binaries for Linux, macOS, and Windows
+	@printf "$(COLOR_CYAN)==> Packaging cross-platform release binaries ($(VERSION))...$(COLOR_RESET)\n"
+	@rm -rf $(DIST_DIR) && mkdir -p $(DIST_DIR)
+	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do \
+		os=$${target%/*}; \
+		arch=$${target#*/}; \
+		ext=""; \
+		[ "$$os" = "windows" ] && ext=".exe"; \
+		output="$(DIST_DIR)/triage_$${os}_$${arch}$${ext}"; \
+		printf "  Building $${os}/$${arch} -> $${output}\n"; \
+		(cd engine && CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../$${output} main.go); \
+		if [ "$$os" = "windows" ]; then \
+			(cd $(DIST_DIR) && zip -q "triage_$(VERSION)_$${os}_$${arch}.zip" "triage_$${os}_$${arch}.exe" && rm "triage_$${os}_$${arch}.exe"); \
+		else \
+			(cd $(DIST_DIR) && tar -czf "triage_$(VERSION)_$${os}_$${arch}.tar.gz" "triage_$${os}_$${arch}" && rm "triage_$${os}_$${arch}"); \
+		fi; \
+	done
+	@cd $(DIST_DIR) && shasum -a 256 triage_* > checksums.txt
+	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Release packages and checksums generated in $(DIST_DIR)/$(COLOR_RESET)\n"
 
 # ==============================================================================
 # Docker & Containers
 # ==============================================================================
 
 .PHONY: docker-build
-docker-build: docker-build-engine docker-build-dashboard ## Build all Docker images locally
-
-.PHONY: docker-build-engine
-docker-build-engine: ## Build Engine Docker image
-	@printf "$(COLOR_CYAN)==> Building Engine Docker image ($(DOCKER_ENGINE_IMAGE):$(VERSION))...$(COLOR_RESET)\n"
+docker-build: ## Build unified Triage Docker image locally
+	@printf "$(COLOR_CYAN)==> Building Triage Docker image ($(DOCKER_IMAGE):$(VERSION))...$(COLOR_RESET)\n"
 	@$(DOCKER) build \
 		--build-arg VERSION=$(VERSION) \
-		-t $(DOCKER_ENGINE_IMAGE):$(VERSION) \
-		-t $(DOCKER_ENGINE_IMAGE):latest \
-		-f apps/engine/Dockerfile \
-		apps/engine
-	@printf "$(COLOR_GREEN)Engine Docker image built successfully.$(COLOR_RESET)\n"
+		-t $(DOCKER_IMAGE):$(VERSION) \
+		-t $(DOCKER_IMAGE):latest \
+		.
+	@printf "$(COLOR_GREEN)Triage Docker image built successfully.$(COLOR_RESET)\n"
 
-.PHONY: docker-build-dashboard
-docker-build-dashboard: ## Build Dashboard Docker image
-	@printf "$(COLOR_CYAN)==> Building Dashboard Docker image ($(DOCKER_DASHBOARD_IMAGE):$(VERSION))...$(COLOR_RESET)\n"
-	@$(DOCKER) build \
-		--build-arg APP_VERSION=$(VERSION) \
-		-t $(DOCKER_DASHBOARD_IMAGE):$(VERSION) \
-		-t $(DOCKER_DASHBOARD_IMAGE):latest \
-		-f apps/dashboard/Dockerfile \
-		apps/dashboard
-	@printf "$(COLOR_GREEN)Dashboard Docker image built successfully.$(COLOR_RESET)\n"
+.PHONY: docker-run run
+docker-run: ## Run Triage in a single Docker container
+	@printf "$(COLOR_CYAN)==> Starting Triage container on :8080...$(COLOR_RESET)\n"
+	@$(DOCKER) run -d --rm \
+		--name triage \
+		-p 8080:8080 \
+		-v triage_data:/data \
+		$(DOCKER_IMAGE):latest
+	@printf "$(COLOR_GREEN)Triage running at http://localhost:8080$(COLOR_RESET)\n"
 
-.PHONY: up docker-up
-up: ## Start local dev stack with Docker Compose
-	@printf "$(COLOR_CYAN)==> Starting Triage local stack...$(COLOR_RESET)\n"
-	@$(DOCKER) compose up -d
-	@printf "$(COLOR_GREEN)Stack started! Dashboard: http://localhost:3000 | Engine: http://localhost:8080$(COLOR_RESET)\n"
+run: docker-run
 
-docker-up: up
+.PHONY: docker-stop stop
+docker-stop: ## Stop running Triage container
+	@printf "$(COLOR_CYAN)==> Stopping Triage container...$(COLOR_RESET)\n"
+	@$(DOCKER) stop triage 2>/dev/null || true
+	@printf "$(COLOR_GREEN)Triage container stopped.$(COLOR_RESET)\n"
 
-.PHONY: down docker-down
-down: ## Stop local dev stack with Docker Compose
-	@printf "$(COLOR_CYAN)==> Stopping Triage local stack...$(COLOR_RESET)\n"
-	@$(DOCKER) compose down
+stop: docker-stop
 
-docker-down: down
+.PHONY: docker-logs logs
+docker-logs: ## Follow Triage Docker container logs
+	@$(DOCKER) logs -f triage
 
-.PHONY: logs docker-logs
-logs: ## Follow Docker Compose logs
-	@$(DOCKER) compose logs -f
-
-docker-logs: logs
-
-.PHONY: prod-up
-prod-up: ## Start production stack from docker-compose.prod.yml
-	@printf "$(COLOR_CYAN)==> Starting Triage production stack...$(COLOR_RESET)\n"
-	POSTGRES_PASSWORD=$${POSTGRES_PASSWORD:-triage_secret_password} $(DOCKER) compose -f docker-compose.prod.yml up -d
+logs: docker-logs
 
 # ==============================================================================
 # Development & Setup
@@ -381,10 +387,10 @@ prod-up: ## Start production stack from docker-compose.prod.yml
 .PHONY: install deps
 install: ## Install all dependencies (Go modules & Bun packages)
 	@printf "$(COLOR_CYAN)==> Downloading Go modules and installing Bun packages...$(COLOR_RESET)\n"
-	@cd apps/engine && $(GO) mod download
+	@cd engine && $(GO) mod download
 	@cd sdk/go && $(GO) mod download
-	@cd apps/web && $(BUN) install && $(BUN) x astro sync
-	@cd apps/dashboard && $(BUN) install
+	@cd web && $(BUN) install && $(BUN) x astro sync
+	@cd dashboard && $(BUN) install
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Dependencies installed and types synchronized!$(COLOR_RESET)\n"
 
 deps: install
@@ -392,17 +398,17 @@ deps: install
 .PHONY: dev-engine
 dev-engine: ## Run Engine server locally with live logging
 	@printf "$(COLOR_CYAN)==> Starting Engine on :8080...$(COLOR_RESET)\n"
-	@cd apps/engine && $(GO) run main.go
+	@cd engine && $(GO) run main.go
 
 .PHONY: dev-dashboard
-dev-dashboard: ## Run Next.js Dashboard in development mode
+dev-dashboard: ## Run Vite Dashboard in development mode (proxying API to :8080)
 	@printf "$(COLOR_CYAN)==> Starting Dashboard on :3000...$(COLOR_RESET)\n"
-	@cd apps/dashboard && $(BUN) run dev
+	@cd dashboard && $(BUN) run dev
 
 .PHONY: dev-web
 dev-web: ## Run Astro Web & docs in development mode
 	@printf "$(COLOR_CYAN)==> Starting Astro Web on :4321...$(COLOR_RESET)\n"
-	@cd apps/web && $(BUN) run dev
+	@cd web && $(BUN) run dev
 
 # ==============================================================================
 # Utilities & Cleanup
@@ -411,8 +417,8 @@ dev-web: ## Run Astro Web & docs in development mode
 .PHONY: clean
 clean: ## Clean binaries, coverage reports, tarballs, and build artifacts
 	@printf "$(COLOR_CYAN)==> Cleaning build outputs...$(COLOR_RESET)\n"
-	@rm -rf $(BIN_DIR)
+	@rm -rf $(BIN_DIR) $(DIST_DIR)
 	@rm -rf coverage.out coverage.html coverage-engine.out coverage-sdk.out
-	@rm -rf apps/web/dist
-	@rm -rf apps/dashboard/.next
+	@rm -rf web/dist
+	@rm -rf engine/internal/ui/dist
 	@printf "$(COLOR_GREEN)Clean completed.$(COLOR_RESET)\n"

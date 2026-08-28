@@ -1,5 +1,6 @@
 # Binaries & build artifacts
 bin/
+dist-bin/
 *.exe
 *.exe~
 *.dll
@@ -9,6 +10,7 @@ bin/
 *.out
 *.prof
 *.tar.gz
+*.zip
 coverage.out
 coverage.html
 /vendor/
@@ -18,20 +20,28 @@ node_modules/
 .pnpm-store/
 .bun/
 
-# Framework outputs
-.next/
+# Framework & UI build outputs
 .astro/
-out/
 dist/
+web/dist/
+dashboard/dist/
+engine/internal/ui/dist/
 build/
 .vercel/
 *.tsbuildinfo
 
-# Secrets & environment
+# SQLite databases & runtime data
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Secrets & certificates
 .env
 .env.*
-!.env.example
-!**/.env.example
 *.pem
 *.key
 *.p12
