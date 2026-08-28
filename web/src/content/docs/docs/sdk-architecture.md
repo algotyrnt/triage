@@ -75,11 +75,17 @@ The SDK dispatches the following JSON payload to `POST /api/v1/telemetry`:
 }
 ```
 
-The Triage engine resolves `owner`, `repo`, and monorepo `root_dir` directly from the `api_key` in PostgreSQL, keeping the SDK payload minimal.
+The Triage server resolves `owner`, `repo`, and monorepo `root_dir` directly from the `api_key` in the embedded database, keeping the SDK payload minimal.
 
 ---
 
-## 4. Secret Sanitization
+## 4. Connection Pooling & Keep-Alive
+
+To minimize network overhead, the SDK utilizes a shared HTTP transport with persistent TCP keep-alive connections (`MaxIdleConns: 100`, `IdleConnTimeout: 90s`). This avoids repeated TLS negotiations and handshake latency on telemetry dispatch.
+
+---
+
+## 5. Secret Sanitization
 
 The SDK automatically sanitizes sensitive headers before transmitting stack traces:
 

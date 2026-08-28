@@ -99,7 +99,7 @@ Attempted to evaluate `req.Amount` on an uninitialized nil pointer (`*PaymentPay
 
 Allocate memory before access: `req := &PaymentPayload{}` and validate JSON decoding errors.
 
-- [ ] [**Generate Fix (PR)**](http://localhost:3000/?incident=INC-8094)
+- [ ] [**Generate Fix (PR)**](http://localhost:8080/?incident=INC-8094)
 
 ---
 

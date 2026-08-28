@@ -51,7 +51,7 @@ export const ArchitectureSection: React.FC = () => {
     {
       num: '05',
       title: 'GitHub Issues & PRs',
-      desc: 'Persists to PostgreSQL, streams live to Studio Dashboard, and automatically files GitHub issues or opens bugfix Pull Requests with verified patches.',
+      desc: 'Persists to embedded SQLite (WAL mode), streams live to Studio Dashboard, and automatically files GitHub issues or opens bugfix Pull Requests with verified patches.',
       badge: 'Automated PRs',
       icon: <GitPullRequest className="w-5 h-5 text-amber-600" />,
     },
@@ -141,7 +141,7 @@ export const ArchitectureSection: React.FC = () => {
 
             <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg">
               <div className="font-mono text-cyan-400 text-xs font-bold mb-1">
-                Tier 2: PostgreSQL
+                Tier 2: Embedded SQLite
               </div>
               <div className="text-2xl font-extrabold text-white mb-1">&lt; 5 ms</div>
               <p className="text-slate-400 text-xs leading-relaxed">

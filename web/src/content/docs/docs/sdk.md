@@ -45,7 +45,7 @@ func main() {
 
 The Triage SDK is designed with **zero client-side configuration boilerplate**. You only pass `apiKey` and `engineURL`:
 
-1. **Repository & Monorepo Subfolder Resolution:** When you register a repository in the Triage dashboard (even as a subfolder in a monorepo like `/backend` or `/apps/api`), your API key is uniquely bound to that project. The Triage engine looks up repository metadata automatically upon telemetry arrival.
+1. **Repository & Monorepo Subfolder Resolution:** When you register a repository in the Triage dashboard (even as a subfolder in a monorepo like `/backend` or `/engine`), your API key is uniquely bound to that project. The Triage engine looks up repository metadata automatically upon telemetry arrival.
 2. **Git Commit Detection:** The SDK automatically extracts the Git commit SHA from Go's embedded binary build info via `debug.ReadBuildInfo()`.
 3. **Trace Context Propagation:** The SDK automatically extracts or generates OpenTelemetry-compatible W3C `traceparent` headers (`00-<trace_id>-0000000000000001-01`) and `X-Triage-Trace-ID`.
 

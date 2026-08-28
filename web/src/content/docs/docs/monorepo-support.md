@@ -3,7 +3,7 @@ title: Monorepos & Multi-Module Architecture
 description: Guide on setting up Go monorepos, nested go.mod detection, root_dir path normalization, and service-scoped API keys
 ---
 
-Many modern Go engineering teams operate within a **monorepo**, where a single GitHub repository hosts multiple independent Go services (e.g. `services/order-service`, `apps/engine`, `workers/analytics`).
+Many modern Go engineering teams operate within a **monorepo**, where a single GitHub repository hosts multiple independent Go services (e.g. `services/order-service`, `services/payment-service`, `workers/analytics`).
 
 Triage provides native, first-class support for monorepos, automatically discovering submodules and normalizing file paths between Git commits and runtime stack traces.
 
@@ -47,7 +47,7 @@ When adding a new project through the Studio Dashboard Setup Wizard:
    - `Root (/)`
    - `services/auth/`
    - `services/payment/`
-   - `apps/engine/`
+   - `engine/`
 4. Select the specific service you want to track. Triage automatically sets the `root_dir` and provisions an isolated API key for that service.
 
 ---

@@ -3,37 +3,42 @@ title: 5-Minute Quickstart
 description: Get from installation to your first AI-diagnosed Go panic in under 5 minutes
 ---
 
-Follow this guide to spin up a local Triage stack and capture your first Go crash with AI diagnostics.
+Follow this guide to spin up a local Triage instance and capture your first Go crash with AI diagnostics.
 
 ## Prerequisites
 
 - **Go 1.26+**
-- **Docker & Docker Compose**
+- **Docker** (or run the standalone Go binary)
 - An API key for your preferred AI provider (**Google Gemini**, **OpenAI**, **Anthropic Claude**) or a local instance (**Ollama**, **vLLM**)
 
 ---
 
-## 1. Start the Triage Stack
+## 1. Start Triage
 
-Clone the repository and start the Docker Compose cluster:
+Run the official single-container Triage image (which includes the server, embedded SQLite database, and React Studio Dashboard):
+
+```bash
+docker run -d \
+  --name triage \
+  -p 8080:8080 \
+  -v triage_data:/data \
+  ghcr.io/algotyrnt/triage:latest
+```
+
+Alternatively, build and run from source:
 
 ```bash
 git clone https://github.com/algotyrnt/triage.git
 cd triage
-docker compose up --build -d
+make build
+./bin/triage
 ```
-
-This starts:
-
-- **`triage-db` (`:5432`)**: PostgreSQL 16 database.
-- **`triage-engine` (`:8080`)**: Core engine serving telemetry and REST APIs.
-- **`triage-dashboard` (`:3000`)**: Studio Dashboard UI.
 
 ---
 
 ## 2. Run the Setup Wizard
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. The initial setup wizard will guide you through:
+Open [http://localhost:8080](http://localhost:8080) in your browser. The initial setup wizard will guide you through:
 
 1. **GitHub App Manifest Creation** (One-click app registration).
 2. **Repository Installation** (Grant access to your Go repositories).
@@ -102,7 +107,7 @@ curl http://localhost:8081/crash
 
 Your HTTP client will receive a generic `500 Internal Server Error` without any sensitive internals exposed.
 
-Now switch back to your Studio Dashboard at **http://localhost:3000**:
+Now switch back to your Studio Dashboard at **http://localhost:8080**:
 
 1. You will see a new **CRITICAL** incident under your active project.
 2. The isolated `*ast.FuncDecl` code block will be highlighted along with resolved cross-file structs and constructors.

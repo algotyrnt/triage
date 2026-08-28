@@ -508,14 +508,14 @@ Returns the indexed Go symbol tree, packages, files, exported/internal functions
 **Query Parameters:**
 
 - `repo` _(required)_: Target repository slug (e.g. `myorg/payments-service` or `algotyrnt/triage`).
-- `root_dir` _(optional)_: Subdirectory path for monorepo Go modules (e.g. `apps/engine` or `backend`).
+- `root_dir` _(optional)_: Subdirectory path for monorepo Go modules (e.g. `engine` or `backend`).
 
 **Response (200 OK):**
 
 ```json
 {
   "repo": "algotyrnt/triage",
-  "root_dir": "apps/engine",
+  "root_dir": "engine",
   "packages": [
     {
       "name": "api",

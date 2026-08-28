@@ -25,7 +25,7 @@ Triage solves this by combining Go's official `go/parser` and `go/ast` packages 
               ▼
 2. 3-Tier Layered Cache Lookup
    ├── Tier 1: In-Memory KV Cache     (< 1.5ms)
-   ├── Tier 2: PostgreSQL ast_nodes   (< 5ms)
+   ├── Tier 2: Embedded SQLite ast_nodes (< 2ms)
    └── Tier 3: GitHub Contents API    (< 25ms)
               │
               ▼
@@ -152,7 +152,7 @@ In monorepos where Go backends live in subfolders (e.g. `backend`, `apps/api`), 
 Triage handles this transparently:
 
 1. **Path Normalization:** The engine normalizes candidate paths using the project's registered `root_dir`, ensuring files are accurately fetched from the GitHub Contents API without path mismatch.
-2. **Dual-Key AST Indexing:** When indexing monorepo AST nodes, Triage indexes both the repository-relative path and the module-relative path in PostgreSQL, guaranteeing $O(1)$ symbolication lookups regardless of how the runtime frame is formatted.
+2. **Dual-Key AST Indexing:** When indexing monorepo AST nodes, Triage indexes both the repository-relative path and the module-relative path in SQLite, guaranteeing $O(1)$ symbolication lookups regardless of how the runtime frame is formatted.
 
 ---
 
@@ -181,4 +181,4 @@ curl -X POST http://localhost:8080/api/v1/ast/index \
   }'
 ```
 
-This parses package directories once and stores rich multi-file AST context snippets in the `ast_nodes` PostgreSQL table for instant `< 5ms` lookups.
+This parses package directories once and stores rich multi-file AST context snippets in the `ast_nodes` table for instant `< 2ms` lookups.

@@ -46,7 +46,7 @@ Welcome to the **triage** technical documentation.
 
 <a href="/docs/self-hosting" class="doc-card">
   <strong>Self-Hosting & Docker</strong>
-  <span>Deploy the single-container Triage engine in your private VPC or cluster.</span>
+  <span>Deploy zero-dependency single-container Triage in your private VPC or cluster.</span>
 </a>
 
 <a href="/docs/development" class="doc-card">

@@ -138,6 +138,6 @@ curl -X POST http://localhost:8080/api/v1/llm/generate-patch \
 
 AI provider credentials, models, and custom endpoint URLs are managed dynamically through the Setup Wizard and Studio Dashboard (**Settings > AI Configuration**).
 
-- **Database-Backed:** Settings are stored securely in PostgreSQL (`instance_config` table).
+- **Database-Backed:** Settings are stored securely in the embedded database (`instance_config` table).
 - **Hot-Swappable:** You can switch providers (e.g. from Gemini to local Ollama or Claude) or update models on the fly without restarting the engine container.
 - **Connection Testing:** The built-in `/api/v1/settings/llm/test` endpoint lets you verify authentication and benchmark latency before saving changes.

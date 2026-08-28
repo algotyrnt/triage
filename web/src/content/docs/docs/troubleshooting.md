@@ -59,12 +59,12 @@ Browser console reports: `Access to fetch has been blocked by CORS policy: No 'A
 
 ### Cause
 
-The Triage Engine locks down CORS access strictly to your configured `instance_url` stored in PostgreSQL.
+The Triage Server locks down CORS access strictly to your configured `instance_url` stored in the database.
 
 ### Fix
 
 1. Open the Studio Dashboard **Settings** page.
-2. Verify that **Instance URL** matches your actual browser domain (e.g. `https://triage.yourcompany.com` or `http://localhost:3000`).
+2. Verify that **Instance URL** matches your actual browser domain (e.g. `https://triage.yourcompany.com` or `http://localhost:8080`).
 3. If running locally, loopback origins (`localhost`, `127.0.0.1`) are permitted by default.
 
 ---

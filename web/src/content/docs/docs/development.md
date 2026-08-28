@@ -7,9 +7,9 @@ Triage includes a centralized `Makefile` to streamline local development, multi-
 
 ## Prerequisites
 
-- **Go 1.26+** (Required for Engine and Go SDK)
+- **Go 1.26+** (Required for Server and Go SDK)
 - **Bun** (latest / 1.x+, used for Web & Dashboard build tooling)
-- **Docker & Docker Compose** (For local stack orchestration)
+- **Docker** (For single-container builds and local testing)
 - **Make** (`/usr/bin/make` on macOS / Linux)
 
 ---
@@ -28,7 +28,7 @@ make help
 
 ### 1. Install Dependencies
 
-Download Go modules and install frontend dependencies across the monorepo:
+Download Go modules and install frontend dependencies across the repository:
 
 ```bash
 make install
@@ -36,13 +36,13 @@ make install
 
 ### 2. Local Service Development
 
-Run individual services locally outside Docker with hot reloading and live logs:
+Run individual components locally outside Docker with hot reloading and live logs:
 
 ```bash
-# Start Go engine on :8080
+# Start Triage server (with embedded SQLite and API) on :8080
 make dev-engine
 
-# Start Studio Dashboard (Next.js) on :3000
+# Start Studio Dashboard (Vite + React 19 with hot reload proxying to :8080) on :3000
 make dev-dashboard
 
 # Start Documentation & Landing Page (Astro) on :4321
@@ -53,19 +53,22 @@ cd test-services/order-service
 TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
 ```
 
-### 3. Docker Compose Stack
+### 3. Single-Container Docker Workflow
 
-Manage the local Docker development cluster:
+Run and manage Triage in a single Docker container:
 
 ```bash
-# Start PostgreSQL, Engine, and Dashboard
-make up
+# Build the unified Docker image locally
+make docker-build
+
+# Run Triage in a container (listens on :8080 with volume triage_data:/data)
+make run
 
 # View container logs
 make logs
 
-# Stop the stack
-make down
+# Stop the container
+make stop
 ```
 
 ---
@@ -75,17 +78,17 @@ make down
 Run the comprehensive pre-flight verification gate before submitting Pull Requests:
 
 ```bash
-# Run linters, test suites, and application builds
+# Run linters, test suites, and component builds
 make check
 ```
 
 ### Individual Test Targets
 
 ```bash
-# Run all Go test suites (Engine + SDK)
+# Run all Go test suites (Server + SDK)
 make test
 
-# Run Engine tests
+# Run Server tests
 make test-engine
 
 # Run Go SDK tests
@@ -101,7 +104,7 @@ make test-coverage
 # Verify Go formatting, go vet, and Prettier checks
 make lint
 
-# Auto-format all Go, Astro, and Next.js code
+# Auto-format all Go, Astro, and Vite code
 make format
 ```
 
@@ -148,7 +151,7 @@ Local `make release`
   ▼
 GitHub Actions (`release.yml`)
   ├── Warms Go module proxy cache (pkg.go.dev indexing)
-  ├── Builds & pushes multi-arch Docker images to GHCR
+  ├── Builds & pushes multi-arch Docker image (ghcr.io/algotyrnt/triage)
   ├── Deploys documentation to Cloudflare Pages
   └── Publishes GitHub Release with automated notes and assets
 ```

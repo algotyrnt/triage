@@ -20,7 +20,7 @@ Browser (Studio Dashboard)               Triage Go Engine (:8080)               
           │                                         │── 6. Exchange code for access_token ─>│
           │                                         │<── 7. Access token + User Profile ───│
           │                                         │                                      │
-          │                                         ├── 8. Upsert user in PostgreSQL       │
+          │                                         ├── 8. Upsert user in the embedded database       │
           │                                         ├── 9. Determine RBAC Role Tier        │
           │                                         ├── 10. Issue 30-day signed HS256 JWT  │
           │<── 11. Redirect with ?token=<JWT> ──────│                                      │
@@ -30,7 +30,7 @@ Browser (Studio Dashboard)               Triage Go Engine (:8080)               
 
 ### Security Highlights
 
-- **Zero Frontend Secret Exposure:** The frontend is a 100% static Single Page Application (SPA). OAuth client secrets and credentials remain securely locked in PostgreSQL.
+- **Zero Frontend Secret Exposure:** The frontend is a 100% static Single Page Application (SPA). OAuth client secrets and credentials remain securely locked in the embedded database.
 - **Cryptographic CSRF Protection:** Authorization redirects set a random, short-lived, `HttpOnly` state nonce cookie validated during callback.
 - **Stateless 30-Day HS256 JWTs:** The Engine signs user sessions using the instance's 256-bit `session_secret`. Tokens are validated in microseconds on each API request.
 
@@ -80,7 +80,7 @@ Organization administrators (`Owner` and `Admin`) can invite additional develope
 
 ### Step 2: Automatic Invitation Claiming
 
-- The invitation is persisted in PostgreSQL under the `invitations` table.
+- The invitation is persisted in the embedded database under the `invitations` table.
 - When the invited user navigates to your Triage dashboard and clicks **Sign in with GitHub**, the Go Engine automatically matches their verified GitHub username against pending invitations.
 - The user account is provisioned with the pre-assigned role, and the invitation is consumed.
 
