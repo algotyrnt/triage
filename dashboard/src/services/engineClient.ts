@@ -448,6 +448,9 @@ export class EngineClient {
         method: 'POST',
         body: JSON.stringify(params),
       });
+      if (data?.success === false || data?.error) {
+        return { success: false, error: data?.error || 'Panic analysis failed' };
+      }
       return {
         success: true,
         rootCause: data.rootCause,
@@ -456,7 +459,7 @@ export class EngineClient {
         recommendedFix: data.recommendedFix,
       };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Panic analysis failed' };
     }
   }
 
@@ -473,9 +476,12 @@ export class EngineClient {
         method: 'POST',
         body: JSON.stringify(params),
       });
+      if (data?.success === false || data?.error || !data?.patch) {
+        return { success: false, error: data?.error || 'Failed to generate patch' };
+      }
       return { success: true, patch: data.patch };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to generate patch' };
     }
   }
 
@@ -487,13 +493,16 @@ export class EngineClient {
         method: 'POST',
         body: JSON.stringify({ incident_id: incidentId }),
       });
+      if (data?.success === false || data?.error || !data?.github_issue) {
+        return { success: false, error: data?.error || 'Failed to create GitHub issue' };
+      }
       return {
         success: true,
-        issue_number: data.github_issue?.number,
-        issue_url: data.github_issue?.html_url,
+        issue_number: data.github_issue.number,
+        issue_url: data.github_issue.html_url,
       };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to create GitHub issue' };
     }
   }
 
@@ -509,14 +518,17 @@ export class EngineClient {
         method: 'POST',
         body: JSON.stringify({ incident_id: params.incidentId, patch_code: params.patchCode }),
       });
+      if (data?.success === false || data?.error || !data?.pull_request) {
+        return { success: false, error: data?.error || 'Failed to create Pull Request' };
+      }
       return {
         success: true,
-        pr_number: data.pull_request?.number,
-        pr_url: data.pull_request?.html_url,
-        branch: data.pull_request?.branch,
+        pr_number: data.pull_request.number,
+        pr_url: data.pull_request.html_url,
+        branch: data.pull_request.branch,
       };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to create Pull Request' };
     }
   }
 
@@ -571,13 +583,19 @@ export class EngineClient {
           base_url: config.baseUrl || '',
         }),
       });
+      if (data?.success === false || data?.error) {
+        return {
+          success: false,
+          error: data.error || 'Connection test failed',
+        };
+      }
       return {
         success: true,
         latency_ms: data.latency_ms,
         provider: data.provider || config.provider,
       };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Connection test failed' };
     }
   }
 
@@ -627,9 +645,12 @@ export class EngineClient {
   async testSetupConnection(): Promise<{ success: boolean; app_name?: string; error?: string }> {
     try {
       const data = await this.request<any>('/setup/test', { method: 'POST', skipAuth: true });
+      if (data?.success === false || data?.error) {
+        return { success: false, error: data.error || 'Connection test failed' };
+      }
       return { success: true, app_name: data.app_name };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Connection test failed' };
     }
   }
 
@@ -673,13 +694,19 @@ export class EngineClient {
         }),
         skipAuth: true,
       });
+      if (data?.success === false || data?.error) {
+        return {
+          success: false,
+          error: data.error || 'Connection test failed',
+        };
+      }
       return {
         success: true,
         latency_ms: data.latency_ms,
         provider: data.provider || config.provider,
       };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Connection test failed' };
     }
   }
 
@@ -757,25 +784,31 @@ export class EngineClient {
 
   async updateMemberRole(id: string, role: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await this.request('/team/members/role', {
+      const data = await this.request<any>('/team/members/role', {
         method: 'PUT',
         body: JSON.stringify({ id, role }),
       });
+      if (data?.status !== 'success' && data?.success === false) {
+        return { success: false, error: data?.error || 'Failed to update role' };
+      }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to update role' };
     }
   }
 
   async removeMember(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await this.request('/team/members', {
+      const data = await this.request<any>('/team/members', {
         method: 'DELETE',
         params: { id },
       });
+      if (data?.status !== 'success' && data?.success === false) {
+        return { success: false, error: data?.error || 'Failed to remove member' };
+      }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to remove member' };
     }
   }
 
@@ -791,25 +824,31 @@ export class EngineClient {
     role: string,
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      await this.request('/team/invites', {
+      const data = await this.request<any>('/team/invites', {
         method: 'POST',
         body: JSON.stringify({ github_username: githubUsername, role }),
       });
+      if (data?.status !== 'created' && data?.success === false) {
+        return { success: false, error: data?.error || 'Failed to create invite' };
+      }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to create invite' };
     }
   }
 
   async cancelInvite(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      await this.request('/team/invites', {
+      const data = await this.request<any>('/team/invites', {
         method: 'DELETE',
         params: { id },
       });
+      if (data?.status !== 'success' && data?.success === false) {
+        return { success: false, error: data?.error || 'Failed to cancel invite' };
+      }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message };
+      return { success: false, error: err.message || 'Failed to cancel invite' };
     }
   }
 }
