@@ -23,6 +23,7 @@ node_modules/
 .astro/
 out/
 dist/
+!engine/internal/ui/dist/.gitkeep
 build/
 .vercel/
 *.tsbuildinfo
