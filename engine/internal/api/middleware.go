@@ -39,9 +39,12 @@ func (s *Server) resolveAllowedOrigin(ctx context.Context, r *http.Request) stri
 		configuredURL = s.configStore.GetInstanceURL(ctx)
 	}
 
-	// 1. Initial Setup mode: when instance_url is not yet stored in PostgreSQL, permit setup origin
+	// 1. Initial Setup mode: when instance_url is not yet configured, only permit localhost origins
 	if configuredURL == "" {
-		return origin
+		if isLocalhostOrigin(origin) {
+			return origin
+		}
+		return ""
 	}
 
 	// 2. Exact match with configured instance URL
@@ -118,19 +121,21 @@ func (s *Server) IsValidAPIKey(ctx context.Context, key string) bool {
 	return s.db.VerifyAPIKey(ctx, key)
 }
 
-// ExtractBearerOrAPIKey retrieves credentials from headers or query parameters.
+// ExtractBearerOrAPIKey retrieves credentials from headers or cookies.
 func ExtractBearerOrAPIKey(r *http.Request) string {
-	apiKey := r.Header.Get("X-Triage-API-Key")
-	if apiKey != "" {
-		return apiKey
+	if r == nil {
+		return ""
 	}
-	apiKey = r.URL.Query().Get("api_key")
+	apiKey := r.Header.Get("X-Triage-API-Key")
 	if apiKey != "" {
 		return apiKey
 	}
 	authHeader := r.Header.Get("Authorization")
 	if strings.HasPrefix(authHeader, "Bearer ") {
 		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	if cookie, err := r.Cookie("triage_session"); err == nil && cookie != nil && cookie.Value != "" {
+		return cookie.Value
 	}
 	return ""
 }
@@ -139,7 +144,7 @@ type contextKey string
 
 const userClaimsContextKey contextKey = "user_claims"
 
-// getUserClaims extracts the verified UserClaims from the request context, Authorization header, or URL query token.
+// getUserClaims extracts and verifies UserClaims from context, Authorization header, or session cookie.
 func (s *Server) getUserClaims(r *http.Request) *UserClaims {
 	if r == nil {
 		return nil
@@ -154,25 +159,47 @@ func (s *Server) getUserClaims(r *http.Request) *UserClaims {
 	authHeader := r.Header.Get("Authorization")
 	if strings.HasPrefix(authHeader, "Bearer ") {
 		tokenStr = strings.TrimPrefix(authHeader, "Bearer ")
-	} else if qToken := r.URL.Query().Get("token"); qToken != "" {
-		tokenStr = qToken
+	} else if cookie, err := r.Cookie("triage_session"); err == nil && cookie != nil && cookie.Value != "" {
+		tokenStr = cookie.Value
 	}
+	// Note: r.URL.Query().Get("token") is explicitly ignored (SEC-003).
 
 	if tokenStr != "" {
-		secret := s.getSessionSecret(r.Context())
-		if claims, err := ParseAndVerifyUserJWT(tokenStr, secret); err == nil {
-			return claims
+		secret, err := s.getSessionSecret(r.Context())
+		if err == nil && secret != "" {
+			if claims, err := ParseAndVerifyUserJWT(tokenStr, secret); err == nil {
+				return claims
+			}
 		}
 	}
 	return nil
 }
 
-// withAuth enforces that the request has a valid JWT session and optionally checks required RBAC roles.
-func (s *Server) withAuth(next http.HandlerFunc, requiredRoles ...string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+// public wraps a public endpoint with CORS, panic recovery, and logging.
+func (s *Server) public(next http.HandlerFunc) http.HandlerFunc {
+	return s.withMiddleware(next)
+}
+
+// withAuth enforces that the request has a valid JWT session or cookie.
+func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
+	return s.withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		claims := s.getUserClaims(r)
 		if claims == nil {
-			http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+			http.Error(w, `{"error":"Unauthorized: Authentication required"}`, http.StatusUnauthorized)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userClaimsContextKey, claims)
+		next(w, r.WithContext(ctx))
+	})
+}
+
+// withAuthRole enforces that the request has a valid JWT session and meets required RBAC roles.
+func (s *Server) withAuthRole(next http.HandlerFunc, requiredRoles ...string) http.HandlerFunc {
+	return s.withMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		claims := s.getUserClaims(r)
+		if claims == nil {
+			http.Error(w, `{"error":"Unauthorized: Authentication required"}`, http.StatusUnauthorized)
 			return
 		}
 
@@ -192,5 +219,5 @@ func (s *Server) withAuth(next http.HandlerFunc, requiredRoles ...string) http.H
 
 		ctx := context.WithValue(r.Context(), userClaimsContextKey, claims)
 		next(w, r.WithContext(ctx))
-	}
+	})
 }
