@@ -82,12 +82,6 @@ export class EngineClient {
   }
 
   getEventsStreamUrl(): string {
-    const token =
-      this.authToken ||
-      (typeof window !== 'undefined' ? localStorage.getItem('triage_session') : null);
-    if (token) {
-      return `${this.baseUrl}/events/stream?token=${encodeURIComponent(token)}`;
-    }
     return `${this.baseUrl}/events/stream`;
   }
 
@@ -797,6 +791,15 @@ export class EngineClient {
     } catch {
       return null;
     }
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await fetch(`${this.baseUrl}/auth/logout`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      });
+    } catch {}
   }
 
   async getTeamMembers(): Promise<any[]> {
