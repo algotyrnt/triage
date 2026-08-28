@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Incident, ScreenId, Project } from '@/types';
+import { Incident, IncidentStatus, ScreenId, Project } from '@/types';
 
 import { Header } from '@/components/Header';
 import { LoginPage } from '@/components/screens/LoginPage';
@@ -49,11 +49,6 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
 
   const navigate = (screen: ScreenId) => {
     setCurrentScreen(screen);
-    try {
-      if (screen !== 'login' && screen !== 'setup') {
-        sessionStorage.setItem('triage_active_screen', screen);
-      }
-    } catch {}
   };
 
   const mapIncidents = (rawIncidents: any[]): Incident[] => {
@@ -65,7 +60,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         repositoryId: item.repository_id || '',
         repositoryName: item.repository_name || '',
         title: item.title || item.panic_message || 'Runtime Go Panic',
-        status: item.status || 'CRITICAL',
+        status: (item.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN') as IncidentStatus,
         triggeringFile: item.file ? `${item.file}:${item.line || 1}` : 'unknown:0',
         triggeringLine: item.line || 1,
         latencyMs: item.latency_ms || 14,
@@ -78,7 +73,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         fingerprint: item.fingerprint || undefined,
         occurrenceCount: item.occurrence_count || 1,
         lastSeenAt: item.last_seen_at ? new Date(item.last_seen_at).toUTCString() : undefined,
-        severity: item.severity || 'CRITICAL',
+        severity: item.severity || undefined,
         aiProvider: item.ai_provider || undefined,
         aiModel: item.ai_model || undefined,
         panicMessage: item.panic_message || item.title || '',
@@ -87,7 +82,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
         githubPrUrl: item.github_pr_url || undefined,
         githubPrNumber: item.github_pr_number ? Number(item.github_pr_number) : undefined,
-        suggestedPatch: item.suggested_patch || item.suggested_fix || undefined,
+        suggestedPatch: item.suggested_patch || undefined,
         astSnippet: {
           functionName: item.function_name || 'main',
           file: item.file || '',
@@ -104,7 +99,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           ? {
               rootCause: item.root_cause,
               explanation: item.root_cause,
-              severity: item.severity || 'CRITICAL',
+              severity: item.severity || undefined,
               recommendedFix: item.suggested_fix || '',
             }
           : undefined,
@@ -176,19 +171,12 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           return;
         }
 
-        // Step 5: Authenticated — Determine target screen
-        let savedScreen: ScreenId | null = null;
-        try {
-          savedScreen = sessionStorage.getItem('triage_active_screen') as ScreenId | null;
-        } catch {}
-
+        // Step 5: Authenticated — Determine target screen (defaults to 'projects')
         let screenToOpen: ScreenId = 'projects';
         if (targetScreen) {
           screenToOpen = targetScreen;
         } else if (isInstalledRedirect) {
           screenToOpen = 'new';
-        } else if (savedScreen && savedScreen !== 'login' && savedScreen !== 'setup') {
-          screenToOpen = savedScreen;
         }
 
         // Step 6: Load projects & incidents
@@ -268,11 +256,17 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               });
               showToast(`New Panic Ingested: ${newInc.triggeringFile}`, 'error');
             }
-          } else if (raw.type === 'incident_updated' && raw.data) {
+          } else if (
+            (raw.type === 'incident_updated' || raw.type === 'incident_resolved') &&
+            raw.data
+          ) {
             const mapped = mapIncidents([raw.data]);
             if (mapped.length > 0) {
               const updated = mapped[0];
               setIncidents((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+              if (raw.type === 'incident_resolved' || updated.status === 'RESOLVED') {
+                showToast(`Incident Resolved: ${updated.triggeringFile}`, 'success');
+              }
             }
           }
         } catch {}
@@ -291,7 +285,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     setTimeout(() => setToast(null), 4000);
   };
 
-  const criticalCount = incidents.filter((i) => i.status === 'CRITICAL').length;
+  const criticalCount = incidents.filter((i) => i.status === 'OPEN').length;
 
   const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
@@ -301,9 +295,6 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
   const handleLogout = () => {
     engineClient.logout().catch(() => {});
     localStorage.removeItem('triage_session');
-    try {
-      sessionStorage.removeItem('triage_active_screen');
-    } catch {}
     engineClient.setAuthToken(null);
     setCurrentUser(null);
     setActiveRepo('');

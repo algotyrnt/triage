@@ -15,7 +15,7 @@ export type ScreenId =
   | 'status'
   | 'settings';
 
-export type IncidentStatus = 'CRITICAL' | 'INVESTIGATING' | 'RESOLVED';
+export type IncidentStatus = 'OPEN' | 'RESOLVED';
 
 export interface Incident {
   id: string; // e.g. "INC-8094"

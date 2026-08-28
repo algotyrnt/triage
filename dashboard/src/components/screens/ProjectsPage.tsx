@@ -100,7 +100,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
     if (!matchesSearch) return false;
 
     const projectIncs = getProjectIncidents(project);
-    const criticalCount = projectIncs.filter((i) => i.status === 'CRITICAL').length;
+    const criticalCount = projectIncs.filter((i) => i.status === 'OPEN').length;
 
     if (statusFilter === 'critical') {
       return criticalCount > 0;
@@ -115,7 +115,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
   // Global KPIs
   const totalProjects = projects.length;
   const totalIncidents = incidents.length;
-  const criticalIncidents = incidents.filter((i) => i.status === 'CRITICAL').length;
+  const criticalIncidents = incidents.filter((i) => i.status === 'OPEN').length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -262,10 +262,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             }`}
           >
             With Panics (
-            {
-              projects.filter((p) => getProjectIncidents(p).some((i) => i.status === 'CRITICAL'))
-                .length
-            }
+            {projects.filter((p) => getProjectIncidents(p).some((i) => i.status === 'OPEN')).length}
             )
           </button>
           <button
@@ -278,7 +275,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
           >
             Healthy (
             {
-              projects.filter((p) => !getProjectIncidents(p).some((i) => i.status === 'CRITICAL'))
+              projects.filter((p) => !getProjectIncidents(p).some((i) => i.status === 'OPEN'))
                 .length
             }
             )
@@ -314,7 +311,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProjects.map((project) => {
             const projectIncs = getProjectIncidents(project);
-            const critCount = projectIncs.filter((i) => i.status === 'CRITICAL').length;
+            const critCount = projectIncs.filter((i) => i.status === 'OPEN').length;
             const projectKey = getProjectKey(project);
             const projectId =
               project.id || `${project.owner}/${project.repo}/${project.root_dir || ''}`;
