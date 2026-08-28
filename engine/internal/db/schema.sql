@@ -55,19 +55,6 @@ CREATE TABLE IF NOT EXISTS ast_nodes (
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS ast_indexes (
-    id                    VARCHAR(64)  PRIMARY KEY,
-    owner                 VARCHAR(255) NOT NULL,
-    repo                  VARCHAR(255) NOT NULL,
-    commit_sha            VARCHAR(64)  NOT NULL,
-    branch                VARCHAR(128) DEFAULT 'main',
-    status                VARCHAR(32)  DEFAULT 'PENDING',
-    parsed_files_count    INT          DEFAULT 0,
-    total_functions_count INT          DEFAULT 0,
-    error_message         TEXT,
-    indexed_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- ---------------------------------------------------------------------------
 -- 4. Ingested Incidents & AI Analysis Log
 -- ---------------------------------------------------------------------------
@@ -177,7 +164,6 @@ CREATE INDEX IF NOT EXISTS idx_invitations_username ON invitations (github_usern
 
 CREATE INDEX IF NOT EXISTS idx_ast_nodes_lookup ON ast_nodes (owner, repo, file_path, line_number);
 CREATE INDEX IF NOT EXISTS idx_ast_nodes_commit ON ast_nodes (owner, repo, commit_sha);
-CREATE INDEX IF NOT EXISTS idx_ast_indexes_lookup ON ast_indexes (owner, repo, indexed_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_active_lookup ON api_keys (key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_repository_id ON api_keys (repository_id);

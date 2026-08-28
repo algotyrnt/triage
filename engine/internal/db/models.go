@@ -22,6 +22,7 @@ type ASTNode struct {
 type Incident struct {
 	ID                string    `json:"id"`
 	RepositoryID      string    `json:"repository_id,omitempty"`
+	RepositoryName    string    `json:"repository_name,omitempty"`
 	Fingerprint       string    `json:"fingerprint,omitempty"`
 	OccurrenceCount   int       `json:"occurrence_count"`
 	Title             string    `json:"title"`

@@ -162,15 +162,3 @@ func (db *DB) GetProjectByOwnerRepo(ctx context.Context, owner, repo, rootDir st
 	}
 	return &r, nil
 }
-
-func (db *DB) UpdateRepositoryInstallationID(ctx context.Context, owner, repo string, installationID int64) error {
-	if db == nil || db.SQL == nil {
-		return fmt.Errorf("database uninitialized")
-	}
-	_, err := db.SQL.ExecContext(ctx, `
-		UPDATE repositories
-		SET installation_id = $3
-		WHERE LOWER(owner) = LOWER($1) AND LOWER(repo) = LOWER($2)
-	`, owner, repo, installationID)
-	return err
-}

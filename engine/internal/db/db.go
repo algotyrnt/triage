@@ -89,15 +89,15 @@ func (db *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 			"status":          "healthy",
 			"database":        "unconnected (in-memory mode)",
 			"total_incidents": 0,
-			"total_projects":  1,
-			"funcs_indexed":   1420,
-			"uptime_seconds":  120,
+			"total_projects":  0,
+			"funcs_indexed":   0,
 		}, nil
 	}
 
-	var incCount, repoCount int
+	var incCount, repoCount, astCount int
 	_ = db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM incidents").Scan(&incCount)
 	_ = db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM repositories").Scan(&repoCount)
+	_ = db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM ast_nodes").Scan(&astCount)
 
 	return map[string]interface{}{
 		"status":          "healthy",
@@ -105,7 +105,6 @@ func (db *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 		"driver":          "sqlite",
 		"total_incidents": incCount,
 		"total_projects":  repoCount,
-		"funcs_indexed":   1420,
-		"uptime_seconds":  3600,
+		"funcs_indexed":   astCount,
 	}, nil
 }
