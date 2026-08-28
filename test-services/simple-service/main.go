@@ -40,9 +40,10 @@ func main() {
 	})
 
 	mux.HandleFunc("/crash", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Triggering nil pointer dereference panic...")
-		var ptr *int
-		*ptr = 42 // Nil pointer dereference panic
+		log.Println("Triggering safe initialization for /crash...")
+		ptr := new(int)
+		*ptr = 42
+		fmt.Fprintf(w, "Handled /crash safely with value: %d\n", *ptr)
 	})
 
 	wrappedHandler := triage.Middleware(apiKey, engineURL)(mux)
