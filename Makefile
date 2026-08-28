@@ -13,6 +13,7 @@ SHELL := /usr/bin/env bash
 # Configuration & Metadata
 # ------------------------------------------------------------------------------
 BIN_DIR         := bin
+DIST_DIR        := dist-bin
 REPO            := github.com/algotyrnt/triage
 RELEASE_BRANCH  ?= main
 ALLOW_DIRTY     ?= 0
@@ -34,7 +35,6 @@ LDFLAGS         := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X 
 
 # Docker Image
 DOCKER_IMAGE    ?= ghcr.io/algotyrnt/triage
-DOCKER_ENGINE_IMAGE ?= $(DOCKER_IMAGE)
 
 # Colors for terminal output
 COLOR_RESET   := \033[0m
@@ -65,7 +65,7 @@ help: ## Show this help message
 			else if (target ~ /^build/) { category = "Build Artifacts"; } \
 			else if (target ~ /^test/) { category = "Testing & QA"; } \
 			else if (target ~ /^(lint|format|fmt|check)/) { category = "Testing & QA"; } \
-			else if (target ~ /^(docker|up|down|logs|prod-up)/) { category = "Docker & Containers"; } \
+			else if (target ~ /^(docker|up|down|logs|prod-up|run|stop)/) { category = "Docker & Containers"; } \
 			else if (target ~ /^(dev|install|deps)/) { category = "Development"; } \
 			else if (target ~ /^clean/) { category = "Utilities"; } \
 			else { category = "General"; } \
@@ -170,7 +170,7 @@ release: check-git-branch check-git-clean check-version-var ## Execute full rele
 	@printf "$(COLOR_YELLOW)[3/3] Pushing tags to remote...$(COLOR_RESET)\n"
 	@$(MAKE) push-tags VERSION=$(VERSION)
 	@printf "\n$(COLOR_BOLD)$(COLOR_GREEN)Release $(VERSION) successfully published!$(COLOR_RESET)\n"
-	@printf "GitHub Actions release pipeline will now build containers and publish the GitHub Release.\n"
+	@printf "GitHub Actions release pipeline will now build containers, cross-compile binaries, and publish the GitHub Release.\n"
 
 .PHONY: release-patch
 release-patch: ## Bump patch version and trigger release (e.g. v0.1.0 -> v0.1.1)
@@ -205,6 +205,7 @@ test: test-engine test-sdk ## Run all Go test suites
 .PHONY: test-engine
 test-engine: ## Run Engine unit tests
 	@printf "$(COLOR_CYAN)==> Testing Engine (engine)...$(COLOR_RESET)\n"
+	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
 	@cd engine && $(GO) test -v ./...
 
 .PHONY: test-sdk
@@ -234,6 +235,7 @@ lint-go: lint-engine lint-sdk ## Verify all Go formatting and static analysis
 .PHONY: lint-engine
 lint-engine: ## Verify Engine formatting and vet
 	@printf "$(COLOR_CYAN)==> Checking Engine formatting and vet...$(COLOR_RESET)\n"
+	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
 	@UNFORMATTED=$$(gofmt -l engine); \
 	if [ -n "$$UNFORMATTED" ]; then \
 		printf "$(COLOR_RED)[ERROR] Unformatted Go files in engine:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
@@ -301,6 +303,7 @@ build-dashboard: ## Build Vite Studio Dashboard into Engine embed directory
 build-triage: ## Compile Triage server binary to bin/triage
 	@printf "$(COLOR_CYAN)==> Building Triage binary ($(VERSION))...$(COLOR_RESET)\n"
 	@mkdir -p $(BIN_DIR)
+	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
 	@cd engine && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../$(BIN_DIR)/triage main.go
 	@printf "$(COLOR_GREEN)Built $(BIN_DIR)/triage$(COLOR_RESET)\n"
 
@@ -316,10 +319,26 @@ build-web: ## Build Astro web documentation & landing page
 	@printf "$(COLOR_CYAN)==> Building Astro Web bundle ($(VERSION))...$(COLOR_RESET)\n"
 	@cd web && PUBLIC_TRIAGE_VERSION=$(VERSION) $(BUN) run build
 
-.PHONY: deploy-web
-deploy-web: build-web ## Deploy Astro web site to Cloudflare via Wrangler
-	@printf "$(COLOR_CYAN)==> Deploying Web to Cloudflare...$(COLOR_RESET)\n"
-	@cd web && $(BUN) x wrangler deploy
+.PHONY: package
+package: build-dashboard ## Cross-compile release binaries for Linux, macOS, and Windows
+	@printf "$(COLOR_CYAN)==> Packaging cross-platform release binaries ($(VERSION))...$(COLOR_RESET)\n"
+	@rm -rf $(DIST_DIR) && mkdir -p $(DIST_DIR)
+	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do \
+		os=$${target%/*}; \
+		arch=$${target#*/}; \
+		ext=""; \
+		[ "$$os" = "windows" ] && ext=".exe"; \
+		output="$(DIST_DIR)/triage_$${os}_$${arch}$${ext}"; \
+		printf "  Building $${os}/$${arch} -> $${output}\n"; \
+		(cd engine && CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../$${output} main.go); \
+		if [ "$$os" = "windows" ]; then \
+			(cd $(DIST_DIR) && zip -q "triage_$(VERSION)_$${os}_$${arch}.zip" "triage_$${os}_$${arch}.exe" && rm "triage_$${os}_$${arch}.exe"); \
+		else \
+			(cd $(DIST_DIR) && tar -czf "triage_$(VERSION)_$${os}_$${arch}.tar.gz" "triage_$${os}_$${arch}" && rm "triage_$${os}_$${arch}"); \
+		fi; \
+	done
+	@cd $(DIST_DIR) && shasum -a 256 triage_* > checksums.txt
+	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Release packages and checksums generated in $(DIST_DIR)/$(COLOR_RESET)\n"
 
 # ==============================================================================
 # Docker & Containers
@@ -398,7 +417,7 @@ dev-web: ## Run Astro Web & docs in development mode
 .PHONY: clean
 clean: ## Clean binaries, coverage reports, tarballs, and build artifacts
 	@printf "$(COLOR_CYAN)==> Cleaning build outputs...$(COLOR_RESET)\n"
-	@rm -rf $(BIN_DIR)
+	@rm -rf $(BIN_DIR) $(DIST_DIR)
 	@rm -rf coverage.out coverage.html coverage-engine.out coverage-sdk.out
 	@rm -rf web/dist
 	@rm -rf engine/internal/ui/dist
