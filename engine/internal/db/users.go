@@ -172,6 +172,9 @@ func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
 			users = append(users, u)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return users, nil
 }
 
@@ -288,6 +291,9 @@ func (db *DB) ListInvitations(ctx context.Context) ([]Invitation, error) {
 			}
 			list = append(list, inv)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return list, nil
 }

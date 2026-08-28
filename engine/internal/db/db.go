@@ -53,6 +53,9 @@ func NewDB(ctx context.Context, sqlitePath string) (*DB, error) {
 	_, _ = sqlDB.ExecContext(ctx, "PRAGMA busy_timeout=5000;")
 	_, _ = sqlDB.ExecContext(ctx, "PRAGMA foreign_keys=ON;")
 	_, _ = sqlDB.ExecContext(ctx, "PRAGMA synchronous=NORMAL;")
+	_, _ = sqlDB.ExecContext(ctx, "PRAGMA cache_size=-64000;")
+	_, _ = sqlDB.ExecContext(ctx, "PRAGMA temp_store=MEMORY;")
+	_, _ = sqlDB.ExecContext(ctx, "PRAGMA mmap_size=268435456;")
 
 	if err := sqlDB.PingContext(ctx); err != nil {
 		sqlDB.Close()
