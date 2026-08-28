@@ -65,7 +65,7 @@ func NewServer(cfg Config) *Server {
 		cfg.Version = version.Get()
 	}
 
-	return &Server{
+	srv := &Server{
 		db:          cfg.DB,
 		configStore: cfg.ConfigStore,
 		githubApp:   cfg.GitHubApp,
@@ -75,23 +75,34 @@ func NewServer(cfg Config) *Server {
 		eventBroker: cfg.EventBroker,
 		version:     cfg.Version,
 	}
+
+	if srv.astFetcher != nil {
+		srv.astFetcher.GitHubApp = srv.githubApp
+		srv.astFetcher.GetInstallationID = func(ctx context.Context, owner, repo string) (int64, error) {
+			return srv.ResolveInstallationID(ctx, owner, repo)
+		}
+	}
+
+	return srv
 }
 
 // ResolveEngineURL dynamically retrieves the base engine URL from the incoming HTTP request.
 func (s *Server) ResolveEngineURL(r *http.Request) string {
-	scheme := "http"
-	if r != nil {
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		if fHost := r.Header.Get("X-Forwarded-Host"); fHost != "" {
-			return fmt.Sprintf("%s://%s", scheme, strings.TrimRight(strings.TrimSpace(fHost), "/"))
-		}
-		if r.Host != "" {
-			return fmt.Sprintf("%s://%s", scheme, strings.TrimRight(strings.TrimSpace(r.Host), "/"))
-		}
+	if r == nil {
+		return "http://localhost:8080"
 	}
-	return "http://localhost:8080"
+	proto := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		proto = "https"
+	}
+	return fmt.Sprintf("%s://%s", proto, r.Host)
+}
+
+// Routes initializes and returns the primary HTTP router multiplexer.
+func (s *Server) Routes() http.Handler {
+	mux := http.NewServeMux()
+	s.RegisterRoutes(mux)
+	return mux
 }
 
 // RegisterRoutes registers all API routes onto the given ServeMux with centralized authentication and RBAC middleware.
@@ -99,6 +110,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	// 1. Core Public Routes
 	mux.HandleFunc("/health", s.public(s.HandleHealth))
 	mux.HandleFunc("/api/v1/telemetry", s.public(s.HandleTelemetry)) // Enforces API key verification internally
+	mux.HandleFunc("/api/v1/webhooks/github", s.public(s.HandleGitHubWebhook))
 
 	// 2. Auth & Session Routes
 	mux.HandleFunc("/api/v1/auth/github", s.public(s.HandleAuthGitHub))
@@ -131,6 +143,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/team/members", s.withAuth(s.HandleTeamMembers))
 
 	// 5. Developer+ Protected Mutation Routes (Developer, Admin, Owner)
+	mux.HandleFunc("/api/v1/incidents/resolve", s.withAuthRole(s.HandleResolveIncident, "Developer", "Admin", "Owner"))
 	mux.HandleFunc("/api/v1/incidents/create-issue", s.withAuthRole(s.HandleCreateIncidentIssue, "Developer", "Admin", "Owner"))
 	mux.HandleFunc("/api/v1/incidents/create-pr", s.withAuthRole(s.HandleCreateIncidentPR, "Developer", "Admin", "Owner"))
 	mux.HandleFunc("/api/v1/projects/context", s.withAuthRole(s.HandleUpdateProjectContext, "Developer", "Admin", "Owner"))
@@ -161,7 +174,71 @@ func (s *Server) LoadGitHubAppConfig(ctx context.Context) {
 
 	if cfg, err := s.configStore.GetGitHubApp(ctx); err == nil && cfg != nil {
 		s.githubApp = cfg
+		if s.astFetcher != nil {
+			s.astFetcher.GitHubApp = cfg
+			s.astFetcher.GetInstallationID = func(ctx context.Context, owner, repo string) (int64, error) {
+				return s.ResolveInstallationID(ctx, owner, repo)
+			}
+		}
 	}
+}
+
+// ResolveInstallationID retrieves the active GitHub App installation ID for an owner/repo.
+func (s *Server) ResolveInstallationID(ctx context.Context, owner, repo string) (int64, error) {
+	if s.githubApp == nil {
+		s.LoadGitHubAppConfig(ctx)
+	}
+	if s.githubApp == nil {
+		return 0, fmt.Errorf("github app not configured on this instance")
+	}
+
+	// 1. Direct verified on-demand query to GitHub App for this specific repository
+	if owner != "" && repo != "" {
+		if liveID, err := s.githubApp.GetRepoInstallation(ctx, owner, repo); err == nil && liveID > 0 {
+			if s.db != nil {
+				_ = s.db.SaveInstallation(ctx, liveID, owner, 0, "Organization")
+				_ = s.db.SaveInstallationRepo(ctx, liveID, owner, repo)
+				_ = s.db.UpdateRepositoryInstallation(ctx, owner, repo, liveID)
+			}
+			return liveID, nil
+		}
+	}
+
+	// 2. Database lookup
+	if s.db != nil && owner != "" && repo != "" {
+		if instID, err := s.db.GetInstallationForRepo(ctx, owner, repo); err == nil && instID > 0 {
+			return instID, nil
+		}
+	}
+
+	// 3. Query all installations for the GitHub App
+	appInstalls, err := s.githubApp.ListAppInstallations(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query github installations: %w", err)
+	}
+	if len(appInstalls) == 0 {
+		return 0, fmt.Errorf("github app is not installed on any account")
+	}
+
+	instID := appInstalls[0].ID
+	for _, inst := range appInstalls {
+		if strings.EqualFold(inst.AccountLogin, owner) {
+			instID = inst.ID
+			break
+		}
+	}
+
+	if s.db != nil {
+		for _, inst := range appInstalls {
+			_ = s.db.SaveInstallation(ctx, inst.ID, inst.AccountLogin, inst.AccountID, inst.AccountType)
+		}
+		if owner != "" && repo != "" && instID > 0 {
+			_ = s.db.SaveInstallationRepo(ctx, instID, owner, repo)
+			_ = s.db.UpdateRepositoryInstallation(ctx, owner, repo, instID)
+		}
+	}
+
+	return instID, nil
 }
 
 // ResolveAppURL dynamically retrieves the public self-hosted Dashboard URL strictly from database instance configuration.

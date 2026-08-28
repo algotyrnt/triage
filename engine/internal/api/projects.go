@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,6 +61,13 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 			rootDir = req.ServicePath
 		}
 		rootDir = strings.Trim(strings.TrimSpace(rootDir), "/")
+
+		if s.githubApp == nil {
+			s.LoadGitHubAppConfig(r.Context())
+		}
+		if s.githubApp != nil {
+			_, _ = s.ResolveInstallationID(r.Context(), owner, repoName)
+		}
 
 		apiKey := ""
 		keyMasked := ""
@@ -359,49 +365,11 @@ func (s *Server) HandleDetectModules(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 2. Scan local workspace if present
-	wsRoot := os.Getenv("TRIAGE_WORKSPACE_ROOT")
-	if wsRoot == "" {
-		wsRoot = os.Getenv("AST_WORKSPACE_ROOT")
-	}
-	if wsRoot == "" {
-		wsRoot, _ = os.Getwd()
-	}
-
-	if wsRoot != "" {
-		_ = filepath.Walk(wsRoot, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if info.IsDir() {
-				name := info.Name()
-				if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if info.Name() == "go.mod" {
-				rel, relErr := filepath.Rel(wsRoot, path)
-				if relErr == nil {
-					dir := filepath.ToSlash(filepath.Dir(rel))
-					if dir == "." {
-						dir = ""
-					}
-					if !seen[dir] {
-						seen[dir] = true
-						displayName := fmt.Sprintf("%s/ (Go Module)", dir)
-						if dir == "" {
-							displayName = "Repository Root (/)"
-						}
-						modules = append(modules, DetectedModule{
-							Path:   dir,
-							Name:   displayName,
-							IsRoot: dir == "",
-						})
-					}
-				}
-			}
-			return nil
+	if len(modules) == 0 {
+		modules = append(modules, DetectedModule{
+			Path:   "",
+			Name:   "Repository Root (/)",
+			IsRoot: true,
 		})
 	}
 

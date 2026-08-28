@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 
 	"triage/engine/internal/ast"
@@ -53,18 +52,6 @@ func (s *Server) HandleASTIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workspacePath := req.WorkspacePath
-	if workspacePath != "" {
-		resolvedPath, valErr := s.ValidateAndResolveFilePath(workspacePath)
-		if valErr != nil {
-			slog.Warn("workspacePath validation failed", "error", valErr, "workspace_path", workspacePath)
-			workspacePath = os.Getenv("AST_WORKSPACE_ROOT")
-		} else {
-			workspacePath = resolvedPath
-		}
-	}
-	if workspacePath == "" {
-		workspacePath = os.Getenv("AST_WORKSPACE_ROOT")
-	}
 	if workspacePath == "" {
 		workspacePath = "."
 	}
@@ -112,24 +99,14 @@ func (s *Server) HandleASTTree(w http.ResponseWriter, r *http.Request) {
 	var files []ast.ASTFileItem
 	var err error
 
-	// 1. Try querying PostgreSQL indexed nodes first
 	if s.astManager != nil && owner != "" && repo != "" {
 		files, err = s.astManager.ListASTFiles(r.Context(), owner, repo, rootDir)
 		if err != nil {
 			slog.Warn("failed to list AST files from database", "error", err, "owner", owner, "repo", repo)
 		}
 	}
-
-	// 2. If database has no indexed files yet, dynamically scan local workspace
-	if len(files) == 0 {
-		workspaceRoot := os.Getenv("AST_WORKSPACE_ROOT")
-		if workspaceRoot == "" {
-			workspaceRoot = "."
-		}
-		localFiles, scanErr := ast.ScanLocalASTFiles(workspaceRoot, rootDir)
-		if scanErr == nil && len(localFiles) > 0 {
-			files = localFiles
-		}
+	if files == nil {
+		files = []ast.ASTFileItem{}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

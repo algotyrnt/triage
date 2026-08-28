@@ -111,6 +111,91 @@ func (s *Server) HandleIncidents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"incidents": incidents})
 }
 
+// HandleResolveIncident resolves an incident manually by ID and closes any linked GitHub issue.
+func (s *Server) HandleResolveIncident(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.db == nil {
+		http.Error(w, "Database unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		IncidentID string `json:"incident_id"`
+		ID         string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	targetID := req.IncidentID
+	if targetID == "" {
+		targetID = req.ID
+	}
+	if targetID == "" {
+		http.Error(w, "Missing incident_id", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.db.ResolveIncident(r.Context(), targetID); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to resolve incident: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	inc, err := s.db.GetIncidentByID(r.Context(), targetID)
+	if err == nil && inc != nil {
+		// Close linked GitHub issue if one exists
+		if inc.GitHubIssueNumber > 0 && inc.RepositoryID != "" {
+			if s.githubApp == nil {
+				s.LoadGitHubAppConfig(r.Context())
+			}
+			if s.githubApp != nil && s.githubApp.AppID > 0 {
+				var owner, repo string
+				var instID int64
+				if projects, pErr := s.db.GetProjects(r.Context()); pErr == nil {
+					for _, p := range projects {
+						if p.ID == inc.RepositoryID {
+							owner = p.Owner
+							repo = p.Repo
+							instID = p.InstallationID
+							break
+						}
+					}
+				}
+				if owner != "" && repo != "" {
+					if liveID, rErr := s.ResolveInstallationID(r.Context(), owner, repo); rErr == nil && liveID > 0 {
+						instID = liveID
+					}
+					if instID > 0 {
+						if cErr := s.githubApp.CloseIssue(r.Context(), instID, owner, repo, inc.GitHubIssueNumber); cErr != nil {
+							slog.Warn("failed to close linked GitHub issue", "error", cErr, "issue_number", inc.GitHubIssueNumber, "repo", fmt.Sprintf("%s/%s", owner, repo))
+						} else {
+							slog.Info("closed linked GitHub issue successfully", "issue_number", inc.GitHubIssueNumber, "repo", fmt.Sprintf("%s/%s", owner, repo))
+						}
+					}
+				}
+			}
+		}
+
+		if s.eventBroker != nil {
+			s.eventBroker.Publish("incident_updated", inc)
+			s.eventBroker.Publish("incident_resolved", inc)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"incident": inc,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
+}
+
 func (s *Server) HandleCreateIncidentIssue(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -178,10 +263,8 @@ func (s *Server) HandleCreateIncidentIssue(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if installationID == 0 {
-		if instID, err := s.db.GetInstallationForRepo(r.Context(), owner, repo); err == nil && instID > 0 {
-			installationID = instID
-		}
+	if liveID, err := s.ResolveInstallationID(r.Context(), owner, repo); err == nil && liveID > 0 {
+		installationID = liveID
 	}
 
 	if installationID == 0 {
@@ -194,45 +277,25 @@ func (s *Server) HandleCreateIncidentIssue(w http.ResponseWriter, r *http.Reques
 		panicMsg = "Runtime panic"
 	}
 	issueTitle := fmt.Sprintf("🚨 Panic in %s:%d: %s", inc.File, inc.Line, panicMsg)
-	var issueBody strings.Builder
-	issueBody.WriteString("## Runtime Go Panic Detected\n\n")
-	issueBody.WriteString(fmt.Sprintf("A runtime panic was intercepted by **Triage** in `%s:%d`.\n\n", inc.File, inc.Line))
-	issueBody.WriteString("---\n\n### Panic Details\n")
-	issueBody.WriteString(fmt.Sprintf("- **Incident ID**: `%s`\n", inc.ID))
-	issueBody.WriteString(fmt.Sprintf("- **File**: `%s:%d`\n", inc.File, inc.Line))
-	issueBody.WriteString(fmt.Sprintf("- **Timestamp**: `%s UTC`\n\n", inc.CreatedAt.UTC().Format("2006-01-02 15:04:05")))
-
-	if inc.RootCause != "" {
-		issueBody.WriteString("---\n\n### Root Cause Analysis (AI Engine)\n")
-		issueBody.WriteString(fmt.Sprintf("%s\n\n", inc.RootCause))
-	}
-	appURL := s.ResolveAppURL(r.Context(), r)
-	if inc.SuggestedFix != "" {
-		issueBody.WriteString("---\n\n### Recommended Fix\n")
-		issueBody.WriteString(fmt.Sprintf("%s\n\n", inc.SuggestedFix))
-		if appURL != "" {
-			fixURL := fmt.Sprintf("%s/?incident=%s", appURL, inc.ID)
-			issueBody.WriteString(fmt.Sprintf("- [ ] [**Generate Fix (PR)**](%s)\n\n", fixURL))
-		} else {
-			issueBody.WriteString("- [ ] **Generate Fix (PR)**\n\n")
-		}
-	}
-	if inc.ASTSnippet != "" {
-		issueBody.WriteString("---\n\n### AST Context\n```go\n")
-		issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", inc.ASTSnippet))
-	}
-	if inc.StackTrace != "" {
-		issueBody.WriteString("---\n\n### Stack Trace\n```\n")
-		issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", inc.StackTrace))
-	}
-	if appURL != "" {
-		issueBody.WriteString(fmt.Sprintf("---\n*Automatically created by [triage](%s)*\n", appURL))
-	} else {
-		issueBody.WriteString("---\n*Automatically created by triage*\n")
-	}
+	issueBody := BuildGitHubIssueBody(GitHubIssueMarkdownParams{
+		IncidentID:   inc.ID,
+		Owner:        owner,
+		Repo:         repo,
+		File:         inc.File,
+		Line:         inc.Line,
+		PanicMessage: panicMsg,
+		Severity:     inc.Severity,
+		Status:       inc.Status,
+		CreatedAt:    inc.CreatedAt,
+		RootCause:    inc.RootCause,
+		SuggestedFix: inc.SuggestedFix,
+		ASTSnippet:   inc.ASTSnippet,
+		StackTrace:   inc.StackTrace,
+		AppURL:       s.ResolveAppURL(r.Context(), r),
+	})
 
 	labels := []string{"panic", "triage", "bug"}
-	issueNum, issueURL, err := s.githubApp.CreateIssue(r.Context(), installationID, owner, repo, issueTitle, issueBody.String(), labels)
+	issueNum, issueURL, err := s.githubApp.CreateIssue(r.Context(), installationID, owner, repo, issueTitle, issueBody, labels)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create GitHub Issue: %v", err), http.StatusInternalServerError)
 		return
@@ -323,10 +386,8 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if installationID == 0 {
-		if instID, err := s.db.GetInstallationForRepo(r.Context(), owner, repo); err == nil && instID > 0 {
-			installationID = instID
-		}
+	if liveID, err := s.ResolveInstallationID(r.Context(), owner, repo); err == nil && liveID > 0 {
+		installationID = liveID
 	}
 
 	if installationID == 0 {
@@ -369,6 +430,26 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	patchCode := req.PatchCode
 	if patchCode == "" {
 		patchCode = inc.SuggestedPatch
+	}
+
+	// If no patch exists yet and user opened PR straight, generate and persist patch
+	if patchCode == "" && (llmCfg.APIKey != "" || llmCfg.Provider == "ollama" || llmCfg.Provider == "custom") {
+		if provider, pErr := llm.NewProvider(llmCfg); pErr == nil {
+			patchCtx, pCancel := context.WithTimeout(r.Context(), 30*time.Second)
+			defer pCancel()
+			if generatedPatch, gErr := provider.GeneratePatch(
+				patchCtx,
+				inc.File,
+				inc.PanicMessage,
+				inc.ASTSnippet,
+				inc.StackTrace,
+				inc.RootCause,
+				projectContext,
+			); gErr == nil && generatedPatch != "" {
+				patchCode = generatedPatch
+				_ = s.db.UpdateIncidentPatch(r.Context(), inc.ID, patchCode)
+			}
+		}
 	}
 
 	var updatedContent string
@@ -441,34 +522,22 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 
 	// 6. Open Pull Request
 	prTitle := commitMsg
-	var prBody strings.Builder
-	prBody.WriteString("## Triage Automated Bugfix Pull Request\n\n")
-	prBody.WriteString(fmt.Sprintf("This Pull Request was generated automatically by **Triage** to fix a runtime panic in `%s:%d`.\n\n", inc.File, inc.Line))
-	if inc.GitHubIssueNumber > 0 {
-		prBody.WriteString(fmt.Sprintf("Closes #%d\n\n", inc.GitHubIssueNumber))
-	}
-	prBody.WriteString("---\n\n### Incident Details\n")
-	prBody.WriteString(fmt.Sprintf("- **Incident ID**: `%s`\n", inc.ID))
-	prBody.WriteString(fmt.Sprintf("- **Panic Message**: `%s`\n\n", inc.PanicMessage))
-	if inc.RootCause != "" {
-		prBody.WriteString("---\n\n### AI Root Cause Analysis\n")
-		prBody.WriteString(fmt.Sprintf("%s\n\n", inc.RootCause))
-	}
-	if inc.SuggestedFix != "" {
-		prBody.WriteString("---\n\n### Recommended Fix\n")
-		prBody.WriteString(fmt.Sprintf("%s\n\n", inc.SuggestedFix))
-	}
-	if patchCode != "" {
-		prBody.WriteString("---\n\n### Suggested Patch Diff\n```diff\n")
-		prBody.WriteString(fmt.Sprintf("%s\n```\n\n", patchCode))
-	}
-	if appURL := s.ResolveAppURL(r.Context(), r); appURL != "" {
-		prBody.WriteString(fmt.Sprintf("---\n*Automated PR generated by [triage](%s)*\n", appURL))
-	} else {
-		prBody.WriteString("---\n*Automated PR generated by triage*\n")
-	}
+	prBody := BuildGitHubPRBody(GitHubPRMarkdownParams{
+		IncidentID:    inc.ID,
+		Owner:         owner,
+		Repo:          repo,
+		File:          inc.File,
+		Line:          inc.Line,
+		PanicMessage:  inc.PanicMessage,
+		IssueNumber:   inc.GitHubIssueNumber,
+		RootCause:     inc.RootCause,
+		SuggestedFix:  inc.SuggestedFix,
+		PatchCode:     patchCode,
+		AppURL:        s.ResolveAppURL(r.Context(), r),
+		DefaultBranch: defaultBranch,
+	})
 
-	prNumber, prURL, err := s.githubApp.CreatePullRequest(r.Context(), installationID, owner, repo, prTitle, prBody.String(), branchName, defaultBranch)
+	prNumber, prURL, err := s.githubApp.CreatePullRequest(r.Context(), installationID, owner, repo, prTitle, prBody, branchName, defaultBranch)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": fmt.Sprintf("Failed to create Pull Request on GitHub: %v", err)})
 		return
@@ -537,11 +606,16 @@ func (s *Server) HandleLLMAnalyzePanic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	severity := ""
+	if analysis != nil && analysis.Severity != "" {
+		severity = strings.ToUpper(strings.TrimSpace(analysis.Severity))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":        true,
 		"rootCause":      analysis.RootCause,
 		"explanation":    analysis.RootCause,
-		"severity":       "CRITICAL",
+		"severity":       severity,
 		"recommendedFix": analysis.SuggestedFix,
 	})
 }
@@ -553,6 +627,7 @@ func (s *Server) HandleLLMGeneratePatch(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
+		IncidentID     string `json:"incidentId,omitempty"`
 		TriggeringFile string `json:"triggeringFile"`
 		PanicMessage   string `json:"panicMessage"`
 		ASTCode        string `json:"astCode"`
@@ -563,6 +638,17 @@ func (s *Server) HandleLLMGeneratePatch(w http.ResponseWriter, r *http.Request) 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
+	}
+
+	// 1. If incident already has a persisted patch in DB, return that persisted fix (it should not be changed)
+	if req.IncidentID != "" && s.db != nil {
+		if inc, err := s.db.GetIncidentByID(r.Context(), req.IncidentID); err == nil && inc != nil && inc.SuggestedPatch != "" {
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"success": true,
+				"patch":   inc.SuggestedPatch,
+			})
+			return
+		}
 	}
 
 	llmCfg := s.GetLLMConfig(r.Context())
@@ -592,6 +678,11 @@ func (s *Server) HandleLLMGeneratePatch(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Patch generation failed: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// 2. Persist generated patch to DB
+	if req.IncidentID != "" && s.db != nil && patch != "" {
+		_ = s.db.UpdateIncidentPatch(r.Context(), req.IncidentID, patch)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

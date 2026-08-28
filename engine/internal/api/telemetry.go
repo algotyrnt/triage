@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -24,17 +22,18 @@ import (
 )
 
 type TelemetryRequest struct {
-	APIKey     string `json:"api_key"`
-	Owner      string `json:"owner,omitempty"`
-	Repo       string `json:"repo,omitempty"`
-	Commit     string `json:"commit,omitempty"`
-	RootDir    string `json:"root_dir,omitempty"`
-	RootPath   string `json:"root_path,omitempty"`
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	StackTrace string `json:"stack_trace"`
-	ASTSnippet string `json:"ast_snippet,omitempty"`
-	TraceID    string `json:"trace_id,omitempty"`
+	APIKey       string `json:"api_key"`
+	Owner        string `json:"owner,omitempty"`
+	Repo         string `json:"repo,omitempty"`
+	Commit       string `json:"commit,omitempty"`
+	RootDir      string `json:"root_dir,omitempty"`
+	RootPath     string `json:"root_path,omitempty"`
+	File         string `json:"file"`
+	Line         int    `json:"line"`
+	PanicMessage string `json:"panic_message,omitempty"`
+	StackTrace   string `json:"stack_trace"`
+	ASTSnippet   string `json:"ast_snippet,omitempty"`
+	TraceID      string `json:"trace_id,omitempty"`
 }
 
 type GitHubIssue struct {
@@ -62,101 +61,6 @@ func isValidTraceID(traceID string) bool {
 	return traceIDPattern.MatchString(traceID)
 }
 
-func detectWorkspaceRoot() string {
-	if root := os.Getenv("TRIAGE_WORKSPACE_ROOT"); root != "" {
-		return root
-	}
-	if root := os.Getenv("AST_WORKSPACE_ROOT"); root != "" {
-		return root
-	}
-
-	dir, err := os.Getwd()
-	if err != nil {
-		return "."
-	}
-
-	curr := dir
-	for {
-		if _, err := os.Stat(filepath.Join(curr, ".git")); err == nil {
-			return curr
-		}
-		if _, err := os.Stat(filepath.Join(curr, "go.work")); err == nil {
-			return curr
-		}
-		parent := filepath.Dir(curr)
-		if parent == curr {
-			break
-		}
-		curr = parent
-	}
-	return dir
-}
-
-func (s *Server) ValidateAndResolveFilePath(reqFile string, rootDir ...string) (string, error) {
-	if reqFile == "" {
-		return "", fmt.Errorf("file path cannot be empty")
-	}
-
-	rd := ""
-	if len(rootDir) > 0 {
-		rd = rootDir[0]
-	}
-
-	projectRoot := detectWorkspaceRoot()
-	cleanRoot := filepath.Clean(projectRoot)
-	if evalRoot, err := filepath.EvalSymlinks(cleanRoot); err == nil {
-		cleanRoot = evalRoot
-	}
-
-	// Case 1: Absolute path on host machine
-	if filepath.IsAbs(reqFile) {
-		cleanAbs := filepath.Clean(reqFile)
-		if evalAbs, err := filepath.EvalSymlinks(cleanAbs); err == nil {
-			cleanAbs = evalAbs
-		}
-		rel, err := filepath.Rel(cleanRoot, cleanAbs)
-		if err == nil && !strings.HasPrefix(rel, "..") {
-			if _, statErr := os.Stat(cleanAbs); statErr == nil {
-				return cleanAbs, nil
-			}
-		}
-	}
-
-	// Case 2: Normalized monorepo or relative candidate paths
-	normReq := ast.NormalizeMonorepoPath(reqFile, rd)
-	candidateRelPaths := []string{}
-	if rd != "" && !strings.HasPrefix(reqFile, rd) && !filepath.IsAbs(reqFile) {
-		candidateRelPaths = append(candidateRelPaths, filepath.Join(rd, reqFile))
-	}
-	candidateRelPaths = append(candidateRelPaths, normReq)
-	if normReq != reqFile && !filepath.IsAbs(reqFile) {
-		candidateRelPaths = append(candidateRelPaths, reqFile)
-	}
-
-	for _, relPath := range candidateRelPaths {
-		targetPath := filepath.Join(cleanRoot, filepath.Clean(relPath))
-		if evalTarget, err := filepath.EvalSymlinks(targetPath); err == nil {
-			targetPath = evalTarget
-		}
-		rel, err := filepath.Rel(cleanRoot, targetPath)
-		if err == nil && !strings.HasPrefix(rel, "..") {
-			if _, statErr := os.Stat(targetPath); statErr == nil {
-				return targetPath, nil
-			}
-		}
-	}
-
-	targetPath := filepath.Join(cleanRoot, filepath.Clean(normReq))
-	if evalTarget, err := filepath.EvalSymlinks(targetPath); err == nil {
-		targetPath = evalTarget
-	}
-	rel, err := filepath.Rel(cleanRoot, targetPath)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("resolved path outside project root: %s", reqFile)
-	}
-	return targetPath, nil
-}
-
 func (s *Server) ExtractASTContext(ctx context.Context, owner, repo, commit, reqFile string, line int, rootDir ...string) (string, error) {
 	rd := ""
 	if len(rootDir) > 0 {
@@ -179,7 +83,7 @@ func (s *Server) ExtractASTContext(ctx context.Context, owner, repo, commit, req
 		}
 	}
 
-	// 2. Pre-indexed PostgreSQL check fallback
+	// 2. Pre-indexed database check
 	if s.astManager != nil {
 		node, err := s.astManager.GetASTNode(ctx, owner, repo, commit, reqFile, line, rd)
 		if err == nil && node != nil && node.Snippet != "" {
@@ -191,7 +95,7 @@ func (s *Server) ExtractASTContext(ctx context.Context, owner, repo, commit, req
 		}
 	}
 
-	// 3. On-demand fetch file source from GitHub or Local Workspace
+	// 3. On-demand fetch file source from GitHub App API
 	if s.astFetcher != nil {
 		content, fetchErr := s.astFetcher.FetchFile(ctx, owner, repo, commit, reqFile, rd)
 		if fetchErr == nil && len(content) > 0 {
@@ -206,17 +110,7 @@ func (s *Server) ExtractASTContext(ctx context.Context, owner, repo, commit, req
 		}
 	}
 
-	// 4. Local workspace fallback
-	resolvedPath, valErr := s.ValidateAndResolveFilePath(reqFile, rd)
-	if valErr != nil {
-		return "", valErr
-	}
-
-	snippet, err := ast.ExtractFuncAST(resolvedPath, line)
-	if err == nil && snippet != "" && s.astCache != nil {
-		s.astCache.Set(owner, repo, commit, normPath, line, snippet)
-	}
-	return snippet, err
+	return "", fmt.Errorf("could not retrieve AST context for %s:%d from GitHub", reqFile, line)
 }
 
 func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
@@ -259,6 +153,7 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("telemetry received", "trace_id", traceID, "file", req.File, "line", req.Line)
+	s.LoadGitHubAppConfig(r.Context())
 
 	rootDir := req.RootDir
 	if rootDir == "" {
@@ -306,9 +201,9 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if installationID == 0 && req.Owner != "" && req.Repo != "" && s.db != nil {
-		if instID, err := s.db.GetInstallationForRepo(r.Context(), req.Owner, req.Repo); err == nil && instID > 0 {
-			installationID = instID
+	if req.Owner != "" && req.Repo != "" {
+		if liveID, err := s.ResolveInstallationID(r.Context(), req.Owner, req.Repo); err == nil && liveID > 0 {
+			installationID = liveID
 		}
 	}
 
@@ -342,15 +237,46 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	title := req.StackTrace
-	if lines := strings.Split(title, "\n"); len(lines) > 0 {
-		title = strings.TrimSpace(lines[0])
+	panicSummary := strings.TrimSpace(req.PanicMessage)
+	if panicSummary == "" {
+		// Parse "panic: ..." from stack trace if present
+		for _, line := range strings.Split(req.StackTrace, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "panic:") {
+				panicSummary = strings.TrimSpace(strings.TrimPrefix(trimmed, "panic:"))
+				break
+			}
+		}
 	}
-	if title == "" {
-		title = fmt.Sprintf("Panic at %s:%d", req.File, req.Line)
+	if panicSummary == "" {
+		// Extract function name if available from top frames
+		for _, line := range strings.Split(req.StackTrace, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "goroutine ") && strings.Contains(trimmed, "(") && !strings.Contains(trimmed, "runtime/") && !strings.Contains(trimmed, "sdk/go") {
+				if paren := strings.Index(trimmed, "("); paren != -1 {
+					funcName := strings.TrimSpace(trimmed[:paren])
+					if funcName != "" {
+						panicSummary = fmt.Sprintf("Panic in %s()", funcName)
+						break
+					}
+				}
+			}
+		}
+	}
+	if panicSummary == "" {
+		panicSummary = fmt.Sprintf("Panic at %s:%d", req.File, req.Line)
 	}
 
-	rawFingerprint := fmt.Sprintf("%s:%d:%s", req.File, req.Line, title)
+	title := panicSummary
+	if analysis != nil && analysis.RootCause != "" && strings.HasPrefix(title, "Panic at ") {
+		// Use concise AI root cause summary if location was the only title info
+		rcFirstLine := strings.Split(strings.TrimSpace(analysis.RootCause), "\n")[0]
+		if len(rcFirstLine) > 0 && len(rcFirstLine) <= 120 {
+			title = rcFirstLine
+		}
+	}
+
+	rawFingerprint := fmt.Sprintf("%s:%d:%s", req.File, req.Line, panicSummary)
 	fpHash := sha256.Sum256([]byte(rawFingerprint))
 	fingerprint := hex.EncodeToString(fpHash[:16])
 
@@ -381,49 +307,45 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		if lines := strings.Split(panicSummary, "\n"); len(lines) > 0 {
 			panicSummary = strings.TrimSpace(lines[0])
 		}
-		issueTitle := fmt.Sprintf("🚨 Panic in %s:%d: %s", req.File, req.Line, panicSummary)
-
-		var issueBody strings.Builder
-		issueBody.WriteString("## Runtime Go Panic Detected\n\n")
-		issueBody.WriteString(fmt.Sprintf("A runtime panic was intercepted by **Triage** in `%s:%d`.\n\n", req.File, req.Line))
-		issueBody.WriteString("---\n\n### Panic Details\n")
-		if traceID != "" {
-			issueBody.WriteString(fmt.Sprintf("- **Trace ID**: `%s`\n", traceID))
-		}
-		issueBody.WriteString(fmt.Sprintf("- **File**: `%s:%d`\n", req.File, req.Line))
-		issueBody.WriteString(fmt.Sprintf("- **Timestamp**: `%s UTC`\n\n", time.Now().UTC().Format("2006-01-02 15:04:05")))
-
-		if analysis != nil && analysis.RootCause != "" {
-			issueBody.WriteString("---\n\n### Root Cause Analysis (AI Engine)\n")
-			issueBody.WriteString(fmt.Sprintf("%s\n\n", analysis.RootCause))
-		}
-		appURL := s.ResolveAppURL(r.Context(), r)
-		if analysis != nil && analysis.SuggestedFix != "" {
-			issueBody.WriteString("---\n\n### Recommended Fix\n")
-			issueBody.WriteString(fmt.Sprintf("%s\n\n", analysis.SuggestedFix))
-			if appURL != "" {
-				fixURL := fmt.Sprintf("%s/?incident=%s", appURL, incidentID)
-				issueBody.WriteString(fmt.Sprintf("- [ ] [**Generate Fix (PR)**](%s)\n\n", fixURL))
-			} else {
-				issueBody.WriteString("- [ ] **Generate Fix (PR)**\n\n")
+		rootCause := ""
+		suggestedFix := ""
+		severity := ""
+		if analysis != nil {
+			rootCause = analysis.RootCause
+			suggestedFix = analysis.SuggestedFix
+			if analysis.Severity != "" {
+				severity = strings.ToUpper(strings.TrimSpace(analysis.Severity))
 			}
 		}
-		if astSnippet != "" {
-			issueBody.WriteString("---\n\n### AST Context\n```go\n")
-			issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", astSnippet))
-		}
-		if req.StackTrace != "" {
-			issueBody.WriteString("---\n\n### Stack Trace\n```\n")
-			issueBody.WriteString(fmt.Sprintf("%s\n```\n\n", req.StackTrace))
-		}
-		if appURL != "" {
-			issueBody.WriteString(fmt.Sprintf("---\n*Automatically created by [triage](%s)*\n", appURL))
-		} else {
-			issueBody.WriteString("---\n*Automatically created by triage*\n")
-		}
+
+		issueTitle := fmt.Sprintf("🚨 Panic in %s:%d: %s", req.File, req.Line, panicSummary)
+
+		issueBody := BuildGitHubIssueBody(GitHubIssueMarkdownParams{
+			IncidentID:   incidentID,
+			Owner:        req.Owner,
+			Repo:         req.Repo,
+			File:         req.File,
+			Line:         req.Line,
+			PanicMessage: panicSummary,
+			Severity:     severity,
+			Status:       "OPEN",
+			CreatedAt:    time.Now().UTC(),
+			TraceID:      traceID,
+			RootCause:    rootCause,
+			SuggestedFix: suggestedFix,
+			ASTSnippet:   astSnippet,
+			StackTrace:   req.StackTrace,
+			AppURL:       s.ResolveAppURL(r.Context(), r),
+		})
 
 		labels := []string{"panic", "triage", "bug"}
-		issueNum, issueURL, err := s.githubApp.CreateIssue(r.Context(), installationID, req.Owner, req.Repo, issueTitle, issueBody.String(), labels)
+		issueNum, issueURL, err := s.githubApp.CreateIssue(r.Context(), installationID, req.Owner, req.Repo, issueTitle, issueBody, labels)
+		if err != nil && strings.Contains(err.Error(), "404") {
+			if liveID, rErr := s.ResolveInstallationID(r.Context(), req.Owner, req.Repo); rErr == nil && liveID > 0 && liveID != installationID {
+				installationID = liveID
+				issueNum, issueURL, err = s.githubApp.CreateIssue(r.Context(), installationID, req.Owner, req.Repo, issueTitle, issueBody, labels)
+			}
+		}
 		if err == nil {
 			gitHubIssue = &GitHubIssue{
 				Number:  issueNum,
@@ -448,12 +370,12 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		} else {
 			rootCause := ""
 			suggestedFix := ""
-			severity := "CRITICAL"
+			severity := ""
 			if analysis != nil {
 				rootCause = analysis.RootCause
 				suggestedFix = analysis.SuggestedFix
 				if analysis.Severity != "" {
-					severity = analysis.Severity
+					severity = strings.ToUpper(strings.TrimSpace(analysis.Severity))
 				}
 			}
 
@@ -471,7 +393,7 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 				Fingerprint:       fingerprint,
 				OccurrenceCount:   1,
 				Title:             title,
-				Status:            "CRITICAL",
+				Status:            "OPEN",
 				Severity:          severity,
 				AIProvider:        llmCfg.Provider,
 				AIModel:           llmCfg.Model,
