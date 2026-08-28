@@ -37,6 +37,7 @@ Go HTTP Server (your app)
 ## Key Highlights
 
 - **Multi-File Package AST Slicing:** Extracts the exact crashing function alongside cross-file receiver structs, referenced types, constructors, and package helpers using Go's standard `go/parser` and `go/ast`. Eliminates >90% of token overhead while providing 100% semantic clarity.
+- **Function-Wise Boundary Caching:** Boundary-aware AST caching that indexes full function spans `[start_line..end_line]` across in-memory and SQLite tiers, delivering sub-millisecond `< 1ms` symbol lookups for any future crashes across the same function with zero redundant GitHub API calls.
 - **Pluggable Multi-Provider AI Engine:** Bring your preferred LLM provider—**Google Gemini**, **OpenAI** (GPT-4o/o3-mini), **Anthropic Claude** (Claude 3.5/3.7), or **100% Air-Gapped Local Models** (Ollama, vLLM, DeepSeek-Coder, Qwen2.5) with live connection testing and latency benchmarking.
 - **Crash Fingerprinting & Frequency Deduplication:** Computes deterministic SHA-256 crash fingerprints from `file:line:panic` to aggregate repeating crashes into canonical incidents with live `occurrence_count` frequency badges and `last_seen_at` timestamps, preventing duplicate GitHub issues.
 - **Zero-Config Embedded SQLite Storage:** Automatically initializes and manages an embedded SQLite database in Write-Ahead Logging (WAL) mode on startup with zero configuration files, environment variables, or external database servers.
@@ -44,7 +45,7 @@ Go HTTP Server (your app)
 - **Sub-0.02ms Client Latency:** Bounded 4-goroutine worker pool with a 1,000-job buffer asynchronously dispatches telemetry without blocking user HTTP requests.
 - **Server-Driven OAuth & RBAC:** Zero frontend secret exposure. The Go server performs GitHub OAuth code exchanges, manages user identity, issues signed 30-day HS256 JWTs, and enforces permissions across `Owner`, `Admin`, `Developer`, and `Viewer` tiers.
 - **Automated Bugfix Pull Requests:** 1-click Pull Request generation directly from the Studio Dashboard. The engine creates a dedicated fix branch, applies the patch via the active LLM, commits the changes, and opens a linked PR on GitHub.
-- **Automated GitHub Issue Filing:** Automatically creates GitHub issues with formatted AST code blocks, raw stack traces, AI diagnostic summaries, and triage labels.
+- **Automated GitHub Issue Filing & 1-Click Resolution:** Automatically creates GitHub issues with formatted AST code blocks, raw stack traces, AI diagnostic summaries, and triage labels. Resolving an incident from the dashboard automatically closes the linked GitHub issue via the GitHub REST API.
 - **Multi-Project & Monorepo Support:** Track multiple Go repositories and monorepos from a single dashboard with an instant project switcher. Includes automatic Go submodule detection (`go.mod` discovery) and path normalization.
 - **Real-Time Live Telemetry (SSE):** Unidirectional Server-Sent Events stream freshly intercepted panics and state changes directly into the Studio Dashboard with automatic keep-alive heartbeats and zero page reloads.
 - **Direct AI REST Endpoints:** Dedicated REST APIs for on-demand crash analysis (`/api/v1/llm/analyze-panic`), unified diff patch generation (`/api/v1/llm/generate-patch`), and live connection testing (`/api/v1/settings/llm/test`).
@@ -103,6 +104,8 @@ func main() {
 	http.ListenAndServe(":8080", handler)
 }
 ```
+
+> **Security:** API keys are SHA-256 hashed at rest. The full key is displayed **once** when generated — copy it immediately and store it in your `.env` or secrets manager. If lost, revoke and generate a new key from the dashboard.
 
 > **Tip:** When running or building your Go service, use `-trimpath` to generate clean relative stack traces that match your repository structure on GitHub.
 
