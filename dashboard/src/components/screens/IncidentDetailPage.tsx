@@ -48,7 +48,6 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
   const [aiAnalysis, setAiAnalysis] = useState(incident.aiAnalysis);
   const [patchCode, setPatchCode] = useState<string | null>(incident.suggestedPatch || null);
   const [generatingPatch, setGeneratingPatch] = useState(false);
-  const [creatingIssue, setCreatingIssue] = useState(false);
   const [creatingPr, setCreatingPr] = useState(false);
   const [copiedPatch, setCopiedPatch] = useState(false);
   const [copiedStack, setCopiedStack] = useState(false);
@@ -61,28 +60,6 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     setAnalysisError(null);
   }, [incident.id, incident.aiAnalysis, incident.suggestedPatch]);
 
-  const handleCreateIssue = async () => {
-    setCreatingIssue(true);
-    setAnalysisError(null);
-    try {
-      const res = await engineClient.createIncidentIssue(incident.id);
-      if (res.success && res.issue_number && res.issue_url) {
-        const updated: Incident = {
-          ...incident,
-          githubIssueNumber: res.issue_number,
-          githubIssueUrl: res.issue_url,
-        };
-        if (onIncidentUpdated) onIncidentUpdated(updated);
-      } else {
-        setAnalysisError(res.error || 'Failed to create GitHub Issue');
-      }
-    } catch (e: any) {
-      setAnalysisError(e?.message || 'Error creating GitHub Issue');
-    } finally {
-      setCreatingIssue(false);
-    }
-  };
-
   const handleCreatePullRequest = async () => {
     setCreatingPr(true);
     setAnalysisError(null);
@@ -92,11 +69,15 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
         patchCode: patchCode || undefined,
       });
       if (res.success && res.pr_number && res.pr_url) {
+        const finalPatch = res.patch || patchCode || incident.suggestedPatch;
+        if (finalPatch) {
+          setPatchCode(finalPatch);
+        }
         const updated: Incident = {
           ...incident,
           githubPrNumber: res.pr_number,
           githubPrUrl: res.pr_url,
-          suggestedPatch: patchCode || incident.suggestedPatch,
+          suggestedPatch: finalPatch,
         };
         if (onIncidentUpdated) onIncidentUpdated(updated);
       } else {
@@ -126,7 +107,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
       setAiAnalysis({
         rootCause: data.rootCause,
         explanation: data.explanation || data.rootCause,
-        severity: (data.severity as any) || 'CRITICAL',
+        severity: (data.severity as any) || undefined,
         recommendedFix: data.recommendedFix || '',
       });
     } catch (e) {
@@ -143,6 +124,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
     setAnalysisError(null);
     try {
       const data = await engineClient.generateFixPatch({
+        incidentId: incident.id,
         triggeringFile: incident.triggeringFile,
         panicMessage: incident.panicMessage,
         astCode: incident.astSnippet.lines.map((l) => l.content).join('\n'),
@@ -153,11 +135,35 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
         throw new Error(data.error || 'Fix patch generation failed');
       }
       setPatchCode(data.patch);
+      const updated: Incident = {
+        ...incident,
+        suggestedPatch: data.patch,
+      };
+      if (onIncidentUpdated) onIncidentUpdated(updated);
     } catch (e) {
       logger.error('Failed to generate fix patch', e);
       setAnalysisError(e instanceof Error ? e.message : 'Failed to generate fix patch');
     } finally {
       setGeneratingPatch(false);
+    }
+  };
+
+  const [resolving, setResolving] = useState(false);
+
+  const handleResolveIncident = async () => {
+    setResolving(true);
+    try {
+      await engineClient.resolveIncident(incident.id);
+      const updated: Incident = {
+        ...incident,
+        status: 'RESOLVED',
+      };
+      if (onIncidentUpdated) onIncidentUpdated(updated);
+    } catch (e) {
+      logger.error('Failed to resolve incident', e);
+      setAnalysisError(e instanceof Error ? e.message : 'Failed to resolve incident');
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -189,24 +195,34 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
               <span>Incidents</span>
             </button>
             <span>/</span>
-            <span className="font-bold text-slate-900">{incident.id}</span>
+            <span className="text-slate-900 font-bold">{incident.id}</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight font-sans">
-              {incident.title}
-            </h1>
-            <span
-              className={`text-xs font-mono font-bold px-2 py-0.5 rounded-sm border ${
-                incident.status === 'CRITICAL'
-                  ? 'bg-red-50 text-red-700 border-red-200'
-                  : incident.status === 'INVESTIGATING'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}
-            >
-              {incident.status}
-            </span>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight font-sans">
+            {incident.title}
+          </h1>
+
+          {/* Badges & Meta Subline under Title */}
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            {incident.status === 'RESOLVED' ? (
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-sm border bg-emerald-50 text-emerald-700 border-emerald-200">
+                RESOLVED
+              </span>
+            ) : (
+              <span
+                className={`text-xs font-mono font-bold px-2 py-0.5 rounded-sm border ${
+                  incident.severity === 'CRITICAL'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                    : incident.severity === 'HIGH'
+                      ? 'bg-orange-50 text-orange-700 border-orange-200'
+                      : incident.severity === 'MEDIUM'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-red-50 text-red-700 border-red-200'
+                }`}
+              >
+                {incident.severity ? `${incident.severity} SEVERITY` : 'OPEN'}
+              </span>
+            )}
             {(incident.occurrenceCount ?? 1) > 1 && (
               <span className="bg-purple-50 text-purple-800 border border-purple-200 text-xs font-mono px-2 py-0.5 rounded-sm font-bold">
                 {incident.occurrenceCount}x Occurrences
@@ -241,21 +257,16 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 font-mono text-xs">
-          {!incident.githubIssueNumber && (
+          {incident.status === 'OPEN' && (
             <button
-              onClick={handleCreateIssue}
-              disabled={creatingIssue}
-              className="bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+              onClick={handleResolveIncident}
+              disabled={resolving}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              {creatingIssue ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Github className="w-3.5 h-3.5" />
-              )}
-              <span>{creatingIssue ? 'Creating Issue...' : 'Create GitHub Issue'}</span>
+              <Check className="w-3.5 h-3.5" />
+              <span>{resolving ? 'Resolving...' : 'Mark Resolved'}</span>
             </button>
           )}
-
           <button
             onClick={handleRunAiAnalysis}
             disabled={analyzing}
@@ -340,7 +351,13 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                       ) : (
                         <GitPullRequest className="w-3.5 h-3.5" />
                       )}
-                      <span>{creatingPr ? 'Opening Pull Request...' : 'Generate Fix (PR)'}</span>
+                      <span>
+                        {creatingPr
+                          ? 'Opening Pull Request...'
+                          : patchCode
+                            ? 'Open PR with this Fix'
+                            : 'Generate Fix (PR)'}
+                      </span>
                     </button>
                   ) : (
                     <a
@@ -355,16 +372,22 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                     </a>
                   )}
 
-                  <button
-                    onClick={handleGenerateFixPatch}
-                    disabled={generatingPatch}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <Code2 className="w-3.5 h-3.5 text-slate-600" />
-                    <span>
-                      {generatingPatch ? 'Generating Fix Patch...' : 'Preview Patch Diff'}
-                    </span>
-                  </button>
+                  {!patchCode && (
+                    <button
+                      onClick={handleGenerateFixPatch}
+                      disabled={generatingPatch}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-3 py-1.5 rounded-sm text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {generatingPatch ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600" />
+                      ) : (
+                        <Code2 className="w-3.5 h-3.5 text-slate-600" />
+                      )}
+                      <span>
+                        {generatingPatch ? 'Generating Fix Patch...' : 'Preview Patch Diff'}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -526,7 +549,7 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
           {/* Related Incidents Navigator */}
           <div className="bg-white border border-slate-200 rounded-sm p-4 space-y-3">
             <div className="font-bold text-slate-900 border-b border-slate-100 pb-2">
-              All Ingested Repository Crashes
+              All Ingested Crashes for Selected Project
             </div>
 
             <div className="space-y-1.5">
@@ -544,17 +567,25 @@ export const IncidentDetailPage: React.FC<IncidentDetailPageProps> = ({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-bold text-xs">{inc.id}</span>
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm border ${
-                          inc.status === 'CRITICAL'
-                            ? 'bg-red-50 text-red-700 border-red-200'
-                            : inc.status === 'INVESTIGATING'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}
-                      >
-                        {inc.status}
-                      </span>
+                      {inc.status === 'RESOLVED' ? (
+                        <span className="text-[9px] px-1.5 py-0.5 font-bold rounded-sm border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          RESOLVED
+                        </span>
+                      ) : (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.5 font-bold rounded-sm border ${
+                            inc.severity === 'CRITICAL'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : inc.severity === 'HIGH'
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : inc.severity === 'MEDIUM'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          {inc.severity || 'OPEN'}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] truncate">{inc.title}</div>
                   </button>

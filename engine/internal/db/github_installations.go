@@ -70,6 +70,9 @@ func (db *DB) GetAllInstallations(ctx context.Context) ([]GitHubInstallation, er
 		}
 		installations = append(installations, inst)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return installations, nil
 }
 
@@ -96,6 +99,9 @@ func (db *DB) GetAllInstallationRepos(ctx context.Context) ([]InstallationRepo, 
 			return nil, err
 		}
 		repos = append(repos, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return repos, nil
 }
@@ -129,6 +135,19 @@ func (db *DB) SaveInstallationRepos(ctx context.Context, installationID int64, r
 	return tx.Commit()
 }
 
+func (db *DB) SaveInstallationRepo(ctx context.Context, installationID int64, owner, repo string) error {
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database uninitialized")
+	}
+	repoID := fmt.Sprintf("ir_%d_%s_%s", installationID, owner, repo)
+	_, err := db.SQL.ExecContext(ctx, `
+		INSERT INTO installation_repos (id, installation_id, owner, repo)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (installation_id, owner, repo) DO NOTHING
+	`, repoID, installationID, owner, repo)
+	return err
+}
+
 func (db *DB) GetInstallationRepos(ctx context.Context, installationID int64) ([]InstallationRepo, error) {
 	if db == nil || db.SQL == nil {
 		return nil, fmt.Errorf("database uninitialized")
@@ -152,6 +171,9 @@ func (db *DB) GetInstallationRepos(ctx context.Context, installationID int64) ([
 		}
 		repos = append(repos, r)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return repos, nil
 }
 
@@ -160,16 +182,29 @@ func (db *DB) GetInstallationForRepo(ctx context.Context, owner, repo string) (i
 		return 0, fmt.Errorf("database uninitialized")
 	}
 	var installationID int64
+
+	// 1. Check mapped installation repo
 	err := db.SQL.QueryRowContext(ctx, `
 		SELECT installation_id
 		FROM installation_repos
-		WHERE owner = $1 AND repo = $2
+		WHERE LOWER(owner) = LOWER($1) AND LOWER(repo) = LOWER($2) AND installation_id > 0
+		LIMIT 1
 	`, owner, repo).Scan(&installationID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return 0, fmt.Errorf("installation not found for repo %s/%s", owner, repo)
-		}
-		return 0, err
+	if err == nil && installationID > 0 {
+		return installationID, nil
 	}
-	return installationID, nil
+
+	// 2. Return active GitHub App installation
+	err = db.SQL.QueryRowContext(ctx, `
+		SELECT installation_id
+		FROM github_installations
+		WHERE status = 'active' AND installation_id > 0
+		ORDER BY created_at DESC
+		LIMIT 1
+	`).Scan(&installationID)
+	if err == nil && installationID > 0 {
+		return installationID, nil
+	}
+
+	return 0, fmt.Errorf("no active GitHub installation found for %s/%s", owner, repo)
 }

@@ -50,7 +50,7 @@ make dev-web
 
 # Run a test simulation service with your API key and -trimpath (e.g. Order Service on :8082)
 cd test-services/order-service
-TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath .
 ```
 
 ### 3. Single-Container Docker Workflow

@@ -6,11 +6,9 @@
 import React, { useState } from 'react';
 import { Menu, X, ArrowRight } from 'lucide-react';
 import { GithubIcon } from '@/components/GithubIcon';
-import { useLatestRelease } from '@/components/useLatestRelease';
 
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const release = useLatestRelease();
 
   return (
     <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-50">
@@ -21,18 +19,6 @@ export const Navbar: React.FC = () => {
             <div className="bg-black text-white px-2.5 py-1 rounded-sm font-mono text-xs tracking-wider font-bold shadow-xs transition-transform group-hover:scale-105">
               [TRIAGE]
             </div>
-          </a>
-
-          {/* Version pill */}
-          <a
-            href={release.releaseUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 font-mono text-[10px] transition-colors border border-slate-200 shrink-0"
-            title="View latest GitHub release"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>{release.version}</span>
           </a>
         </div>
 
@@ -146,7 +132,7 @@ export const Navbar: React.FC = () => {
               className="flex-1 text-center border border-slate-200 text-slate-700 py-2 rounded-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-slate-50"
             >
               <GithubIcon className="w-4 h-4" />
-              <span>GitHub ({release.version})</span>
+              <span>GitHub</span>
             </a>
             <a
               href="/docs/quickstart"

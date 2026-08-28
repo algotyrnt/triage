@@ -131,11 +131,11 @@ export const ArchitectureSection: React.FC = () => {
           <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg">
               <div className="font-mono text-emerald-400 text-xs font-bold mb-1">
-                Tier 1: In-Memory KV
+                Tier 1: In-Memory Range
               </div>
-              <div className="text-2xl font-extrabold text-white mb-1">&lt; 1.5 ms</div>
+              <div className="text-2xl font-extrabold text-white mb-1">&lt; 1.0 ms</div>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Hot AST cache storing parsed FuncDecl trees in engine memory.
+                Boundary-aware cache storing full [start..end] function spans in memory.
               </p>
             </div>
 
@@ -143,9 +143,9 @@ export const ArchitectureSection: React.FC = () => {
               <div className="font-mono text-cyan-400 text-xs font-bold mb-1">
                 Tier 2: Embedded SQLite
               </div>
-              <div className="text-2xl font-extrabold text-white mb-1">&lt; 5 ms</div>
+              <div className="text-2xl font-extrabold text-white mb-1">&lt; 2.0 ms</div>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Pre-indexed ast_nodes table lookup by repository and commit SHA.
+                Persisted ast_nodes table lookup by repository, commit SHA, and line.
               </p>
             </div>
 
@@ -155,7 +155,7 @@ export const ArchitectureSection: React.FC = () => {
               </div>
               <div className="text-2xl font-extrabold text-white mb-1">&lt; 25 ms</div>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Fetches raw source via GitHub Contents API and parses on the fly.
+                Fetches raw source via GitHub App Contents API and parses on the fly.
               </p>
             </div>
           </div>

@@ -22,7 +22,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'Do I need to pre-index all Go code in a database?',
-    a: 'No! Triage features an on-demand AST slicing architecture. When a panic occurs, the engine uses the git commit SHA and file path to fetch only the required source file (via in-memory KV cache, local workspace, or GitHub Contents API) and parses the enclosing *ast.FuncDecl subtree and package context synchronously in under 14 milliseconds.',
+    a: 'No! Triage features an on-demand Function-Wise AST slicing architecture. When a panic occurs, the engine uses the git commit SHA and file path to fetch only the required source file (via in-memory range cache, SQLite storage, or GitHub Contents API) and parses the enclosing *ast.FuncDecl subtree and package context synchronously in under 14 milliseconds.',
   },
   {
     q: 'How does Triage handle Go monorepos and multi-module projects?',
@@ -30,7 +30,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'Can I manage multiple Go projects and API keys from a single deployment?',
-    a: 'Yes. The Studio Dashboard includes a Workspace Projects page and Header Project Switcher. You can track multiple microservices, generate project-specific API keys, revoke keys, and filter incidents by repository ID or name.',
+    a: 'Yes. The Studio Dashboard includes a Workspace Projects page and Header Project Switcher. You can track multiple microservices, generate project-specific API keys, revoke keys, and filter incidents by repository ID or name. API keys are SHA-256 hashed at rest and displayed once at creation — if lost, revoke and generate a new key.',
   },
   {
     q: 'Can I use my own AI API keys or select different providers?',

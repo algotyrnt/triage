@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Incident, ScreenId, Project } from '@/types';
+import { Incident, IncidentStatus, ScreenId, Project } from '@/types';
 
 import { Header } from '@/components/Header';
 import { LoginPage } from '@/components/screens/LoginPage';
@@ -12,9 +12,7 @@ import { OnboardingPage } from '@/components/screens/OnboardingPage';
 import { ProjectsPage } from '@/components/screens/ProjectsPage';
 import { DashboardPage } from '@/components/screens/DashboardPage';
 import { IncidentDetailPage } from '@/components/screens/IncidentDetailPage';
-import { AstExplorerPage } from '@/components/screens/AstExplorerPage';
 import { TeamPage } from '@/components/screens/TeamPage';
-import { SystemStatusPage } from '@/components/screens/SystemStatusPage';
 import { SettingsPage } from '@/components/screens/SettingsPage';
 import { SetupWizardPage } from '@/components/screens/SetupWizardPage';
 
@@ -49,11 +47,6 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
 
   const navigate = (screen: ScreenId) => {
     setCurrentScreen(screen);
-    try {
-      if (screen !== 'login' && screen !== 'setup') {
-        sessionStorage.setItem('triage_active_screen', screen);
-      }
-    } catch {}
   };
 
   const mapIncidents = (rawIncidents: any[]): Incident[] => {
@@ -65,7 +58,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         repositoryId: item.repository_id || '',
         repositoryName: item.repository_name || '',
         title: item.title || item.panic_message || 'Runtime Go Panic',
-        status: item.status || 'CRITICAL',
+        status: (item.status === 'RESOLVED' ? 'RESOLVED' : 'OPEN') as IncidentStatus,
         triggeringFile: item.file ? `${item.file}:${item.line || 1}` : 'unknown:0',
         triggeringLine: item.line || 1,
         latencyMs: item.latency_ms || 14,
@@ -78,7 +71,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         fingerprint: item.fingerprint || undefined,
         occurrenceCount: item.occurrence_count || 1,
         lastSeenAt: item.last_seen_at ? new Date(item.last_seen_at).toUTCString() : undefined,
-        severity: item.severity || 'CRITICAL',
+        severity: item.severity || undefined,
         aiProvider: item.ai_provider || undefined,
         aiModel: item.ai_model || undefined,
         panicMessage: item.panic_message || item.title || '',
@@ -87,7 +80,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         githubIssueNumber: item.github_issue_number ? Number(item.github_issue_number) : undefined,
         githubPrUrl: item.github_pr_url || undefined,
         githubPrNumber: item.github_pr_number ? Number(item.github_pr_number) : undefined,
-        suggestedPatch: item.suggested_patch || item.suggested_fix || undefined,
+        suggestedPatch: item.suggested_patch || undefined,
         astSnippet: {
           functionName: item.function_name || 'main',
           file: item.file || '',
@@ -104,7 +97,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           ? {
               rootCause: item.root_cause,
               explanation: item.root_cause,
-              severity: item.severity || 'CRITICAL',
+              severity: item.severity || undefined,
               recommendedFix: item.suggested_fix || '',
             }
           : undefined,
@@ -176,19 +169,12 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           return;
         }
 
-        // Step 5: Authenticated — Determine target screen
-        let savedScreen: ScreenId | null = null;
-        try {
-          savedScreen = sessionStorage.getItem('triage_active_screen') as ScreenId | null;
-        } catch {}
-
+        // Step 5: Authenticated — Determine target screen (defaults to 'projects')
         let screenToOpen: ScreenId = 'projects';
         if (targetScreen) {
           screenToOpen = targetScreen;
         } else if (isInstalledRedirect) {
           screenToOpen = 'new';
-        } else if (savedScreen && savedScreen !== 'login' && savedScreen !== 'setup') {
-          screenToOpen = savedScreen;
         }
 
         // Step 6: Load projects & incidents
@@ -268,11 +254,17 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               });
               showToast(`New Panic Ingested: ${newInc.triggeringFile}`, 'error');
             }
-          } else if (raw.type === 'incident_updated' && raw.data) {
+          } else if (
+            (raw.type === 'incident_updated' || raw.type === 'incident_resolved') &&
+            raw.data
+          ) {
             const mapped = mapIncidents([raw.data]);
             if (mapped.length > 0) {
               const updated = mapped[0];
               setIncidents((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+              if (raw.type === 'incident_resolved' || updated.status === 'RESOLVED') {
+                showToast(`Incident Resolved: ${updated.triggeringFile}`, 'success');
+              }
             }
           }
         } catch {}
@@ -291,7 +283,60 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
     setTimeout(() => setToast(null), 4000);
   };
 
-  const criticalCount = incidents.filter((i) => i.status === 'CRITICAL').length;
+  const activeServiceIncidents = React.useMemo(() => {
+    const cleanRepo = activeRepo.toLowerCase();
+    const cleanRoot = (activeRootDir || '').toLowerCase();
+    const activeProject =
+      projects.find((p) => {
+        const slug = `${p.owner}/${p.repo}`.toLowerCase();
+        const pRoot = (p.root_dir || '').toLowerCase();
+        return (slug === cleanRepo || p.repo.toLowerCase() === cleanRepo) && pRoot === cleanRoot;
+      }) ||
+      projects.find((p) => {
+        const slug = `${p.owner}/${p.repo}`.toLowerCase();
+        return slug === cleanRepo || p.repo.toLowerCase() === cleanRepo;
+      });
+
+    const cleanActiveRepo = activeRepo.toLowerCase();
+    const activeRepoName = cleanActiveRepo.includes('/')
+      ? cleanActiveRepo.split('/')[1]
+      : cleanActiveRepo;
+    const cleanRootDir = (activeRootDir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+
+    return incidents.filter((incident) => {
+      if (activeProject?.id && incident.repositoryId) {
+        return incident.repositoryId === activeProject.id;
+      }
+      if (incident.repositoryId && projects.length > 0) {
+        const matchedProj = projects.find((p) => p.id === incident.repositoryId);
+        if (matchedProj) {
+          const projSlug = `${matchedProj.owner}/${matchedProj.repo}`.toLowerCase();
+          const projRoot = (matchedProj.root_dir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+          const repoMatches =
+            projSlug === cleanActiveRepo ||
+            matchedProj.repo.toLowerCase() === cleanActiveRepo ||
+            matchedProj.repo.toLowerCase() === activeRepoName;
+          const rootMatches = projRoot === cleanRootDir;
+          return repoMatches && rootMatches;
+        }
+      }
+      if (incident.repositoryName) {
+        const incRepo = incident.repositoryName.toLowerCase();
+        if (incRepo !== cleanActiveRepo && incRepo !== activeRepoName) return false;
+      }
+      if (cleanRootDir) {
+        const trigFile = (incident.triggeringFile || incident.astSnippet?.file || '').toLowerCase();
+        if (trigFile && !trigFile.startsWith(cleanRootDir + '/') && trigFile !== cleanRootDir) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [incidents, projects, activeRepo, activeRootDir]);
+
+  const activeServiceOpenCount = React.useMemo(() => {
+    return activeServiceIncidents.filter((i) => i.status === 'OPEN').length;
+  }, [activeServiceIncidents]);
 
   const handleLoginSuccess = (user: any) => {
     setCurrentUser(user);
@@ -301,9 +346,6 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
   const handleLogout = () => {
     engineClient.logout().catch(() => {});
     localStorage.removeItem('triage_session');
-    try {
-      sessionStorage.removeItem('triage_active_screen');
-    } catch {}
     engineClient.setAuthToken(null);
     setCurrentUser(null);
     setActiveRepo('');
@@ -423,7 +465,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
         <Header
           currentScreen={currentScreen}
           onNavigate={navigate}
-          criticalCount={criticalCount}
+          openCount={activeServiceOpenCount}
           activeRepo={activeRepo}
           activeRootDir={activeRootDir}
           projects={projects}
@@ -483,6 +525,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                 activeRepo={activeRepo}
                 rootDir={activeRootDir}
                 apiKey={activeApiKey}
+                projects={projects}
                 onSelectIncident={(id) => {
                   setSelectedIncidentId(id);
                   navigate('incident_detail');
@@ -494,7 +537,9 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
               (selectedIncident ? (
                 <IncidentDetailPage
                   incident={selectedIncident}
-                  allIncidents={incidents}
+                  allIncidents={
+                    activeServiceIncidents.length > 0 ? activeServiceIncidents : [selectedIncident]
+                  }
                   onSelectIncident={(id) => setSelectedIncidentId(id)}
                   onIncidentUpdated={(updated) =>
                     setIncidents((prev) =>
@@ -512,18 +557,8 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
                 </div>
               ))}
 
-            {currentScreen === 'ast' && (
-              <AstExplorerPage
-                onNavigate={navigate}
-                activeRepo={activeRepo}
-                activeRootDir={activeRootDir}
-              />
-            )}
             {currentScreen === 'team' && (
               <TeamPage currentUser={currentUser} onNavigate={navigate} />
-            )}
-            {currentScreen === 'status' && (
-              <SystemStatusPage onNavigate={navigate} health={[]} metrics={[]} />
             )}
             {currentScreen === 'settings' && (
               <SettingsPage

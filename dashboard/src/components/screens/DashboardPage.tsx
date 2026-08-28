@@ -3,25 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Incident, ScreenId } from '@/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Incident, Project, ScreenId } from '@/types';
 import { engineClient } from '@/services/engineClient';
 import {
   Key,
   GitBranch,
   Code2,
   Activity,
-  Copy,
   Check,
   AlertTriangle,
   ArrowRight,
   Terminal,
   FolderGit2,
-  Eye,
-  EyeOff,
   Search,
   ExternalLink,
   Settings,
+  Sparkles,
 } from 'lucide-react';
 
 interface DashboardPageProps {
@@ -31,6 +29,7 @@ interface DashboardPageProps {
   activeRepo?: string;
   rootDir?: string;
   apiKey?: string;
+  projects?: Project[];
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
@@ -40,20 +39,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   activeRepo = 'algotyrnt/triage',
   rootDir = '',
   apiKey: rawApiKey,
+  projects = [],
 }) => {
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [showKey, setShowKey] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<
-    'ALL' | 'CRITICAL' | 'INVESTIGATING' | 'RESOLVED'
-  >('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'RESOLVED'>('OPEN');
+  const [severityFilter, setSeverityFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MEDIUM'>(
+    'ALL',
+  );
   const [stats, setStats] = useState<{
     total_incidents: number;
     funcs_indexed: number;
     total_projects: number;
   } | null>(null);
 
-  const apiKey = rawApiKey || '••••••••••••••••••••••••••••••••';
+  const maskedKeyDisplay = rawApiKey
+    ? rawApiKey.startsWith('...')
+      ? `••••••••••••${rawApiKey.replace('...', '')}`
+      : `••••••••••••${rawApiKey.slice(-4)}`
+    : '••••••••••••••••';
 
   useEffect(() => {
     engineClient.getStats().then((data) => {
@@ -61,26 +64,92 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     });
   }, [incidents.length]);
 
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    setCopiedKey(true);
-    setTimeout(() => setCopiedKey(false), 2000);
-  };
+  // Find active project metadata
+  const activeProject = useMemo(() => {
+    if (!projects || projects.length === 0) return undefined;
+    const cleanRepo = activeRepo.toLowerCase();
+    const cleanRoot = (rootDir || '').toLowerCase();
+    return (
+      projects.find((p) => {
+        const slug = `${p.owner}/${p.repo}`.toLowerCase();
+        const pRoot = (p.root_dir || '').toLowerCase();
+        return (slug === cleanRepo || p.repo.toLowerCase() === cleanRepo) && pRoot === cleanRoot;
+      }) ||
+      projects.find((p) => {
+        const slug = `${p.owner}/${p.repo}`.toLowerCase();
+        return slug === cleanRepo || p.repo.toLowerCase() === cleanRepo;
+      })
+    );
+  }, [projects, activeRepo, rootDir]);
 
-  const filteredIncidents = incidents.filter((incident) => {
-    if (statusFilter !== 'ALL' && incident.status !== statusFilter) {
-      return false;
-    }
-    if (searchFilter.trim()) {
-      const q = searchFilter.toLowerCase();
-      return (
-        incident.id.toLowerCase().includes(q) ||
-        incident.title.toLowerCase().includes(q) ||
-        incident.triggeringFile.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  // Scope incidents to only those belonging to the selected service/project
+  const serviceIncidents = useMemo(() => {
+    const cleanActiveRepo = activeRepo.toLowerCase();
+    const activeRepoName = cleanActiveRepo.includes('/')
+      ? cleanActiveRepo.split('/')[1]
+      : cleanActiveRepo;
+    const cleanRootDir = (rootDir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+
+    return incidents.filter((incident) => {
+      // 1. Direct ID match if project ID is available
+      if (activeProject?.id && incident.repositoryId) {
+        return incident.repositoryId === activeProject.id;
+      }
+
+      // 2. If incident has repositoryId, check if it matches another known project
+      if (incident.repositoryId && projects && projects.length > 0) {
+        const matchedProj = projects.find((p) => p.id === incident.repositoryId);
+        if (matchedProj) {
+          const projSlug = `${matchedProj.owner}/${matchedProj.repo}`.toLowerCase();
+          const projRoot = (matchedProj.root_dir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+          const repoMatches =
+            projSlug === cleanActiveRepo ||
+            matchedProj.repo.toLowerCase() === cleanActiveRepo ||
+            matchedProj.repo.toLowerCase() === activeRepoName;
+          const rootMatches = projRoot === cleanRootDir;
+          return repoMatches && rootMatches;
+        }
+      }
+
+      // 3. Match by repositoryName
+      if (incident.repositoryName) {
+        const incRepo = incident.repositoryName.toLowerCase();
+        const repoMatches = incRepo === cleanActiveRepo || incRepo === activeRepoName;
+        if (!repoMatches) return false;
+      }
+
+      // 4. For monorepo services with rootDir, check triggering file path prefix
+      if (cleanRootDir) {
+        const trigFile = (incident.triggeringFile || incident.astSnippet?.file || '').toLowerCase();
+        if (trigFile && !trigFile.startsWith(cleanRootDir + '/') && trigFile !== cleanRootDir) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [incidents, activeProject, activeRepo, rootDir, projects]);
+
+  const filteredIncidents = useMemo(() => {
+    return serviceIncidents.filter((incident) => {
+      if (statusFilter !== 'ALL' && incident.status !== statusFilter) {
+        return false;
+      }
+      if (severityFilter !== 'ALL' && incident.severity !== severityFilter) {
+        return false;
+      }
+      if (searchFilter.trim()) {
+        const q = searchFilter.toLowerCase();
+        return (
+          incident.id.toLowerCase().includes(q) ||
+          incident.title.toLowerCase().includes(q) ||
+          incident.triggeringFile.toLowerCase().includes(q) ||
+          (incident.panicMessage && incident.panicMessage.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [serviceIncidents, statusFilter, severityFilter, searchFilter]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
@@ -120,14 +189,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <span>All Projects</span>
           </button>
           <button
-            onClick={() => onNavigate('ast')}
-            className="text-xs font-mono bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-sm transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-            title="AST Syntax Explorer"
-          >
-            <Code2 className="w-3 h-3 text-slate-500" />
-            <span>AST Explorer</span>
-          </button>
-          <button
             onClick={() => onNavigate('settings')}
             className="text-xs font-mono bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-sm transition-colors flex items-center gap-1.5 cursor-pointer"
             title="Project Settings"
@@ -147,37 +208,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <Key className="w-3.5 h-3.5 text-slate-700" />
               <span>Ingestion Key</span>
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="text-slate-600 hover:text-black font-mono text-[11px] flex items-center gap-0.5 cursor-pointer"
-                title={showKey ? 'Hide key' : 'Reveal key'}
-                aria-label={showKey ? 'Hide key' : 'Reveal key'}
-              >
-                {showKey ? (
-                  <EyeOff className="w-3 h-3 text-slate-500" />
-                ) : (
-                  <Eye className="w-3 h-3 text-slate-500" />
-                )}
-                <span>{showKey ? 'Hide' : 'Show'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleCopyKey}
-                className="text-slate-600 hover:text-black font-mono text-[11px] underline flex items-center gap-0.5 cursor-pointer"
-              >
-                {copiedKey ? (
-                  <Check className="w-3 h-3 text-emerald-600" />
-                ) : (
-                  <Copy className="w-3 h-3" />
-                )}
-                <span>{copiedKey ? 'Copied' : 'Copy'}</span>
-              </button>
-            </div>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900 truncate">
-            {showKey ? apiKey : apiKey.replace(/./g, '•')}
+            {maskedKeyDisplay}
           </div>
           <div className="text-[11px] font-mono text-slate-500 flex items-center justify-between">
             <span>Env: Production</span>
@@ -203,19 +236,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
         </div>
 
-        {/* Metric 3: AST Index Status */}
+        {/* Metric 3: Indexed Functions */}
         <div className="bg-white border border-slate-200 p-3.5 rounded-sm space-y-1.5">
           <div className="flex items-center justify-between text-xs font-mono text-slate-500">
             <span className="flex items-center gap-1">
               <Code2 className="w-3.5 h-3.5 text-slate-700" />
-              <span>AST Index Status</span>
+              <span>Monitored Functions</span>
             </span>
-            <button
-              onClick={() => onNavigate('ast')}
-              className="text-slate-600 hover:text-black text-[11px] underline cursor-pointer"
-            >
-              Tree
-            </button>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900">
             {stats ? `${stats.funcs_indexed.toLocaleString()} Funcs Indexed` : '— Loading...'}
@@ -231,17 +258,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           <div className="flex items-center justify-between text-xs font-mono text-slate-500">
             <span className="flex items-center gap-1">
               <Activity className="w-3.5 h-3.5 text-slate-700" />
-              <span>Total Dispatches</span>
+              <span>Service Dispatches</span>
             </span>
             <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.2 rounded-sm font-mono font-bold">
-              {incidents.filter((i) => i.status === 'CRITICAL').length} Critical
+              {serviceIncidents.filter((i) => i.status === 'OPEN').length} Open
             </span>
           </div>
           <div className="font-mono text-xs font-bold text-slate-900">
-            {stats ? `${stats.total_incidents.toLocaleString()} Telemetry Events` : '— Loading...'}
+            {`${serviceIncidents.length} Telemetry Events`}
           </div>
-          <div className="text-[11px] font-mono text-slate-500">
-            Avg Latency: <span className="text-slate-800 font-semibold">14ms</span>
+          <div className="text-[11px] font-mono text-slate-500 truncate">
+            Scope:{' '}
+            <span className="text-slate-800 font-semibold">
+              {activeRepo}
+              {rootDir ? ` (${rootDir})` : ''}
+            </span>
           </div>
         </div>
       </div>
@@ -256,14 +287,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               Live Panic Telemetry & Incident Dispatches
             </span>
             <span className="text-[11px] text-slate-500">
-              ({filteredIncidents.length} of {incidents.length})
+              ({filteredIncidents.length} of {serviceIncidents.length})
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Status Filter Tabs */}
             <div className="flex items-center bg-white border border-slate-200 rounded-sm p-0.5 text-xs">
-              {(['ALL', 'CRITICAL', 'INVESTIGATING', 'RESOLVED'] as const).map((status) => (
+              {(['ALL', 'OPEN', 'RESOLVED'] as const).map((status) => (
                 <button
                   key={status}
                   type="button"
@@ -279,6 +310,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               ))}
             </div>
 
+            {/* Severity Filter Tabs */}
+            <div className="flex items-center bg-white border border-slate-200 rounded-sm p-0.5 text-xs">
+              {(['ALL', 'CRITICAL', 'HIGH', 'MEDIUM'] as const).map((sev) => (
+                <button
+                  key={sev}
+                  type="button"
+                  onClick={() => setSeverityFilter(sev)}
+                  className={`px-2 py-0.5 rounded-sm transition-colors text-[10px] font-mono font-medium cursor-pointer ${
+                    severityFilter === sev
+                      ? 'bg-black text-white font-bold'
+                      : 'text-slate-600 hover:text-black'
+                  }`}
+                >
+                  {sev}
+                </button>
+              ))}
+            </div>
+
             {/* Search Filter */}
             <div className="relative">
               <Search className="w-3 h-3 absolute left-2.5 top-2 text-slate-400" />
@@ -290,14 +339,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 className="pl-7 pr-2.5 py-1 bg-white border border-slate-200 rounded-sm text-xs font-mono focus:outline-none focus:border-black"
               />
             </div>
-
-            <button
-              onClick={() => onNavigate('incident_detail')}
-              className="bg-black hover:bg-slate-800 text-white text-xs px-3 py-1 rounded-sm flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span>AST Inspector</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
           </div>
         </div>
 
@@ -309,13 +350,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </div>
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-slate-800">
-                {incidents.length === 0 ? 'No Incidents Recorded' : 'No Matching Incidents'}
+                {serviceIncidents.length === 0 ? 'No Incidents Recorded' : 'No Matching Incidents'}
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto font-sans leading-normal">
-                {incidents.length === 0 ? (
+                {serviceIncidents.length === 0 ? (
                   <>
-                    Your service is healthy. When goroutine panics occur, real-time crash
-                    diagnostics and AST symbolication traces will appear here automatically.
+                    No panics recorded for this service. When runtime panics occur, real-time crash
+                    diagnostics and AST symbolication traces will appear here.
                   </>
                 ) : (
                   'Try adjusting your status or search filters above.'
@@ -326,7 +367,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         ) : (
           <div className="divide-y divide-slate-100">
             {filteredIncidents.map((incident) => {
-              const isCritical = incident.status === 'CRITICAL';
               return (
                 <div
                   key={incident.id}
@@ -339,39 +379,84 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                       onSelectIncident(incident.id);
                     }
                   }}
-                  className="p-3.5 hover:bg-slate-50 transition-colors cursor-pointer group flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-mono text-xs focus:outline-none focus:bg-slate-50"
+                  className="p-4 hover:bg-slate-50 transition-colors cursor-pointer group flex flex-col sm:flex-row sm:items-start justify-between gap-4 font-mono text-xs focus:outline-none focus:bg-slate-50"
                 >
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 group-hover:underline text-xs">
-                        {incident.id}
+                  <div className="space-y-2 flex-1 min-w-0">
+                    {/* Header: Title + Badges */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-slate-900 group-hover:underline text-sm font-sans line-clamp-1">
+                        {incident.title}
                       </span>
                       {(incident.occurrenceCount ?? 1) > 1 && (
                         <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-purple-50 text-purple-700 border border-purple-200">
                           {incident.occurrenceCount}x
                         </span>
                       )}
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border ${
-                          isCritical
-                            ? 'bg-red-50 text-red-700 border-red-200'
-                            : incident.status === 'INVESTIGATING'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        }`}
-                      >
-                        {incident.status}
-                      </span>
-                      <span className="text-[11px] text-slate-500">{incident.triggeringFile}</span>
+                      {incident.status === 'RESOLVED' ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          RESOLVED
+                        </span>
+                      ) : (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm border ${
+                            incident.severity === 'CRITICAL'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : incident.severity === 'HIGH'
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : incident.severity === 'MEDIUM'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          {incident.severity || 'OPEN'}
+                        </span>
+                      )}
+                      {incident.githubIssueNumber && (
+                        <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-sm bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          Issue #{incident.githubIssueNumber}
+                        </span>
+                      )}
+                      {incident.githubPrNumber && (
+                        <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-sm bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                          PR #{incident.githubPrNumber}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="text-xs font-semibold text-slate-800 font-sans line-clamp-1">
-                      {incident.title}
+                    {/* Context Row: Function / Crash Site + Root Cause Preview */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 font-sans">
+                      <div className="flex items-center gap-1 font-mono text-[11px] text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-sm">
+                        <Code2 className="w-3 h-3 text-slate-500" />
+                        <span>{incident.triggeringFile}</span>
+                      </div>
+
+                      {incident.astSnippet?.functionName &&
+                        incident.astSnippet.functionName !== 'main' && (
+                          <div className="font-mono text-[11px] text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded-sm">
+                            fn:{' '}
+                            <span className="font-semibold text-slate-800">
+                              {incident.astSnippet.functionName}()
+                            </span>
+                          </div>
+                        )}
+
+                      {incident.aiAnalysis?.rootCause ? (
+                        <div className="text-[11px] text-slate-600 flex items-center gap-1 line-clamp-1">
+                          <Sparkles className="w-3 h-3 text-purple-600 shrink-0" />
+                          <span className="font-medium text-slate-700">Root Cause:</span>
+                          <span className="text-slate-500">{incident.aiAnalysis.rootCause}</span>
+                        </div>
+                      ) : incident.panicMessage && incident.panicMessage !== incident.title ? (
+                        <div className="text-[11px] text-slate-500 line-clamp-1 font-mono">
+                          {incident.panicMessage}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 text-xs text-slate-500 shrink-0">
-                    <span className="font-mono">{incident.latencyMs}ms</span>
+                  {/* Right Meta Column */}
+                  <div className="flex items-center gap-4 text-xs text-slate-500 shrink-0 sm:pt-1">
+                    <span className="font-mono text-[11px]">{incident.latencyMs}ms</span>
                     <span className="text-slate-400 font-mono text-[11px]">
                       {incident.timestamp}
                     </span>

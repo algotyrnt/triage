@@ -173,6 +173,33 @@ func (c *AppConfig) FetchFileContent(ctx context.Context, installationID int64, 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
+		// Fallback: If fetch with commitSHA failed (e.g. unpushed local commit or stale ref), retry without commitSHA on default branch
+		if commitSHA != "" {
+			defaultURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, filePath)
+			retryReq, rErr := http.NewRequestWithContext(ctx, "GET", defaultURL, nil)
+			if rErr == nil {
+				retryReq.Header.Set("Authorization", "Bearer "+token)
+				retryReq.Header.Set("Accept", "application/vnd.github+json")
+				SetDefaultHeaders(retryReq)
+				if retryResp, doErr := githubHTTPClient.Do(retryReq); doErr == nil {
+					defer retryResp.Body.Close()
+					if retryResp.StatusCode == http.StatusOK {
+						var retryPayload struct {
+							Content  string `json:"content"`
+							Encoding string `json:"encoding"`
+							SHA      string `json:"sha"`
+						}
+						if dErr := json.NewDecoder(retryResp.Body).Decode(&retryPayload); dErr == nil {
+							if decoded, bErr := base64.StdEncoding.DecodeString(retryPayload.Content); bErr == nil {
+								return decoded, retryPayload.SHA, nil
+							}
+						}
+					}
+				}
+			}
+		}
+
 		return nil, "", fmt.Errorf("failed to fetch file content, status: %d, body: %s", resp.StatusCode, body)
 	}
 
@@ -278,6 +305,50 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 	}
 
 	return payload.Number, payload.HTMLURL, nil
+}
+
+// CloseIssue updates an issue on GitHub to state "closed".
+func (c *AppConfig) CloseIssue(ctx context.Context, installationID int64, owner, repo string, issueNumber int) error {
+	token, err := c.GetInstallationToken(ctx, installationID)
+	if err != nil {
+		return fmt.Errorf("failed to get token: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", owner, repo, issueNumber)
+	payloadReq := struct {
+		State       string `json:"state"`
+		StateReason string `json:"state_reason,omitempty"`
+	}{
+		State:       "closed",
+		StateReason: "completed",
+	}
+
+	payloadBytes, err := json.Marshal(payloadReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+	SetDefaultHeaders(req)
+
+	resp, err := githubHTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to close issue, status: %d, body: %s", resp.StatusCode, body)
+	}
+	return nil
 }
 
 func (c *AppConfig) GetDefaultBranch(ctx context.Context, installationID int64, owner, repo string) (string, string, error) {
@@ -515,6 +586,42 @@ type RepositoryInfo struct {
 	DefaultBranch string `json:"default_branch"`
 	Language      string `json:"language"`
 	Private       bool   `json:"private"`
+}
+
+// GetRepoInstallation queries GitHub App API (GET /repos/:owner/:repo/installation)
+// using App JWT to find the exact installation ID for a specific repository.
+func (c *AppConfig) GetRepoInstallation(ctx context.Context, owner, repo string) (int64, error) {
+	appJWT, err := c.SignAppJWT()
+	if err != nil {
+		return 0, fmt.Errorf("failed to sign app jwt: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/installation", owner, repo)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	SetDefaultHeaders(req)
+
+	resp, err := githubHTTPClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get repo installation: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		var payload struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err == nil && payload.ID > 0 {
+			return payload.ID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("repository %s/%s installation not found on GitHub App (status: %d)", owner, repo, resp.StatusCode)
 }
 
 func (c *AppConfig) ListAppInstallations(ctx context.Context) ([]AppInstallationInfo, error) {
@@ -756,68 +863,72 @@ func FetchUserRepositories(ctx context.Context, username string, accessToken ...
 		orgsReq.Header.Set("Accept", "application/vnd.github+json")
 		SetDefaultHeaders(orgsReq)
 
-		if orgsResp, oErr := client.Do(orgsReq); oErr == nil && orgsResp.StatusCode == http.StatusOK {
-			var orgs []struct {
-				Login string `json:"login"`
-			}
-			_ = json.NewDecoder(orgsResp.Body).Decode(&orgs)
-			orgsResp.Body.Close()
-
-			for _, org := range orgs {
-				orgPage := 1
-				for orgPage <= 5 {
-					orgUrl := fmt.Sprintf("https://api.github.com/orgs/%s/repos?type=all&per_page=100&page=%d", org.Login, orgPage)
-					oReq, rErr := http.NewRequestWithContext(ctx, "GET", orgUrl, nil)
-					if rErr != nil {
-						break
-					}
-					oReq.Header.Set("Authorization", "Bearer "+token)
-					oReq.Header.Set("Accept", "application/vnd.github+json")
-					SetDefaultHeaders(oReq)
-
-					oResp, dErr := client.Do(oReq)
-					if dErr != nil || oResp.StatusCode != http.StatusOK {
-						if oResp != nil {
-							oResp.Body.Close()
-						}
-						break
-					}
-
-					var orgItems []struct {
-						Name          string `json:"name"`
-						Private       bool   `json:"private"`
-						DefaultBranch string `json:"default_branch"`
-						Language      string `json:"language"`
-						Owner         struct {
-							Login string `json:"login"`
-						} `json:"owner"`
-					}
-					_ = json.NewDecoder(oResp.Body).Decode(&orgItems)
-					oResp.Body.Close()
-
-					if len(orgItems) == 0 {
-						break
-					}
-
-					for _, r := range orgItems {
-						key := strings.ToLower(fmt.Sprintf("%s/%s", r.Owner.Login, r.Name))
-						if !seen[key] {
-							seen[key] = true
-							allRepos = append(allRepos, RepositoryInfo{
-								Owner:         r.Owner.Login,
-								Repo:          r.Name,
-								DefaultBranch: r.DefaultBranch,
-								Language:      r.Language,
-								Private:       r.Private,
-							})
-						}
-					}
-
-					if len(orgItems) < 100 {
-						break
-					}
-					orgPage++
+		if orgsResp, oErr := client.Do(orgsReq); oErr == nil {
+			if orgsResp.StatusCode == http.StatusOK {
+				var orgs []struct {
+					Login string `json:"login"`
 				}
+				_ = json.NewDecoder(orgsResp.Body).Decode(&orgs)
+				orgsResp.Body.Close()
+
+				for _, org := range orgs {
+					orgPage := 1
+					for orgPage <= 5 {
+						orgUrl := fmt.Sprintf("https://api.github.com/orgs/%s/repos?type=all&per_page=100&page=%d", org.Login, orgPage)
+						oReq, rErr := http.NewRequestWithContext(ctx, "GET", orgUrl, nil)
+						if rErr != nil {
+							break
+						}
+						oReq.Header.Set("Authorization", "Bearer "+token)
+						oReq.Header.Set("Accept", "application/vnd.github+json")
+						SetDefaultHeaders(oReq)
+
+						oResp, dErr := client.Do(oReq)
+						if dErr != nil || oResp.StatusCode != http.StatusOK {
+							if oResp != nil {
+								oResp.Body.Close()
+							}
+							break
+						}
+
+						var orgItems []struct {
+							Name          string `json:"name"`
+							Private       bool   `json:"private"`
+							DefaultBranch string `json:"default_branch"`
+							Language      string `json:"language"`
+							Owner         struct {
+								Login string `json:"login"`
+							} `json:"owner"`
+						}
+						_ = json.NewDecoder(oResp.Body).Decode(&orgItems)
+						oResp.Body.Close()
+
+						if len(orgItems) == 0 {
+							break
+						}
+
+						for _, r := range orgItems {
+							key := strings.ToLower(fmt.Sprintf("%s/%s", r.Owner.Login, r.Name))
+							if !seen[key] {
+								seen[key] = true
+								allRepos = append(allRepos, RepositoryInfo{
+									Owner:         r.Owner.Login,
+									Repo:          r.Name,
+									DefaultBranch: r.DefaultBranch,
+									Language:      r.Language,
+									Private:       r.Private,
+								})
+							}
+						}
+
+						if len(orgItems) < 100 {
+							break
+						}
+						orgPage++
+					}
+				}
+			} else {
+				orgsResp.Body.Close()
 			}
 		}
 	}

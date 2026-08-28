@@ -57,6 +57,9 @@ func (db *DB) GetAllInstanceConfig(ctx context.Context) (map[string]string, erro
 		}
 		result[k] = v
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 

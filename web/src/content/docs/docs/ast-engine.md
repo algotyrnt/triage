@@ -156,29 +156,11 @@ Triage handles this transparently:
 
 ---
 
-## Interactive AST Explorer & Symbol Tree
+## Function-Wise Range Caching
 
-The Studio Dashboard includes a dedicated **AST Explorer** workspace (`/ast`):
+Rather than caching purely on an exact `line_number` or requiring manual repository-wide pre-indexing, Triage uses an intelligent **Function-Wise AST Caching** engine:
 
-- **Package Hierarchy & Symbols:** Browse live Go packages, source files, and declared functions with their method receivers and line positions.
-- **Syntax Snippet Inspector:** Click any function symbol to instantly view its parsed AST syntax snippet formatted with syntax highlighting.
-- **1-Click Re-indexing:** Trigger on-demand package re-indexing directly from the Studio UI to refresh symbols after pushing commits.
-
----
-
-## Pre-Indexing via API (Optional)
-
-While Triage resolves AST nodes dynamically on demand, you can also pre-index entire repositories via the REST API:
-
-```bash
-curl -X POST http://localhost:8080/api/v1/ast/index \
-  -H "Authorization: Bearer $TRIAGE_SESSION_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repo": "myorg/myrepo",
-    "root_dir": "backend",
-    "commit_sha": "main"
-  }'
-```
-
-This parses package directories once and stores rich multi-file AST context snippets in the `ast_nodes` table for instant `< 2ms` lookups.
+1. **Boundary-Aware In-Memory Caching:** When a file is fetched and parsed from GitHub on-demand, Triage identifies the enclosing function declaration's boundary coordinates `[start_line..end_line]`.
+2. **Sub-Millisecond Hit Rate:** If a crash happens anywhere within that function boundary (e.g. lines 45–120 of `ProcessPayment`), subsequent panics on _any_ line in that range hit the memory cache in `< 1ms` with **zero redundant GitHub API requests**.
+3. **Persistent SQLite Tier:** Extracted AST function snippets are stored in SQLite (`ast_nodes` table) to survive container or engine restarts.
+4. **Commit Content-Addressing:** Cache keys are scoped by Git commit SHA (`owner/repo@commit:file`), guaranteeing 100% cache consistency without stale data when code is deployed.

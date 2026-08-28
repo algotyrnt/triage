@@ -59,8 +59,6 @@ func TestSecurity_SEC001_UnauthenticatedAccessVerifications(t *testing.T) {
 		{http.MethodGet, "/api/v1/incidents"},
 		{http.MethodGet, "/api/v1/projects"},
 		{http.MethodGet, "/api/v1/stats"},
-		{http.MethodGet, "/api/v1/ast/index"},
-		{http.MethodGet, "/api/v1/ast/tree"},
 		{http.MethodGet, "/api/v1/repos/detect-modules"},
 		{http.MethodGet, "/api/v1/team/members"},
 		{http.MethodPost, "/api/v1/incidents/create-issue"},

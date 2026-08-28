@@ -233,6 +233,13 @@ export class EngineClient {
     return res.incidents || [];
   }
 
+  async resolveIncident(incidentId: string): Promise<any> {
+    return this.request('/incidents/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ incident_id: incidentId }),
+    });
+  }
+
   async getStats(): Promise<any> {
     return this.request('/stats', { fallback: null });
   }
@@ -323,7 +330,6 @@ export class EngineClient {
       id: k.id,
       name: k.name || 'API Key',
       keyMasked: k.key_masked || '...xxxx',
-      fullKey: k.raw_key || undefined,
       createdAt: k.created_at ? new Date(k.created_at).toISOString().split('T')[0] : 'Recently',
       lastUsed: 'Recently',
       status: (k.status === 'REVOKED' ? 'REVOKED' : 'ACTIVE') as 'ACTIVE' | 'REVOKED',
@@ -398,33 +404,6 @@ export class EngineClient {
     return Array.isArray(res.modules) && res.modules.length > 0 ? res.modules : fallback;
   }
 
-  async getASTTree(
-    owner: string,
-    repo: string,
-    rootDir?: string,
-  ): Promise<{ status: string; files: any[]; total: number } | null> {
-    return this.request('/ast/tree', {
-      params: { owner, repo, root_dir: rootDir },
-      fallback: null,
-    });
-  }
-
-  async indexAST(
-    owner: string,
-    repo: string,
-    commit = 'main',
-    rootDir = '',
-  ): Promise<{ status: string; indexed_count?: number; error?: string } | null> {
-    try {
-      return await this.request('/ast/index', {
-        method: 'POST',
-        body: JSON.stringify({ owner, repo, commit, root_dir: rootDir }),
-      });
-    } catch (err: any) {
-      return { status: 'error', error: err.message };
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // AI Diagnostics & Remediation
   // ---------------------------------------------------------------------------
@@ -455,7 +434,7 @@ export class EngineClient {
         success: true,
         rootCause: data.rootCause,
         explanation: data.explanation,
-        severity: data.severity || 'CRITICAL',
+        severity: data.severity || undefined,
         recommendedFix: data.recommendedFix,
       };
     } catch (err: any) {
@@ -464,6 +443,7 @@ export class EngineClient {
   }
 
   async generateFixPatch(params: {
+    incidentId?: string;
     triggeringFile: string;
     panicMessage: string;
     astCode: string;
@@ -511,6 +491,7 @@ export class EngineClient {
     pr_number?: number;
     pr_url?: string;
     branch?: string;
+    patch?: string;
     error?: string;
   }> {
     try {
@@ -526,6 +507,7 @@ export class EngineClient {
         pr_number: data.pull_request.number,
         pr_url: data.pull_request.html_url,
         branch: data.pull_request.branch,
+        patch: data.patch || params.patchCode,
       };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to create Pull Request' };

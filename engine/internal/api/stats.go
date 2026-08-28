@@ -25,7 +25,7 @@ func (s *Server) HandleStats(w http.ResponseWriter, r *http.Request) {
 		"status":          "healthy",
 		"version":         s.version,
 		"total_incidents": 0,
-		"funcs_indexed":   1420,
+		"funcs_indexed":   0,
 	}
 
 	if s.db != nil {

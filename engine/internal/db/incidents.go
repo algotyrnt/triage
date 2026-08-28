@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -19,15 +20,16 @@ func (db *DB) FindActiveIncidentByFingerprint(ctx context.Context, repositoryID,
 	}
 	var inc Incident
 	err := db.SQL.QueryRowContext(ctx, `
-		SELECT id, COALESCE(repository_id, ''), COALESCE(fingerprint, ''), occurrence_count, title, status, COALESCE(severity, 'CRITICAL'), COALESCE(ai_provider, ''), COALESCE(ai_model, ''), file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at, last_seen_at
-		FROM incidents
-		WHERE (repository_id = $1 OR ($1 = '' AND repository_id IS NULL))
-		  AND fingerprint = $2
-		  AND status != 'RESOLVED'
-		ORDER BY last_seen_at DESC
+		SELECT i.id, COALESCE(i.repository_id, ''), COALESCE(r.owner || '/' || r.repo, ''), COALESCE(i.fingerprint, ''), i.occurrence_count, i.title, i.status, COALESCE(i.severity, ''), COALESCE(i.ai_provider, ''), COALESCE(i.ai_model, ''), i.file, i.line, i.panic_message, i.stack_trace, COALESCE(i.ast_snippet, ''), COALESCE(i.root_cause, ''), COALESCE(i.suggested_fix, ''), COALESCE(i.suggested_patch, ''), COALESCE(i.github_issue_url, ''), COALESCE(i.github_issue_number, 0), COALESCE(i.github_pr_url, ''), COALESCE(i.github_pr_number, 0), i.created_at, i.last_seen_at
+		FROM incidents i
+		LEFT JOIN repositories r ON i.repository_id = r.id
+		WHERE (i.repository_id = $1 OR ($1 = '' AND i.repository_id IS NULL))
+		  AND i.fingerprint = $2
+		  AND i.status != 'RESOLVED'
+		ORDER BY i.last_seen_at DESC
 		LIMIT 1
 	`, repositoryID, fingerprint).Scan(
-		&inc.ID, &inc.RepositoryID, &inc.Fingerprint, &inc.OccurrenceCount, &inc.Title, &inc.Status, &inc.Severity, &inc.AIProvider, &inc.AIModel, &inc.File, &inc.Line,
+		&inc.ID, &inc.RepositoryID, &inc.RepositoryName, &inc.Fingerprint, &inc.OccurrenceCount, &inc.Title, &inc.Status, &inc.Severity, &inc.AIProvider, &inc.AIModel, &inc.File, &inc.Line,
 		&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
 		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt, &inc.LastSeenAt,
 	)
@@ -71,8 +73,14 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 	if inc.OccurrenceCount <= 0 {
 		inc.OccurrenceCount = 1
 	}
-	if inc.Severity == "" {
-		inc.Severity = "CRITICAL"
+	if inc.Status == "" {
+		inc.Status = "OPEN"
+	}
+	if inc.Severity != "" {
+		inc.Severity = strings.ToUpper(strings.TrimSpace(inc.Severity))
+		if inc.Severity != "CRITICAL" && inc.Severity != "HIGH" && inc.Severity != "MEDIUM" {
+			inc.Severity = ""
+		}
 	}
 
 	query := `
@@ -132,6 +140,30 @@ func (db *DB) UpdateIncidentIssue(ctx context.Context, incidentID, issueURL stri
 	return err
 }
 
+func (db *DB) UpdateIncidentPatch(ctx context.Context, incidentID, patch string) error {
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database uninitialized")
+	}
+	_, err := db.SQL.ExecContext(ctx, `
+		UPDATE incidents
+		SET suggested_patch = $2
+		WHERE id = $1 AND (suggested_patch IS NULL OR suggested_patch = '')
+	`, incidentID, patch)
+	return err
+}
+
+func (db *DB) ResolveIncident(ctx context.Context, id string) error {
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database uninitialized")
+	}
+	_, err := db.SQL.ExecContext(ctx, `
+		UPDATE incidents
+		SET status = 'RESOLVED'
+		WHERE id = $1
+	`, id)
+	return err
+}
+
 func (db *DB) UpdateIncidentPR(ctx context.Context, incidentID, prURL string, prNumber int, patch string) error {
 	if db == nil || db.SQL == nil {
 		return fmt.Errorf("database uninitialized")
@@ -155,9 +187,10 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 	}
 
 	rows, err := db.SQL.QueryContext(ctx, `
-		SELECT id, COALESCE(repository_id, ''), COALESCE(fingerprint, ''), occurrence_count, title, status, COALESCE(severity, 'CRITICAL'), COALESCE(ai_provider, ''), COALESCE(ai_model, ''), file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at, last_seen_at
-		FROM incidents
-		ORDER BY last_seen_at DESC
+		SELECT i.id, COALESCE(i.repository_id, ''), COALESCE(r.owner || '/' || r.repo, ''), COALESCE(i.fingerprint, ''), i.occurrence_count, i.title, i.status, COALESCE(i.severity, ''), COALESCE(i.ai_provider, ''), COALESCE(i.ai_model, ''), i.file, i.line, i.panic_message, i.stack_trace, COALESCE(i.ast_snippet, ''), COALESCE(i.root_cause, ''), COALESCE(i.suggested_fix, ''), COALESCE(i.suggested_patch, ''), COALESCE(i.github_issue_url, ''), COALESCE(i.github_issue_number, 0), COALESCE(i.github_pr_url, ''), COALESCE(i.github_pr_number, 0), i.created_at, i.last_seen_at
+		FROM incidents i
+		LEFT JOIN repositories r ON i.repository_id = r.id
+		ORDER BY i.last_seen_at DESC
 		LIMIT $1
 	`, limit)
 	if err != nil {
@@ -169,7 +202,7 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 	for rows.Next() {
 		var inc Incident
 		err := rows.Scan(
-			&inc.ID, &inc.RepositoryID, &inc.Fingerprint, &inc.OccurrenceCount, &inc.Title, &inc.Status, &inc.Severity, &inc.AIProvider, &inc.AIModel, &inc.File, &inc.Line,
+			&inc.ID, &inc.RepositoryID, &inc.RepositoryName, &inc.Fingerprint, &inc.OccurrenceCount, &inc.Title, &inc.Status, &inc.Severity, &inc.AIProvider, &inc.AIModel, &inc.File, &inc.Line,
 			&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
 			&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt, &inc.LastSeenAt,
 		)
@@ -177,6 +210,9 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 			return nil, err
 		}
 		results = append(results, inc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return results, nil
 }
@@ -187,11 +223,12 @@ func (db *DB) GetIncidentByID(ctx context.Context, id string) (*Incident, error)
 	}
 	var inc Incident
 	err := db.SQL.QueryRowContext(ctx, `
-		SELECT id, COALESCE(repository_id, ''), COALESCE(fingerprint, ''), occurrence_count, title, status, COALESCE(severity, 'CRITICAL'), COALESCE(ai_provider, ''), COALESCE(ai_model, ''), file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at, last_seen_at
-		FROM incidents
-		WHERE id = $1
+		SELECT i.id, COALESCE(i.repository_id, ''), COALESCE(r.owner || '/' || r.repo, ''), COALESCE(i.fingerprint, ''), i.occurrence_count, i.title, i.status, COALESCE(i.severity, ''), COALESCE(i.ai_provider, ''), COALESCE(i.ai_model, ''), i.file, i.line, i.panic_message, i.stack_trace, COALESCE(i.ast_snippet, ''), COALESCE(i.root_cause, ''), COALESCE(i.suggested_fix, ''), COALESCE(i.suggested_patch, ''), COALESCE(i.github_issue_url, ''), COALESCE(i.github_issue_number, 0), COALESCE(i.github_pr_url, ''), COALESCE(i.github_pr_number, 0), i.created_at, i.last_seen_at
+		FROM incidents i
+		LEFT JOIN repositories r ON i.repository_id = r.id
+		WHERE i.id = $1
 	`, id).Scan(
-		&inc.ID, &inc.RepositoryID, &inc.Fingerprint, &inc.OccurrenceCount, &inc.Title, &inc.Status, &inc.Severity, &inc.AIProvider, &inc.AIModel, &inc.File, &inc.Line,
+		&inc.ID, &inc.RepositoryID, &inc.RepositoryName, &inc.Fingerprint, &inc.OccurrenceCount, &inc.Title, &inc.Status, &inc.Severity, &inc.AIProvider, &inc.AIModel, &inc.File, &inc.Line,
 		&inc.PanicMessage, &inc.StackTrace, &inc.ASTSnippet, &inc.RootCause, &inc.SuggestedFix, &inc.SuggestedPatch,
 		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt, &inc.LastSeenAt,
 	)

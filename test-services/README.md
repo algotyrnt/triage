@@ -1,6 +1,6 @@
 # Test Services Suite
 
-This directory contains dummy Go microservices specifically designed to test **Triage's** panic interception, cross-file AST extraction, AI root-cause diagnosis, and automated bugfix PR generation across realistic backend architectures.
+This directory contains standalone Go microservices designed to test **Triage's** panic interception, monorepo AST extraction, AI root-cause diagnosis, and automated bugfix PR generation across realistic backend architectures.
 
 ---
 
@@ -12,6 +12,22 @@ This directory contains dummy Go microservices specifically designed to test **T
 | **Order Service**   | `test-services/order-service`   | `:8082`      | Multi-package domain logic, nested nil struct pointers, slice bounds out of range, uninitialized maps |
 | **Payment Gateway** | `test-services/payment-gateway` | `:8083`      | Interface method panics, uninitialized config struct dereference, integer divide-by-zero              |
 | **Auth Service**    | `test-services/auth-service`    | `:8084`      | Deep nested nil claims dereference, short header slice bounds out of range, send to closed channel    |
+
+---
+
+## Project Onboarding in Triage
+
+To track any of these test microservices in Triage:
+
+1. Open your Triage Console at **http://localhost:8080** (or **http://localhost:3000** during local development).
+2. Click **"New Project"** (`+`).
+3. Select or enter your repository: `algotyrnt/triage` (or your repository).
+4. Set the **Monorepo Subdirectory (`root_dir`)**:
+   - For **Order Service**: `test-services/order-service`
+   - For **Payment Gateway**: `test-services/payment-gateway`
+   - For **Auth Service**: `test-services/auth-service`
+   - For **Simple Service**: `test-services/simple-service`
+5. Click **Initialize Project**, copy the **Ingestion API Key** displayed on the completion screen, and store it securely.
 
 ---
 
@@ -29,7 +45,7 @@ cp .env.example .env.local
 
 | Variable            | Required? | Default                                  | Description                                         |
 | :------------------ | :-------- | :--------------------------------------- | :-------------------------------------------------- |
-| `TRIAGE_API_KEY`    | **Yes**   | —                                        | Project-scoped ingestion key from Triage Dashboard  |
+| `TRIAGE_API_KEY`    | **Yes**   | —                                        | Project-scoped ingestion key from Triage Onboarding |
 | `TRIAGE_ENGINE_URL` | No        | `http://localhost:8080/api/v1/telemetry` | Telemetry endpoint on the Triage engine             |
 | `PORT`              | No        | Service-specific (`8081`-`8084`)         | Port the HTTP service listens on                    |
 
@@ -37,30 +53,30 @@ cp .env.example .env.local
 
 ## Running with `-trimpath` (Recommended)
 
-When running or building Go services with the Triage SDK, pass `TRIAGE_API_KEY` and the `-trimpath` flag:
+When running or building Go services with the Triage SDK, provide `TRIAGE_API_KEY` and the `-trimpath` flag:
 
 ```bash
 # 1. Order Service (:8082)
 cd test-services/order-service
-TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath .
 
 # 2. Payment Gateway (:8083)
 cd test-services/payment-gateway
-TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath .
 
 # 3. Auth Service (:8084)
 cd test-services/auth-service
-TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath .
 
 # 4. Simple Service (:8081)
 cd test-services/simple-service
-TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
+TRIAGE_API_KEY=your_sample_api_key go run -trimpath .
 ```
 
-Or when compiling a binary:
+Or when compiling a production binary:
 
 ```bash
-go build -trimpath -o server main.go
+go build -trimpath -o server .
 ./server
 ```
 
@@ -89,7 +105,7 @@ go build -trimpath -o server main.go
   ```
 - **Slice Index Out of Range** (`rules[0]` on empty slice in `calculator.go`):
   ```bash
-  curl http://localhost:8082/orders/apply-discount-bounds
+  curl http://localhost:8082/orders/discount-empty-slice
   ```
 - **Assignment to Nil Map** (`order.Metadata[key] = val` in `service.go`):
   ```bash

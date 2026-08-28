@@ -14,8 +14,6 @@ import {
   PlusCircle,
   Search,
   ArrowRight,
-  Copy,
-  Check,
   Activity,
   Settings,
   RefreshCw,
@@ -23,8 +21,6 @@ import {
   Terminal,
   ShieldCheck,
   Sparkles,
-  Eye,
-  EyeOff,
 } from 'lucide-react';
 
 interface ProjectsPageProps {
@@ -46,42 +42,34 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'critical' | 'healthy'>('all');
-  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
-  const [revealedProjects, setRevealedProjects] = useState<Record<string, boolean>>({});
 
   // Helper to get incidents for a specific project
   const getProjectIncidents = (project: Project): Incident[] => {
-    const projectRepoSlug = `${project.owner}/${project.repo}`;
+    const projectRepoSlug = `${project.owner}/${project.repo}`.toLowerCase();
+    const cleanRootDir = (project.root_dir || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+
     return incidents.filter((inc) => {
       if (inc.repositoryId && project.id && inc.repositoryId === project.id) {
         return true;
       }
-      if (
-        inc.repositoryName &&
-        (inc.repositoryName === projectRepoSlug || inc.repositoryName === project.repo)
-      ) {
-        return true;
+      if (inc.repositoryName) {
+        const incRepo = inc.repositoryName.toLowerCase();
+        const repoMatches = incRepo === projectRepoSlug || incRepo === project.repo.toLowerCase();
+        if (!repoMatches) return false;
       }
-      return false;
+      if (cleanRootDir) {
+        const trigFile = (inc.triggeringFile || inc.astSnippet?.file || '').toLowerCase();
+        if (trigFile && !trigFile.startsWith(cleanRootDir + '/') && trigFile !== cleanRootDir) {
+          return false;
+        }
+      }
+      return true;
     });
   };
 
   // Helper to get active API key for a project
   const getProjectKey = (project: Project): string => {
     return project.api_key_masked || '...xxxx';
-  };
-
-  const toggleRevealProjectKey = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setRevealedProjects((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handleCopyKey = (e: React.MouseEvent, project: Project) => {
-    e.stopPropagation();
-    const key = getProjectKey(project);
-    navigator.clipboard.writeText(key);
-    setCopiedKeyId(project.id || `${project.owner}/${project.repo}`);
-    setTimeout(() => setCopiedKeyId(null), 2000);
   };
 
   // Filtered projects
@@ -100,7 +88,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
     if (!matchesSearch) return false;
 
     const projectIncs = getProjectIncidents(project);
-    const criticalCount = projectIncs.filter((i) => i.status === 'CRITICAL').length;
+    const criticalCount = projectIncs.filter((i) => i.status === 'OPEN').length;
 
     if (statusFilter === 'critical') {
       return criticalCount > 0;
@@ -115,7 +103,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
   // Global KPIs
   const totalProjects = projects.length;
   const totalIncidents = incidents.length;
-  const criticalIncidents = incidents.filter((i) => i.status === 'CRITICAL').length;
+  const criticalIncidents = incidents.filter((i) => i.status === 'OPEN').length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -190,12 +178,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
           <div className="text-[11px] font-mono text-slate-500">Across all active services</div>
         </div>
 
-        {/* Metric 3: Critical Incidents */}
+        {/* Metric 3: Open Incidents */}
         <div className="bg-white border border-slate-200 p-4 rounded-sm space-y-2 shadow-xs">
           <div className="flex items-center justify-between text-xs font-mono text-slate-500">
             <span className="flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
-              <span>Critical Incidents</span>
+              <span>Open Incidents</span>
             </span>
             <span
               className={`text-[10px] border px-1.5 py-0.5 rounded-sm font-mono font-bold ${
@@ -262,10 +250,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
             }`}
           >
             With Panics (
-            {
-              projects.filter((p) => getProjectIncidents(p).some((i) => i.status === 'CRITICAL'))
-                .length
-            }
+            {projects.filter((p) => getProjectIncidents(p).some((i) => i.status === 'OPEN')).length}
             )
           </button>
           <button
@@ -278,7 +263,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
           >
             Healthy (
             {
-              projects.filter((p) => !getProjectIncidents(p).some((i) => i.status === 'CRITICAL'))
+              projects.filter((p) => !getProjectIncidents(p).some((i) => i.status === 'OPEN'))
                 .length
             }
             )
@@ -314,18 +299,15 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProjects.map((project) => {
             const projectIncs = getProjectIncidents(project);
-            const critCount = projectIncs.filter((i) => i.status === 'CRITICAL').length;
+            const critCount = projectIncs.filter((i) => i.status === 'OPEN').length;
             const projectKey = getProjectKey(project);
             const projectId =
               project.id || `${project.owner}/${project.repo}/${project.root_dir || ''}`;
-            const isRevealed = Boolean(revealedProjects[projectId]);
-            const isKeyCopied = copiedKeyId === (project.id || `${project.owner}/${project.repo}`);
-            const repoSlug = `${project.owner}/${project.repo}`;
-            const maskedKeyDisplay = projectKey.replace(/./g, '•');
+            const maskedKeyDisplay = `••••••••••••${projectKey.replace('...', '')}`;
 
             return (
               <div
-                key={project.id || `${project.owner}/${project.repo}/${project.root_dir || ''}`}
+                key={projectId}
                 onClick={() => onSelectProject(project, 'dashboard')}
                 className="bg-white border border-slate-200 rounded-sm p-5 space-y-4 hover:border-slate-400 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
               >
@@ -350,7 +332,7 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
                           : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       }`}
                     >
-                      {critCount > 0 ? `${critCount} CRITICAL` : 'HEALTHY'}
+                      {critCount > 0 ? `${critCount} OPEN` : 'HEALTHY'}
                     </span>
                   </div>
 
@@ -375,43 +357,12 @@ export const ProjectsPage: React.FC<ProjectsPageProps> = ({
 
                   {/* API Key Box */}
                   <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-sm space-y-1 font-mono">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Key className="w-3 h-3 text-slate-600" />
-                        <span>Telemetry Key</span>
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => toggleRevealProjectKey(e, projectId)}
-                          className="text-slate-600 hover:text-black text-[10px] flex items-center gap-0.5 cursor-pointer"
-                          title={isRevealed ? 'Hide API Key' : 'Reveal API Key'}
-                          aria-label={isRevealed ? 'Hide API Key' : 'Reveal API Key'}
-                        >
-                          {isRevealed ? (
-                            <EyeOff className="w-3 h-3 text-slate-500" />
-                          ) : (
-                            <Eye className="w-3 h-3 text-slate-500" />
-                          )}
-                          <span>{isRevealed ? 'Hide' : 'Show'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyKey(e, project)}
-                          className="text-slate-600 hover:text-black text-[10px] underline flex items-center gap-0.5 cursor-pointer"
-                          title="Copy Ingestion API Key"
-                        >
-                          {isKeyCopied ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                          <span>{isKeyCopied ? 'Copied' : 'Copy'}</span>
-                        </button>
-                      </div>
+                    <div className="flex items-center text-[11px] text-slate-500 gap-1">
+                      <Key className="w-3 h-3 text-slate-600" />
+                      <span>Telemetry Key</span>
                     </div>
-                    <div className="text-xs font-bold text-slate-800 truncate select-all">
-                      {isRevealed ? projectKey : maskedKeyDisplay}
+                    <div className="text-xs font-bold text-slate-800 truncate">
+                      {maskedKeyDisplay}
                     </div>
                   </div>
                 </div>

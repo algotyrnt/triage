@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"triage/engine/internal/api"
@@ -32,115 +30,6 @@ func TestIsValidAPIKey(t *testing.T) {
 	// 2. Empty input key should return false
 	if s.IsValidAPIKey(ctx, "") {
 		t.Errorf("expected IsValidAPIKey to return false for empty key")
-	}
-}
-
-func TestValidateAndResolveFilePath_Symlink(t *testing.T) {
-	s := newTestServer()
-	tmpDir := t.TempDir()
-
-	workspaceDir := filepath.Join(tmpDir, "workspace")
-	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
-		t.Fatalf("failed to create workspace dir: %v", err)
-	}
-
-	externalDir := filepath.Join(tmpDir, "external")
-	if err := os.MkdirAll(externalDir, 0755); err != nil {
-		t.Fatalf("failed to create external dir: %v", err)
-	}
-
-	externalFile := filepath.Join(externalDir, "secret.go")
-	if err := os.WriteFile(externalFile, []byte("package external\n"), 0644); err != nil {
-		t.Fatalf("failed to create external file: %v", err)
-	}
-
-	// Create symlink inside workspace pointing to external file outside workspace
-	symlinkPath := filepath.Join(workspaceDir, "symlink.go")
-	if err := os.Symlink(externalFile, symlinkPath); err != nil {
-		t.Skipf("symlinks not supported on this platform: %v", err)
-	}
-
-	_ = os.Setenv("TRIAGE_WORKSPACE_ROOT", workspaceDir)
-	defer os.Unsetenv("TRIAGE_WORKSPACE_ROOT")
-
-	// Expect validation to reject target because its resolved symlink path lies outside workspace root
-	_, err := s.ValidateAndResolveFilePath("symlink.go")
-	if err == nil {
-		t.Errorf("expected error for symlink pointing outside workspace root, got nil")
-	}
-}
-
-func TestValidateAndResolveFilePath_Monorepo(t *testing.T) {
-	s := newTestServer()
-	tmpDir := t.TempDir()
-	workspaceDir := filepath.Join(tmpDir, "monorepo")
-	backendDir := filepath.Join(workspaceDir, "backend", "pkg", "handler")
-	if err := os.MkdirAll(backendDir, 0755); err != nil {
-		t.Fatalf("failed to create backend dir: %v", err)
-	}
-
-	userGo := filepath.Join(backendDir, "user.go")
-	if err := os.WriteFile(userGo, []byte("package handler\n"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-
-	expectedPath := userGo
-	if evalExpected, err := filepath.EvalSymlinks(userGo); err == nil {
-		expectedPath = evalExpected
-	}
-
-	_ = os.Setenv("TRIAGE_WORKSPACE_ROOT", workspaceDir)
-	defer os.Unsetenv("TRIAGE_WORKSPACE_ROOT")
-
-	// 1. Resolve relative file "pkg/handler/user.go" with rootDir "backend"
-	resolved, err := s.ValidateAndResolveFilePath("pkg/handler/user.go", "backend")
-	if err != nil {
-		t.Fatalf("expected no error resolving monorepo path, got: %v", err)
-	}
-	if resolved != expectedPath {
-		t.Errorf("expected resolved path %s, got %s", expectedPath, resolved)
-	}
-
-	// 2. Resolve already prefixed file "backend/pkg/handler/user.go" with rootDir "backend"
-	resolved2, err := s.ValidateAndResolveFilePath("backend/pkg/handler/user.go", "backend")
-	if err != nil {
-		t.Fatalf("expected no error resolving already-prefixed path, got: %v", err)
-	}
-	if resolved2 != expectedPath {
-		t.Errorf("expected resolved path %s, got %s", expectedPath, resolved2)
-	}
-}
-
-func TestValidateAndResolveFilePath_AbsoluteServicePath(t *testing.T) {
-	s := newTestServer()
-	tmpDir := t.TempDir()
-
-	serviceDir := filepath.Join(tmpDir, "test-service")
-	engineDir := filepath.Join(tmpDir, "apps", "engine")
-	if err := os.MkdirAll(serviceDir, 0755); err != nil {
-		t.Fatalf("failed to create test-service dir: %v", err)
-	}
-	if err := os.MkdirAll(engineDir, 0755); err != nil {
-		t.Fatalf("failed to create apps/engine dir: %v", err)
-	}
-
-	serviceMain := filepath.Join(serviceDir, "main.go")
-	engineMain := filepath.Join(engineDir, "main.go")
-	_ = os.WriteFile(serviceMain, []byte("package main\nfunc testService() {}\n"), 0644)
-	_ = os.WriteFile(engineMain, []byte("package main\nfunc engineMain() {}\n"), 0644)
-
-	_ = os.Setenv("TRIAGE_WORKSPACE_ROOT", tmpDir)
-	defer os.Unsetenv("TRIAGE_WORKSPACE_ROOT")
-
-	// Resolving absolute path to test-service/main.go must return test-service/main.go, never apps/engine/main.go
-	resolved, err := s.ValidateAndResolveFilePath(serviceMain)
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
-	evalServiceMain, _ := filepath.EvalSymlinks(serviceMain)
-	if resolved != evalServiceMain {
-		t.Errorf("expected %s, got %s (did it incorrectly resolve to engine main?)", evalServiceMain, resolved)
 	}
 }
 

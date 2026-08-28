@@ -77,6 +77,9 @@ func (db *DB) GetAPIKeys(ctx context.Context, owner, repo, rootDir string) ([]AP
 		}
 		keys = append(keys, k)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return keys, nil
 }
 
@@ -90,12 +93,18 @@ func (db *DB) CreateAPIKey(ctx context.Context, owner, repo, rootDir, keyName st
 	tupleHash := sha256.Sum256([]byte(tupleStr))
 	repoID := fmt.Sprintf("repo_%s", hex.EncodeToString(tupleHash[:16]))
 
+	var instID int64
+	if id, err := db.GetInstallationForRepo(ctx, owner, repo); err == nil && id > 0 {
+		instID = id
+	}
+
 	// Ensure repository exists
 	_, err := db.SQL.ExecContext(ctx, `
 		INSERT INTO repositories (id, owner, repo, root_dir, installation_id)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (owner, repo, root_dir) DO NOTHING
-	`, repoID, owner, repo, cleanRootDir, 1001)
+		ON CONFLICT (owner, repo, root_dir) DO UPDATE SET
+			installation_id = CASE WHEN EXCLUDED.installation_id > 0 THEN EXCLUDED.installation_id ELSE repositories.installation_id END
+	`, repoID, owner, repo, cleanRootDir, instID)
 	if err != nil {
 		return nil, err
 	}

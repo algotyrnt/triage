@@ -149,6 +149,30 @@ Lists recent recorded incidents with optional filtering by repository ID or repo
 
 ---
 
+### `POST /api/v1/incidents/resolve`
+
+Resolves an open incident and automatically closes the linked GitHub Issue via the GitHub REST API. Broadcasts an `incident_resolved` event to connected dashboard SSE clients.
+
+**Request Body:**
+
+```json
+{
+  "incident_id": "INC-8094"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "success",
+  "incident_id": "INC-8094",
+  "incident_status": "RESOLVED"
+}
+```
+
+---
+
 ## GitHub Automation
 
 ### `POST /api/v1/incidents/create-issue`
@@ -236,6 +260,8 @@ Lists all tracked repositories and configured Go services.
 
 Registers a new repository or Go monorepo service, saves domain context, and issues an initial API key.
 
+> **Security:** The `api_key` field contains the full plaintext key and is returned **once** at creation time. The engine stores only a SHA-256 hash (`key_hash`) and a masked suffix (`key_masked`). The raw key **cannot be retrieved** after this response.
+
 **Request Body:**
 
 ```json
@@ -256,8 +282,8 @@ Registers a new repository or Go monorepo service, saves domain context, and iss
   "repo": "myorg/payments-service",
   "root_dir": "backend",
   "context": "High-throughput payment gateway processing Stripe webhooks.",
-  "api_key": "your_sample_api_key",
-  "key_masked": "...xxxx"
+  "api_key": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "key_masked": "...c5d6"
 }
 ```
 
@@ -329,7 +355,7 @@ Automatically scans a GitHub repository or local workspace for nested `go.mod` f
 
 ### `GET /api/v1/projects/keys`
 
-Lists API keys for a specific project.
+Lists API keys for a specific project. Only the masked suffix is returned — full keys are shown once at creation time and are not stored in plaintext.
 
 **Query Parameters:**
 
@@ -345,7 +371,7 @@ Lists API keys for a specific project.
     {
       "id": "key_1724123456",
       "name": "Production Service Key",
-      "key_masked": "...xxxx",
+      "key_masked": "...c5d6",
       "status": "ACTIVE",
       "created_at": "2026-08-15T10:00:00Z"
     }
@@ -491,75 +517,6 @@ Tests connectivity, validates credentials, and benchmarks latency for an LLM con
   "latency_ms": 142,
   "provider": "openai",
   "model": "gpt-4o"
-}
-```
-
----
-
-## AST Engine & Explorer
-
-### `GET /api/v1/ast/tree`
-
-Returns the indexed Go symbol tree, packages, files, exported/internal functions, and AST snippets for a repository.
-
-**Query Parameters:**
-
-- `repo` _(required)_: Target repository slug (e.g. `myorg/payments-service` or `algotyrnt/triage`).
-- `root_dir` _(optional)_: Subdirectory path for monorepo Go modules (e.g. `engine` or `backend`).
-
-**Response (200 OK):**
-
-```json
-{
-  "repo": "algotyrnt/triage",
-  "root_dir": "engine",
-  "packages": [
-    {
-      "name": "api",
-      "dir": "internal/api",
-      "files": [
-        {
-          "path": "internal/api/telemetry.go",
-          "functions": [
-            {
-              "name": "HandleTelemetry",
-              "receiver": "*Server",
-              "line": 42,
-              "snippet": "func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {\n\t// ...\n}"
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "total_packages": 6,
-  "total_functions": 84
-}
-```
-
----
-
-### `POST /api/v1/ast/index`
-
-Pre-indexes a repository's package AST declarations into SQLite database for sub-millisecond `< 5ms` symbolication.
-
-**Request Body:**
-
-```json
-{
-  "repo": "myorg/payments-service",
-  "root_dir": "backend",
-  "commit_sha": "main"
-}
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "status": "INDEXED",
-  "functions_indexed": 142,
-  "files_processed": 18
 }
 ```
 

@@ -29,14 +29,20 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 		contextStr = projectContext[0]
 	}
 
+	var instID int64
+	if id, err := db.GetInstallationForRepo(ctx, owner, repo); err == nil && id > 0 {
+		instID = id
+	}
+
 	// Insert or update repository record
 	_, err := db.SQL.ExecContext(ctx, `
 		INSERT INTO repositories (id, owner, repo, root_dir, installation_id, context)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (owner, repo, root_dir) DO UPDATE SET
 			root_dir = EXCLUDED.root_dir,
+			installation_id = CASE WHEN EXCLUDED.installation_id > 0 THEN EXCLUDED.installation_id ELSE repositories.installation_id END,
 			context = CASE WHEN EXCLUDED.context != '' THEN EXCLUDED.context ELSE repositories.context END
-	`, repoID, owner, repo, cleanRootDir, 1001, contextStr)
+	`, repoID, owner, repo, cleanRootDir, instID, contextStr)
 	if err != nil {
 		return "", "", err
 	}
@@ -65,6 +71,18 @@ func (db *DB) CreateProject(ctx context.Context, owner, repo, rootDir, ownerUser
 	}
 
 	return rawKey, repoID, nil
+}
+
+func (db *DB) UpdateRepositoryInstallation(ctx context.Context, owner, repo string, installationID int64) error {
+	if db == nil || db.SQL == nil || installationID <= 0 {
+		return fmt.Errorf("database uninitialized or invalid installation ID")
+	}
+	_, err := db.SQL.ExecContext(ctx, `
+		UPDATE repositories
+		SET installation_id = $3
+		WHERE LOWER(owner) = LOWER($1) AND LOWER(repo) = LOWER($2)
+	`, owner, repo, installationID)
+	return err
 }
 
 func (db *DB) UpdateProjectContext(ctx context.Context, owner, repo, rootDir, projectContext string) error {
@@ -111,6 +129,9 @@ func (db *DB) GetProjects(ctx context.Context) ([]Repository, error) {
 			return nil, err
 		}
 		repos = append(repos, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return repos, nil
 }
