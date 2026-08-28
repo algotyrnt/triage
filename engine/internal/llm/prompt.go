@@ -26,7 +26,8 @@ Analyze the following Go panic crash telemetry and surrounding Go AST package co
 Respond ONLY with a valid JSON object with the following schema:
 {
   "root_cause": "Explanation of what caused the crash",
-  "suggested_fix": "Detailed solution or code modification to fix the issue"
+  "suggested_fix": "Detailed solution or code modification to fix the issue",
+  "severity": "CRITICAL, HIGH, or MEDIUM based on impact (CRITICAL for fatal crashes / nil pointers / memory races, HIGH for application panic errors / type assertion bugs, MEDIUM for recovered handler warnings)"
 }`, contextSection, stackTrace, astSnippet)
 }
 
