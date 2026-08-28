@@ -359,6 +359,29 @@ func TestLLMSettingsAndTestRoute(t *testing.T) {
 	if !testRes.Success || testRes.Provider != "openai" {
 		t.Errorf("unexpected test result: %+v, body: %s", testRes, bodyStr)
 	}
+
+	// 3. Test HandleTestLLM failure returns success: false with error message
+	failBody, _ := json.Marshal(map[string]interface{}{
+		"provider": "openai",
+		"api_key":  "sk-test-key",
+		"model":    "non-existent-model",
+		"base_url": "http://127.0.0.1:9999/unreachable",
+	})
+	failReq := httptest.NewRequest(http.MethodPost, "/api/v1/settings/llm/test", bytes.NewReader(failBody))
+	failRec := httptest.NewRecorder()
+	s.HandleTestLLM(failRec, failReq)
+
+	var failRes struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	failBodyStr := failRec.Body.String()
+	if err := json.Unmarshal([]byte(failBodyStr), &failRes); err != nil {
+		t.Fatalf("failed to decode fail response: %v, body: %s", err, failBodyStr)
+	}
+	if failRes.Success || failRes.Error == "" {
+		t.Errorf("expected success: false with error message, got: %+v", failRes)
+	}
 }
 
 func TestSetupManifest_Public(t *testing.T) {
