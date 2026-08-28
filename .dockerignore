@@ -1,6 +1,7 @@
 .git
 .github
 .vscode
+.idea
 .gemini
 .DS_Store
 node_modules
@@ -8,9 +9,19 @@ node_modules
 dist
 **/dist
 bin
+dist-bin
+data
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.tar.gz
+*.zip
 coverage*
 .astro
 web
 sdk
 test-services
+*.md
+.prettier*
+.eslint*

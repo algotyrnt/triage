@@ -1,8 +1,6 @@
 node_modules
-.next
 dist
-out
 build
+out
 *.tsbuildinfo
-next-env.d.ts
-
+bun.lock

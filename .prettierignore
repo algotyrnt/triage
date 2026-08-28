@@ -1,6 +1,8 @@
 node_modules
-.next
 dist
+dist-bin
+bin
+data
 .astro
 build
 out
@@ -8,5 +10,5 @@ vendor
 .git
 .gemini
 *.tsbuildinfo
-next-env.d.ts
-
+coverage*
+bun.lock
