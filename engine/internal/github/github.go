@@ -173,6 +173,33 @@ func (c *AppConfig) FetchFileContent(ctx context.Context, installationID int64, 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
+		// Fallback: If fetch with commitSHA failed (e.g. unpushed local commit or stale ref), retry without commitSHA on default branch
+		if commitSHA != "" {
+			defaultURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, filePath)
+			retryReq, rErr := http.NewRequestWithContext(ctx, "GET", defaultURL, nil)
+			if rErr == nil {
+				retryReq.Header.Set("Authorization", "Bearer "+token)
+				retryReq.Header.Set("Accept", "application/vnd.github+json")
+				SetDefaultHeaders(retryReq)
+				if retryResp, doErr := githubHTTPClient.Do(retryReq); doErr == nil {
+					defer retryResp.Body.Close()
+					if retryResp.StatusCode == http.StatusOK {
+						var retryPayload struct {
+							Content  string `json:"content"`
+							Encoding string `json:"encoding"`
+							SHA      string `json:"sha"`
+						}
+						if dErr := json.NewDecoder(retryResp.Body).Decode(&retryPayload); dErr == nil {
+							if decoded, bErr := base64.StdEncoding.DecodeString(retryPayload.Content); bErr == nil {
+								return decoded, retryPayload.SHA, nil
+							}
+						}
+					}
+				}
+			}
+		}
+
 		return nil, "", fmt.Errorf("failed to fetch file content, status: %d, body: %s", resp.StatusCode, body)
 	}
 
