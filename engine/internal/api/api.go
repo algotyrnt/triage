@@ -94,54 +94,57 @@ func (s *Server) ResolveEngineURL(r *http.Request) string {
 	return "http://localhost:8080"
 }
 
-// RegisterRoutes registers all API routes onto the given ServeMux with standard middleware.
+// RegisterRoutes registers all API routes onto the given ServeMux with centralized authentication and RBAC middleware.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
-	// Core routes
-	mux.HandleFunc("/health", s.withMiddleware(s.HandleHealth))
-	mux.HandleFunc("/api/v1/events/stream", s.withMiddleware(s.HandleEventsStream))
-	mux.HandleFunc("/api/v1/telemetry", s.withMiddleware(s.HandleTelemetry))
-	mux.HandleFunc("/api/v1/ast/index", s.withMiddleware(s.HandleASTIndex))
-	mux.HandleFunc("/api/v1/ast/tree", s.withMiddleware(s.HandleASTTree))
-	mux.HandleFunc("/api/v1/incidents", s.withMiddleware(s.HandleIncidents))
-	mux.HandleFunc("/api/v1/incidents/create-issue", s.withMiddleware(s.HandleCreateIncidentIssue))
-	mux.HandleFunc("/api/v1/incidents/create-pr", s.withMiddleware(s.HandleCreateIncidentPR))
-	mux.HandleFunc("/api/v1/projects", s.withMiddleware(s.HandleProjects))
-	mux.HandleFunc("/api/v1/projects/context", s.withMiddleware(s.HandleUpdateProjectContext))
-	mux.HandleFunc("/api/v1/stats", s.withMiddleware(s.HandleStats))
-	mux.HandleFunc("/api/v1/repos/detect-modules", s.withMiddleware(s.HandleDetectModules))
+	// 1. Core Public Routes
+	mux.HandleFunc("/health", s.public(s.HandleHealth))
+	mux.HandleFunc("/api/v1/telemetry", s.public(s.HandleTelemetry)) // Enforces API key verification internally
 
-	// Setup wizard routes
-	mux.HandleFunc("/api/v1/setup/status", s.withMiddleware(s.HandleSetupStatus))
-	mux.HandleFunc("/api/v1/setup/manifest", s.withMiddleware(s.HandleSetupManifest))
-	mux.HandleFunc("/api/v1/setup/callback", s.withMiddleware(s.HandleSetupCallback))
-	mux.HandleFunc("/api/v1/setup/install", s.withMiddleware(s.HandleSetupInstall))
-	mux.HandleFunc("/api/v1/setup/install/callback", s.withMiddleware(s.HandleSetupInstallCallback))
-	mux.HandleFunc("/api/v1/setup/oauth", s.withMiddleware(s.HandleSetupOAuth))
-	mux.HandleFunc("/api/v1/setup/llm", s.withMiddleware(s.HandleSetupLLM))
-	mux.HandleFunc("/api/v1/setup/test", s.withMiddleware(s.HandleSetupTest))
-	mux.HandleFunc("/api/v1/setup/repos", s.withMiddleware(s.HandleSetupRepos))
-	mux.HandleFunc("/api/v1/setup/installed-repos", s.withMiddleware(s.HandleInstalledRepos))
-	mux.HandleFunc("/api/v1/setup/check-repo", s.withMiddleware(s.HandleCheckRepo))
+	// 2. Auth & Session Routes
+	mux.HandleFunc("/api/v1/auth/github", s.public(s.HandleAuthGitHub))
+	mux.HandleFunc("/api/v1/auth/github/callback", s.public(s.HandleAuthGitHubCallback))
+	mux.HandleFunc("/api/v1/auth/logout", s.public(s.HandleAuthLogout))
+	mux.HandleFunc("/api/v1/auth/me", s.withAuth(s.HandleAuthMe))
 
-	// Auth & RBAC routes
-	mux.HandleFunc("/api/v1/auth/github", s.withMiddleware(s.HandleAuthGitHub))
-	mux.HandleFunc("/api/v1/auth/github/callback", s.withMiddleware(s.HandleAuthGitHubCallback))
-	mux.HandleFunc("/api/v1/auth/me", s.withMiddleware(s.HandleAuthMe))
+	// 3. Setup Wizard Routes
+	mux.HandleFunc("/api/v1/setup/status", s.public(s.HandleSetupStatus))
+	mux.HandleFunc("/api/v1/setup/manifest", s.public(s.HandleSetupManifest))
+	mux.HandleFunc("/api/v1/setup/callback", s.public(s.HandleSetupCallback))
+	mux.HandleFunc("/api/v1/setup/install", s.public(s.HandleSetupInstall))
+	mux.HandleFunc("/api/v1/setup/install/callback", s.public(s.HandleSetupInstallCallback))
+	mux.HandleFunc("/api/v1/setup/oauth", s.public(s.HandleSetupOAuth))
+	mux.HandleFunc("/api/v1/setup/llm", s.public(s.HandleSetupLLM))
+	mux.HandleFunc("/api/v1/setup/test", s.public(s.HandleSetupTest))
+	mux.HandleFunc("/api/v1/setup/repos", s.public(s.HandleSetupRepos))
+	mux.HandleFunc("/api/v1/setup/installed-repos", s.public(s.HandleInstalledRepos))
+	mux.HandleFunc("/api/v1/setup/check-repo", s.public(s.HandleCheckRepo))
 
-	// Team Management routes
-	mux.HandleFunc("/api/v1/team/members", s.withMiddleware(s.HandleTeamMembers))
-	mux.HandleFunc("/api/v1/team/members/role", s.withMiddleware(s.HandleTeamMemberRole))
-	mux.HandleFunc("/api/v1/team/invites", s.withMiddleware(s.HandleTeamInvites))
+	// 4. Authenticated Core Routes (Viewer, Developer, Admin, Owner)
+	mux.HandleFunc("/api/v1/events/stream", s.withAuth(s.HandleEventsStream))
+	mux.HandleFunc("/api/v1/incidents", s.withAuth(s.HandleIncidents))
+	mux.HandleFunc("/api/v1/projects", s.withAuth(s.HandleProjects))
+	mux.HandleFunc("/api/v1/stats", s.withAuth(s.HandleStats))
+	mux.HandleFunc("/api/v1/ast/index", s.withAuth(s.HandleASTIndex))
+	mux.HandleFunc("/api/v1/ast/tree", s.withAuth(s.HandleASTTree))
+	mux.HandleFunc("/api/v1/repos/detect-modules", s.withAuth(s.HandleDetectModules))
+	mux.HandleFunc("/api/v1/team/members", s.withAuth(s.HandleTeamMembers))
 
-	// Settings & Key management routes
-	mux.HandleFunc("/api/v1/settings/llm", s.withMiddleware(s.HandleSettingsLLM))
-	mux.HandleFunc("/api/v1/settings/llm/test", s.withMiddleware(s.HandleTestLLM))
-	mux.HandleFunc("/api/v1/projects/keys", s.withMiddleware(s.HandleProjectKeys))
-	mux.HandleFunc("/api/v1/projects/keys/revoke", s.withMiddleware(s.HandleRevokeProjectKey))
-	mux.HandleFunc("/api/v1/llm/analyze-panic", s.withMiddleware(s.HandleLLMAnalyzePanic))
-	mux.HandleFunc("/api/v1/llm/generate-patch", s.withMiddleware(s.HandleLLMGeneratePatch))
+	// 5. Developer+ Protected Mutation Routes (Developer, Admin, Owner)
+	mux.HandleFunc("/api/v1/incidents/create-issue", s.withAuthRole(s.HandleCreateIncidentIssue, "Developer", "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/incidents/create-pr", s.withAuthRole(s.HandleCreateIncidentPR, "Developer", "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/projects/context", s.withAuthRole(s.HandleUpdateProjectContext, "Developer", "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/llm/analyze-panic", s.withAuthRole(s.HandleLLMAnalyzePanic, "Developer", "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/llm/generate-patch", s.withAuthRole(s.HandleLLMGeneratePatch, "Developer", "Admin", "Owner"))
 
-	// Embedded Studio Dashboard SPA Handler (serves UI assets and handles client routing)
+	// 6. Admin+ Management Routes (Admin, Owner)
+	mux.HandleFunc("/api/v1/team/members/role", s.withAuthRole(s.HandleTeamMemberRole, "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/team/invites", s.withAuthRole(s.HandleTeamInvites, "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/settings/llm", s.withAuthRole(s.HandleSettingsLLM, "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/settings/llm/test", s.withAuthRole(s.HandleTestLLM, "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/projects/keys", s.withAuthRole(s.HandleProjectKeys, "Admin", "Owner"))
+	mux.HandleFunc("/api/v1/projects/keys/revoke", s.withAuthRole(s.HandleRevokeProjectKey, "Admin", "Owner"))
+
+	// 7. Embedded Studio Dashboard SPA Handler
 	mux.Handle("/", ui.Handler())
 }
 

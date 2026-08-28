@@ -142,18 +142,25 @@ func TestServerSetupRepos(t *testing.T) {
 func TestCORSResolution(t *testing.T) {
 	s := newTestAPIServer()
 
-	// 1. Initial setup phase (unconfigured DB) reflects caller origin
+	// 1. Initial setup phase (unconfigured DB) rejects untrusted external origins and allows localhost
 	setupReq := httptest.NewRequest(http.MethodGet, "/health", nil)
 	setupReq.Header.Set("Origin", "http://setup-domain.com:3000")
 	setupRec := httptest.NewRecorder()
 	handler := s.withMiddleware(s.HandleHealth)
 	handler(setupRec, setupReq)
 
-	if setupRec.Header().Get("Access-Control-Allow-Origin") != "http://setup-domain.com:3000" {
-		t.Errorf("expected reflected origin during setup, got: %s", setupRec.Header().Get("Access-Control-Allow-Origin"))
+	if setupRec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("expected untrusted external origin to be denied during setup, got: %s", setupRec.Header().Get("Access-Control-Allow-Origin"))
 	}
-	if setupRec.Header().Get("Access-Control-Allow-Credentials") != "true" {
-		t.Errorf("expected Allow-Credentials true, got: %s", setupRec.Header().Get("Access-Control-Allow-Credentials"))
+
+	// 2. Localhost origin permitted during setup
+	localReq := httptest.NewRequest(http.MethodGet, "/health", nil)
+	localReq.Header.Set("Origin", "http://localhost:3000")
+	localRec := httptest.NewRecorder()
+	handler(localRec, localReq)
+
+	if localRec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3000" {
+		t.Errorf("expected localhost origin allowed, got: %s", localRec.Header().Get("Access-Control-Allow-Origin"))
 	}
 
 	// 2. Preflight OPTIONS request
@@ -183,7 +190,10 @@ func TestCORSResolution(t *testing.T) {
 
 func TestJWTAuthAndRBAC(t *testing.T) {
 	s := newTestAPIServer()
-	secret := s.getSessionSecret(context.Background())
+	secret, err := s.getSessionSecret(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get session secret: %v", err)
+	}
 
 	// 1. Generate JWT
 	user := &db.User{
@@ -219,8 +229,8 @@ func TestJWTAuthAndRBAC(t *testing.T) {
 		t.Fatalf("expected status 200 for /api/v1/auth/me, got %d", meRec.Code)
 	}
 
-	// 4. Test withAuth middleware with role check
-	protectedHandler := s.withAuth(func(w http.ResponseWriter, r *http.Request) {
+	// 4. Test withAuthRole middleware with role check
+	protectedHandler := s.withAuthRole(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"authorized"}`))
 	}, "Owner", "Admin")
