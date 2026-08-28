@@ -23,6 +23,15 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var githubHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 20,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 // SetDefaultHeaders attaches standard GitHub API headers including User-Agent and API version.
 func SetDefaultHeaders(req *http.Request) {
 	if req != nil {
@@ -109,7 +118,7 @@ func (c *AppConfig) GetInstallationToken(ctx context.Context, installationID int
 	req.Header.Set("Accept", "application/vnd.github+json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to do request: %w", err)
 	}
@@ -156,7 +165,7 @@ func (c *AppConfig) FetchFileContent(ctx context.Context, installationID int64, 
 	req.Header.Set("Accept", "application/vnd.github+json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to do request: %w", err)
 	}
@@ -222,7 +231,7 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 	req.Header.Set("Content-Type", "application/json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to do request: %w", err)
 	}
@@ -241,7 +250,7 @@ func (c *AppConfig) CreateIssue(ctx context.Context, installationID int64, owner
 				retryReq.Header.Set("Content-Type", "application/json")
 				SetDefaultHeaders(retryReq)
 
-				retryResp, doErr := http.DefaultClient.Do(retryReq)
+				retryResp, doErr := githubHTTPClient.Do(retryReq)
 				if doErr == nil {
 					defer retryResp.Body.Close()
 					if retryResp.StatusCode == http.StatusCreated {
@@ -286,7 +295,7 @@ func (c *AppConfig) GetDefaultBranch(ctx context.Context, installationID int64, 
 	req.Header.Set("Accept", "application/vnd.github+json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to fetch repo info: %w", err)
 	}
@@ -318,7 +327,7 @@ func (c *AppConfig) GetDefaultBranch(ctx context.Context, installationID int64, 
 	refReq.Header.Set("Accept", "application/vnd.github+json")
 	SetDefaultHeaders(refReq)
 
-	refResp, err := http.DefaultClient.Do(refReq)
+	refResp, err := githubHTTPClient.Do(refReq)
 	if err != nil {
 		return defaultBranch, "", fmt.Errorf("failed to get ref: %w", err)
 	}
@@ -363,7 +372,7 @@ func (c *AppConfig) CreateBranch(ctx context.Context, installationID int64, owne
 	req.Header.Set("Content-Type", "application/json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to create branch: %w", err)
 	}
@@ -403,7 +412,7 @@ func (c *AppConfig) UpdateFileContent(ctx context.Context, installationID int64,
 	req.Header.Set("Content-Type", "application/json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to update file: %w", err)
 	}
@@ -441,7 +450,7 @@ func (c *AppConfig) CreatePullRequest(ctx context.Context, installationID int64,
 	req.Header.Set("Content-Type", "application/json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to create PR: %w", err)
 	}
@@ -479,7 +488,7 @@ func (c *AppConfig) VerifyApp(ctx context.Context) error {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	SetDefaultHeaders(req)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -516,7 +525,7 @@ func (c *AppConfig) ListAppInstallations(ctx context.Context) ([]AppInstallation
 
 	var allInstallations []AppInstallationInfo
 	page := 1
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := githubHTTPClient
 
 	for {
 		url := fmt.Sprintf("https://api.github.com/app/installations?per_page=100&page=%d", page)
@@ -584,7 +593,7 @@ func (c *AppConfig) ListInstallationRepositories(ctx context.Context, installati
 
 	var allRepos []RepositoryInfo
 	page := 1
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := githubHTTPClient
 
 	for {
 		url := fmt.Sprintf("https://api.github.com/installation/repositories?per_page=100&page=%d", page)
@@ -671,7 +680,7 @@ func FetchUserRepositories(ctx context.Context, username string, accessToken ...
 
 	var allRepos []RepositoryInfo
 	seen := make(map[string]bool)
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := githubHTTPClient
 
 	// 1. Fetch user & affiliated repositories (both public and private)
 	page := 1

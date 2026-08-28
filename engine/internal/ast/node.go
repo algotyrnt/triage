@@ -6,6 +6,7 @@ package ast
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,8 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"triage/engine/internal/db"
 )
 
 type ASTNode struct {
@@ -34,35 +34,23 @@ type ASTNode struct {
 }
 
 type Manager struct {
-	pool *pgxpool.Pool
+	db *db.DB
 }
 
 func NewManager(ctx context.Context, databaseURL string) (*Manager, error) {
-	if databaseURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL environment variable is missing or empty")
-	}
-
-	config, err := pgxpool.ParseConfig(databaseURL)
+	database, err := db.NewDB(ctx, databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse DATABASE_URL: %w", err)
+		return nil, err
 	}
+	return &Manager{db: database}, nil
+}
 
-	config.MaxConns = 25
-	config.MinConns = 5
-	config.MaxConnIdleTime = 5 * time.Minute
-
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
-	}
-
-	return &Manager{pool: pool}, nil
+func NewManagerWithDB(database *db.DB) *Manager {
+	return &Manager{db: database}
 }
 
 func (m *Manager) Close() {
-	if m.pool != nil {
-		m.pool.Close()
-	}
+	// DB lifecycle is managed by caller or db.Close()
 }
 
 func generateNodeID(owner, repo, commit, file string, line int) string {
@@ -70,10 +58,10 @@ func generateNodeID(owner, repo, commit, file string, line int) string {
 	return "ast-" + hex.EncodeToString(hash[:12])
 }
 
-// GetASTNode queries pre-parsed AST node snippet directly from PostgreSQL.
+// GetASTNode queries pre-parsed AST node snippet directly from the database.
 func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file string, line int, rootDir ...string) (*ASTNode, error) {
-	if m.pool == nil {
-		return nil, fmt.Errorf("PostgreSQL database is uninitialized")
+	if m.db == nil || m.db.SQL == nil {
+		return nil, fmt.Errorf("database is uninitialized")
 	}
 
 	query := `
@@ -98,7 +86,7 @@ func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file stri
 
 	for _, cand := range candidates {
 		var node ASTNode
-		err := m.pool.QueryRow(ctx, query, owner, repo, commit, cand, line).Scan(
+		err := m.db.SQL.QueryRowContext(ctx, query, owner, repo, commit, cand, line).Scan(
 			&node.ID,
 			&node.Owner,
 			&node.Repo,
@@ -112,23 +100,23 @@ func (m *Manager) GetASTNode(ctx context.Context, owner, repo, commit, file stri
 			node.EndLine = node.StartLine
 			return &node, nil
 		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
 	}
 
-	return nil, pgx.ErrNoRows
+	return nil, sql.ErrNoRows
 }
 
 // IndexRepositoryAST processes repository Go packages, resolves cross-file type definitions,
-// receiver methods, and helpers, and saves rich multi-file AST context snippets directly to PostgreSQL.
+// receiver methods, and helpers, and saves rich multi-file AST context snippets directly to the database.
 func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, workspacePath string, rootDir ...string) (int, error) {
 	if workspacePath == "" {
 		workspacePath = "."
 	}
 
-	if m.pool == nil {
-		return 0, fmt.Errorf("PostgreSQL database is uninitialized")
+	if m.db == nil || m.db.SQL == nil {
+		return 0, fmt.Errorf("database is uninitialized")
 	}
 
 	cleanRootDir := ""
@@ -189,7 +177,12 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 				continue
 			}
 
-			batch := &pgx.Batch{}
+			tx, txErr := m.db.SQL.BeginTx(ctx, nil)
+			if txErr != nil {
+				slog.Error("failed to start AST transaction", "dir", dir, "error", txErr)
+				continue
+			}
+
 			query := `
 				INSERT INTO ast_nodes (id, owner, repo, commit_sha, file_path, line_number, function_name, snippet)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -197,8 +190,14 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 					snippet = EXCLUDED.snippet,
 					commit_sha = EXCLUDED.commit_sha;
 			`
-			totalQueued := 0
+			stmt, stmtErr := tx.PrepareContext(ctx, query)
+			if stmtErr != nil {
+				_ = tx.Rollback()
+				slog.Error("failed to prepare AST statement", "dir", dir, "error", stmtErr)
+				continue
+			}
 
+			var execErr error
 			for i := range pkgCtx.Functions {
 				fn := &pkgCtx.Functions[i]
 				types, helpers, vars := pkgCtx.ResolveDependencies(fn)
@@ -214,30 +213,28 @@ func (m *Manager) IndexRepositoryAST(ctx context.Context, owner, repo, commit, w
 				moduleRelPath = filepath.ToSlash(moduleRelPath)
 
 				nodeID := generateNodeID(owner, repo, commit, relPath, fn.StartLine)
-				batch.Queue(query, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, richSnippet)
-				totalQueued++
+				_, execErr = stmt.ExecContext(ctx, nodeID, owner, repo, commit, relPath, fn.StartLine, fn.Name, richSnippet)
+				if execErr != nil {
+					break
+				}
 
 				if moduleRelPath != "" && moduleRelPath != relPath {
 					altNodeID := generateNodeID(owner, repo, commit, moduleRelPath, fn.StartLine)
-					batch.Queue(query, altNodeID, owner, repo, commit, moduleRelPath, fn.StartLine, fn.Name, richSnippet)
-					totalQueued++
+					_, execErr = stmt.ExecContext(ctx, altNodeID, owner, repo, commit, moduleRelPath, fn.StartLine, fn.Name, richSnippet)
+					if execErr != nil {
+						break
+					}
 				}
 			}
 
-			if totalQueued > 0 {
-				br := m.pool.SendBatch(ctx, batch)
-				var firstErr error
-				for i := 0; i < totalQueued; i++ {
-					_, execErr := br.Exec()
-					if execErr != nil && firstErr == nil {
-						firstErr = execErr
-					}
-				}
-				if closeErr := br.Close(); closeErr != nil && firstErr == nil {
-					firstErr = closeErr
-				}
-				if firstErr != nil {
-					slog.Error("AST batch execution error", "dir", dir, "error", firstErr)
+			_ = stmt.Close()
+
+			if execErr != nil {
+				_ = tx.Rollback()
+				slog.Error("AST batch execution error", "dir", dir, "error", execErr)
+			} else {
+				if commitErr := tx.Commit(); commitErr != nil {
+					slog.Error("failed to commit AST transaction", "dir", dir, "error", commitErr)
 				} else {
 					count += len(pkgCtx.Functions)
 				}
@@ -263,8 +260,8 @@ type ASTFileItem struct {
 
 // ListASTFiles queries grouped Go files and their indexed function symbols for a given repository.
 func (m *Manager) ListASTFiles(ctx context.Context, owner, repo string, rootDir ...string) ([]ASTFileItem, error) {
-	if m.pool == nil {
-		return nil, fmt.Errorf("PostgreSQL database is uninitialized")
+	if m.db == nil || m.db.SQL == nil {
+		return nil, fmt.Errorf("database is uninitialized")
 	}
 
 	query := `
@@ -273,7 +270,7 @@ func (m *Manager) ListASTFiles(ctx context.Context, owner, repo string, rootDir 
 		WHERE owner = $1 AND repo = $2
 		ORDER BY file_path ASC, line_number ASC;
 	`
-	rows, err := m.pool.Query(ctx, query, owner, repo)
+	rows, err := m.db.SQL.QueryContext(ctx, query, owner, repo)
 	if err != nil {
 		return nil, err
 	}

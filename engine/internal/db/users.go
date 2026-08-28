@@ -10,16 +10,16 @@ import (
 )
 
 func (db *DB) CountUsers(ctx context.Context) (int, error) {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return 0, nil
 	}
 	var count int
-	err := db.Pool.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
+	err := db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM users").Scan(&count)
 	return count, err
 }
 
 func (db *DB) UpsertUserWithRole(ctx context.Context, githubID, username, email, avatarURL, defaultRole string) (*User, error) {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		role := defaultRole
 		if role == "" {
 			role = "Owner"
@@ -39,14 +39,13 @@ func (db *DB) UpsertUserWithRole(ctx context.Context, githubID, username, email,
 	// 1. Check if user already exists
 	var existing User
 	var existingEmail, existingAvatar *string
-	err := db.Pool.QueryRow(ctx, `
+	err := db.SQL.QueryRowContext(ctx, `
 		SELECT id, github_id, username, email, avatar_url, role, created_at, updated_at
 		FROM users
 		WHERE github_id = $1
 	`, githubID).Scan(&existing.ID, &existing.GitHubID, &existing.Username, &existingEmail, &existingAvatar, &existing.Role, &existing.CreatedAt, &existing.UpdatedAt)
 
 	if err == nil {
-		// Existing user: update profile data, preserve role
 		if existingEmail != nil {
 			existing.Email = *existingEmail
 		}
@@ -56,9 +55,9 @@ func (db *DB) UpsertUserWithRole(ctx context.Context, githubID, username, email,
 
 		var u User
 		var retEmail, retAvatar *string
-		updErr := db.Pool.QueryRow(ctx, `
+		updErr := db.SQL.QueryRowContext(ctx, `
 			UPDATE users
-			SET username = $2, email = $3, avatar_url = $4, updated_at = NOW()
+			SET username = $2, email = $3, avatar_url = $4, updated_at = CURRENT_TIMESTAMP
 			WHERE github_id = $1
 			RETURNING id, github_id, username, email, avatar_url, role, created_at, updated_at
 		`, githubID, username, email, avatarURL).Scan(&u.ID, &u.GitHubID, &u.Username, &retEmail, &retAvatar, &u.Role, &u.CreatedAt, &u.UpdatedAt)
@@ -74,35 +73,32 @@ func (db *DB) UpsertUserWithRole(ctx context.Context, githubID, username, email,
 		return &u, nil
 	}
 
-	// 2. New user registration: determine role
+	// 2. New user registration
 	assignedRole := defaultRole
 	if assignedRole == "" {
 		assignedRole = "Developer"
 	}
 
-	// First user in the instance gets Owner role automatically
 	userCount, _ := db.CountUsers(ctx)
 	if userCount == 0 {
 		assignedRole = "Owner"
 	} else {
-		// Check if there is a pending invitation for this GitHub username
 		var invRole string
-		invErr := db.Pool.QueryRow(ctx, `
+		invErr := db.SQL.QueryRowContext(ctx, `
 			SELECT role FROM invitations WHERE LOWER(github_username) = LOWER($1) LIMIT 1
 		`, username).Scan(&invRole)
 		if invErr == nil && invRole != "" {
 			assignedRole = invRole
-			// Consume invitation
-			_, _ = db.Pool.Exec(ctx, `DELETE FROM invitations WHERE LOWER(github_username) = LOWER($1)`, username)
+			_, _ = db.SQL.ExecContext(ctx, `DELETE FROM invitations WHERE LOWER(github_username) = LOWER($1)`, username)
 		}
 	}
 
 	userID := fmt.Sprintf("usr_%s", githubID)
 	var u User
 	var retEmail, retAvatar *string
-	err = db.Pool.QueryRow(ctx, `
+	err = db.SQL.QueryRowContext(ctx, `
 		INSERT INTO users (id, github_id, username, email, avatar_url, role, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		RETURNING id, github_id, username, email, avatar_url, role, created_at, updated_at
 	`, userID, githubID, username, email, avatarURL, assignedRole).Scan(
 		&u.ID, &u.GitHubID, &u.Username, &retEmail, &retAvatar, &u.Role, &u.CreatedAt, &u.UpdatedAt,
@@ -124,12 +120,12 @@ func (db *DB) UpsertUser(ctx context.Context, githubID, username, avatarURL stri
 }
 
 func (db *DB) GetUserByID(ctx context.Context, id string) (*User, error) {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return &User{ID: id, Username: "demo_user", Role: "Owner"}, nil
 	}
 	var u User
 	var email, avatar *string
-	err := db.Pool.QueryRow(ctx, `
+	err := db.SQL.QueryRowContext(ctx, `
 		SELECT id, github_id, username, email, avatar_url, role, created_at, updated_at
 		FROM users
 		WHERE id = $1
@@ -147,12 +143,12 @@ func (db *DB) GetUserByID(ctx context.Context, id string) (*User, error) {
 }
 
 func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return []User{
 			{ID: "usr_demo", GitHubID: "12345", Username: "algotyrnt", Role: "Owner", CreatedAt: time.Now(), UpdatedAt: time.Now()},
 		}, nil
 	}
-	rows, err := db.Pool.Query(ctx, `
+	rows, err := db.SQL.QueryContext(ctx, `
 		SELECT id, github_id, username, email, avatar_url, role, created_at, updated_at
 		FROM users
 		ORDER BY created_at ASC
@@ -180,7 +176,7 @@ func (db *DB) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 func (db *DB) UpdateUserRole(ctx context.Context, id, newRole string) error {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return nil
 	}
 
@@ -189,47 +185,46 @@ func (db *DB) UpdateUserRole(ctx context.Context, id, newRole string) error {
 		return fmt.Errorf("invalid role: %s", newRole)
 	}
 
-	// Protect against demoting the last Owner
 	var currentRole string
-	err := db.Pool.QueryRow(ctx, "SELECT role FROM users WHERE id = $1", id).Scan(&currentRole)
+	err := db.SQL.QueryRowContext(ctx, "SELECT role FROM users WHERE id = $1", id).Scan(&currentRole)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
 	}
 
 	if currentRole == "Owner" && newRole != "Owner" {
 		var ownerCount int
-		_ = db.Pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE role = 'Owner'").Scan(&ownerCount)
+		_ = db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE role = 'Owner'").Scan(&ownerCount)
 		if ownerCount <= 1 {
 			return fmt.Errorf("cannot demote the only instance Owner")
 		}
 	}
 
-	_, err = db.Pool.Exec(ctx, `
-		UPDATE users SET role = $2, updated_at = NOW() WHERE id = $1
+	_, err = db.SQL.ExecContext(ctx, `
+		UPDATE users SET role = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
 	`, id, newRole)
 	return err
 }
 
 func (db *DB) DeleteUser(ctx context.Context, id string) error {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return nil
 	}
 
 	var role string
-	err := db.Pool.QueryRow(ctx, "SELECT role FROM users WHERE id = $1", id).Scan(&role)
+	err := db.SQL.QueryRowContext(ctx, "SELECT role FROM users WHERE id = $1", id).Scan(&role)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
 	}
 
 	if role == "Owner" {
 		var ownerCount int
-		_ = db.Pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE role = 'Owner'").Scan(&ownerCount)
+		_ = db.SQL.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE role = 'Owner'").Scan(&ownerCount)
 		if ownerCount <= 1 {
 			return fmt.Errorf("cannot delete the only instance Owner")
 		}
 	}
 
-	_, err = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
+	_, err = db.SQL.ExecContext(ctx, "DELETE FROM users WHERE id = $1", id)
 	return err
 }
 
@@ -241,7 +236,7 @@ func (db *DB) CreateInvitation(ctx context.Context, githubUsername, role, invite
 
 	invID := fmt.Sprintf("inv_%d", time.Now().UnixNano())
 
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return &Invitation{
 			ID:             invID,
 			GitHubUsername: githubUsername,
@@ -253,10 +248,10 @@ func (db *DB) CreateInvitation(ctx context.Context, githubUsername, role, invite
 
 	var inv Invitation
 	var invBy *string
-	err := db.Pool.QueryRow(ctx, `
+	err := db.SQL.QueryRowContext(ctx, `
 		INSERT INTO invitations (id, github_username, role, invited_by, created_at)
-		VALUES ($1, $2, $3, $4, NOW())
-		ON CONFLICT (github_username) DO UPDATE SET role = EXCLUDED.role, created_at = NOW()
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+		ON CONFLICT (github_username) DO UPDATE SET role = EXCLUDED.role, created_at = CURRENT_TIMESTAMP
 		RETURNING id, github_username, role, invited_by, created_at
 	`, invID, githubUsername, role, invitedBy).Scan(&inv.ID, &inv.GitHubUsername, &inv.Role, &invBy, &inv.CreatedAt)
 
@@ -270,10 +265,10 @@ func (db *DB) CreateInvitation(ctx context.Context, githubUsername, role, invite
 }
 
 func (db *DB) ListInvitations(ctx context.Context) ([]Invitation, error) {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return []Invitation{}, nil
 	}
-	rows, err := db.Pool.Query(ctx, `
+	rows, err := db.SQL.QueryContext(ctx, `
 		SELECT id, github_username, role, invited_by, created_at
 		FROM invitations
 		ORDER BY created_at DESC
@@ -298,9 +293,9 @@ func (db *DB) ListInvitations(ctx context.Context) ([]Invitation, error) {
 }
 
 func (db *DB) DeleteInvitation(ctx context.Context, id string) error {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return nil
 	}
-	_, err := db.Pool.Exec(ctx, "DELETE FROM invitations WHERE id = $1 OR github_username = $1", id)
+	_, err := db.SQL.ExecContext(ctx, "DELETE FROM invitations WHERE id = $1 OR github_username = $1", id)
 	return err
 }

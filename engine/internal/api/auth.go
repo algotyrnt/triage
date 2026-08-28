@@ -50,7 +50,7 @@ func GenerateUserJWT(user *db.User, secret string) (string, error) {
 		Role:      user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.ID,
-			Issuer:    "triage-engine",
+			Issuer:    "triage",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(30 * 24 * time.Hour)), // 30-day session
 		},

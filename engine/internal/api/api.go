@@ -16,6 +16,7 @@ import (
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
 	"triage/engine/internal/llm"
+	"triage/engine/internal/ui"
 	"triage/engine/internal/version"
 )
 
@@ -140,26 +141,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/llm/analyze-panic", s.withMiddleware(s.HandleLLMAnalyzePanic))
 	mux.HandleFunc("/api/v1/llm/generate-patch", s.withMiddleware(s.HandleLLMGeneratePatch))
 
-	// Root handler: redirect visitors to dashboard if configured, or return engine operational status
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		dashboardURL := s.ResolveAppURL(r.Context(), r)
-		if dashboardURL == "" {
-			writeJSON(w, http.StatusOK, map[string]string{
-				"service": "triage-engine",
-				"status":  "operational",
-			})
-			return
-		}
-		target := dashboardURL
-		if r.URL.RawQuery != "" {
-			target = fmt.Sprintf("%s?%s", dashboardURL, r.URL.RawQuery)
-		}
-		http.Redirect(w, r, target, http.StatusFound)
-	})
+	// Embedded Studio Dashboard SPA Handler (serves UI assets and handles client routing)
+	mux.Handle("/", ui.Handler())
 }
 
 // LoadGitHubAppConfig refreshes the GitHub App credentials and client details from the instance configuration database.

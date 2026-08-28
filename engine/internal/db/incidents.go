@@ -6,20 +6,19 @@ package db
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 func (db *DB) FindActiveIncidentByFingerprint(ctx context.Context, repositoryID, fingerprint string) (*Incident, error) {
-	if db.Pool == nil || fingerprint == "" {
+	if db == nil || db.SQL == nil || fingerprint == "" {
 		return nil, nil
 	}
 	var inc Incident
-	err := db.Pool.QueryRow(ctx, `
+	err := db.SQL.QueryRowContext(ctx, `
 		SELECT id, COALESCE(repository_id, ''), COALESCE(fingerprint, ''), occurrence_count, title, status, COALESCE(severity, 'CRITICAL'), COALESCE(ai_provider, ''), COALESCE(ai_model, ''), file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at, last_seen_at
 		FROM incidents
 		WHERE (repository_id = $1 OR ($1 = '' AND repository_id IS NULL))
@@ -33,7 +32,7 @@ func (db *DB) FindActiveIncidentByFingerprint(ctx context.Context, repositoryID,
 		&inc.GitHubIssueURL, &inc.GitHubIssueNumber, &inc.GitHubPRURL, &inc.GitHubPRNumber, &inc.CreatedAt, &inc.LastSeenAt,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
@@ -42,21 +41,21 @@ func (db *DB) FindActiveIncidentByFingerprint(ctx context.Context, repositoryID,
 }
 
 func (db *DB) IncrementIncidentOccurrence(ctx context.Context, incidentID string) error {
-	if db.Pool == nil {
-		return fmt.Errorf("PostgreSQL pool uninitialized")
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database uninitialized")
 	}
-	_, err := db.Pool.Exec(ctx, `
+	_, err := db.SQL.ExecContext(ctx, `
 		UPDATE incidents
 		SET occurrence_count = occurrence_count + 1,
-		    last_seen_at = NOW()
+		    last_seen_at = CURRENT_TIMESTAMP
 		WHERE id = $1
 	`, incidentID)
 	return err
 }
 
 func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
-	if db.Pool == nil {
-		return fmt.Errorf("PostgreSQL connection pool uninitialized")
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database connection uninitialized")
 	}
 
 	var repoID *string
@@ -100,7 +99,7 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 			github_issue_number = CASE WHEN EXCLUDED.github_issue_number > 0 THEN EXCLUDED.github_issue_number ELSE incidents.github_issue_number END,
 			github_pr_url = COALESCE(NULLIF(EXCLUDED.github_pr_url, ''), incidents.github_pr_url),
 			github_pr_number = CASE WHEN EXCLUDED.github_pr_number > 0 THEN EXCLUDED.github_pr_number ELSE incidents.github_pr_number END,
-			last_seen_at = NOW();
+			last_seen_at = CURRENT_TIMESTAMP;
 	`
 	now := time.Now().UTC()
 	createdAt := inc.CreatedAt
@@ -112,7 +111,7 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 		lastSeenAt = now
 	}
 
-	_, err := db.Pool.Exec(
+	_, err := db.SQL.ExecContext(
 		ctx, query,
 		inc.ID, repoID, inc.Fingerprint, inc.OccurrenceCount, inc.Title, inc.Status, inc.Severity, inc.AIProvider, inc.AIModel,
 		inc.File, inc.Line, inc.PanicMessage, inc.StackTrace, inc.ASTSnippet, inc.RootCause, inc.SuggestedFix, inc.SuggestedPatch,
@@ -122,10 +121,10 @@ func (db *DB) SaveIncident(ctx context.Context, inc *Incident) error {
 }
 
 func (db *DB) UpdateIncidentIssue(ctx context.Context, incidentID, issueURL string, issueNumber int) error {
-	if db.Pool == nil {
-		return fmt.Errorf("PostgreSQL pool uninitialized")
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database uninitialized")
 	}
-	_, err := db.Pool.Exec(ctx, `
+	_, err := db.SQL.ExecContext(ctx, `
 		UPDATE incidents
 		SET github_issue_url = $2, github_issue_number = $3
 		WHERE id = $1
@@ -134,10 +133,10 @@ func (db *DB) UpdateIncidentIssue(ctx context.Context, incidentID, issueURL stri
 }
 
 func (db *DB) UpdateIncidentPR(ctx context.Context, incidentID, prURL string, prNumber int, patch string) error {
-	if db.Pool == nil {
-		return fmt.Errorf("PostgreSQL pool uninitialized")
+	if db == nil || db.SQL == nil {
+		return fmt.Errorf("database uninitialized")
 	}
-	_, err := db.Pool.Exec(ctx, `
+	_, err := db.SQL.ExecContext(ctx, `
 		UPDATE incidents
 		SET github_pr_url = $2,
 		    github_pr_number = $3,
@@ -148,14 +147,14 @@ func (db *DB) UpdateIncidentPR(ctx context.Context, incidentID, prURL string, pr
 }
 
 func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
-	if db.Pool == nil {
+	if db == nil || db.SQL == nil {
 		return []Incident{}, nil
 	}
 	if limit <= 0 {
 		limit = 50
 	}
 
-	rows, err := db.Pool.Query(ctx, `
+	rows, err := db.SQL.QueryContext(ctx, `
 		SELECT id, COALESCE(repository_id, ''), COALESCE(fingerprint, ''), occurrence_count, title, status, COALESCE(severity, 'CRITICAL'), COALESCE(ai_provider, ''), COALESCE(ai_model, ''), file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at, last_seen_at
 		FROM incidents
 		ORDER BY last_seen_at DESC
@@ -183,11 +182,11 @@ func (db *DB) GetIncidents(ctx context.Context, limit int) ([]Incident, error) {
 }
 
 func (db *DB) GetIncidentByID(ctx context.Context, id string) (*Incident, error) {
-	if db.Pool == nil {
-		return nil, fmt.Errorf("PostgreSQL pool uninitialized")
+	if db == nil || db.SQL == nil {
+		return nil, fmt.Errorf("database uninitialized")
 	}
 	var inc Incident
-	err := db.Pool.QueryRow(ctx, `
+	err := db.SQL.QueryRowContext(ctx, `
 		SELECT id, COALESCE(repository_id, ''), COALESCE(fingerprint, ''), occurrence_count, title, status, COALESCE(severity, 'CRITICAL'), COALESCE(ai_provider, ''), COALESCE(ai_model, ''), file, line, panic_message, stack_trace, COALESCE(ast_snippet, ''), COALESCE(root_cause, ''), COALESCE(suggested_fix, ''), COALESCE(suggested_patch, ''), COALESCE(github_issue_url, ''), COALESCE(github_issue_number, 0), COALESCE(github_pr_url, ''), COALESCE(github_pr_number, 0), created_at, last_seen_at
 		FROM incidents
 		WHERE id = $1

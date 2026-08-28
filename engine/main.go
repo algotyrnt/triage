@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,6 +30,14 @@ var (
 )
 
 func main() {
+	opts := config.DefaultOptions()
+
+	portFlag := flag.String("port", opts.Port, "HTTP server port")
+	dataDirFlag := flag.String("data-dir", opts.DataDir, "Data directory for embedded SQLite storage")
+	dbPathFlag := flag.String("db", "", "Explicit SQLite database file path (defaults to <data-dir>/triage.db)")
+	logLevelFlag := flag.String("log-level", opts.LogLevel, "Log level: debug, info, warn, error")
+	flag.Parse()
+
 	if version != "" {
 		versionPkg.Version = version
 	}
@@ -40,10 +49,13 @@ func main() {
 	}
 	currentVersion := versionPkg.Get()
 
-	env, err := config.LoadEnv()
-	if err != nil {
-		slog.Error("fatal: invalid environment configuration", "error", err)
-		os.Exit(1)
+	opts.Port = *portFlag
+	opts.DataDir = *dataDirFlag
+	opts.LogLevel = *logLevelFlag
+
+	dbPath := opts.DatabasePath()
+	if *dbPathFlag != "" {
+		dbPath = *dbPathFlag
 	}
 
 	logger.InitLogger()
@@ -51,21 +63,17 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	database, err := db.NewDB(ctx, env.DatabaseURL)
+	database, err := db.NewDB(ctx, dbPath)
 	if err != nil {
-		slog.Error("fatal: failed to connect to PostgreSQL database", "error", err)
+		slog.Error("fatal: failed to initialize embedded database", "path", dbPath, "error", err)
 		os.Exit(1)
 	}
 	defer database.Close()
-	slog.Info("connected engine to PostgreSQL database pool", "version", currentVersion)
+	slog.Info("connected triage to embedded SQLite database", "path", database.Path, "version", currentVersion)
 
-	astManager, err := ast.NewManager(ctx, env.DatabaseURL)
-	if err != nil {
-		slog.Error("fatal: failed to connect AST manager to PostgreSQL", "error", err)
-		os.Exit(1)
-	}
+	astManager := ast.NewManagerWithDB(database)
 	defer astManager.Close()
-	slog.Info("connected engine to PostgreSQL AST indexer")
+	slog.Info("initialized AST indexer")
 
 	configStore := config.NewStore(database)
 	if _, err := configStore.EnsureSessionSecret(ctx); err != nil {
@@ -86,7 +94,7 @@ func main() {
 	server.RegisterRoutes(mux)
 
 	httpServer := &http.Server{
-		Addr:         ":" + env.Port,
+		Addr:         ":" + opts.Port,
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -98,7 +106,7 @@ func main() {
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		slog.Info("triage engine server starting", "port", env.Port)
+		slog.Info("triage server starting", "port", opts.Port, "ui", "embedded", "db", "sqlite")
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("HTTP server failed", "error", err)
 			os.Exit(1)
@@ -106,7 +114,7 @@ func main() {
 	}()
 
 	<-stopChan
-	slog.Info("shutting down triage engine gracefully...")
+	slog.Info("shutting down triage server gracefully...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
@@ -114,5 +122,5 @@ func main() {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP shutdown error", "error", err)
 	}
-	slog.Info("triage engine stopped cleanly")
+	slog.Info("triage server stopped cleanly")
 }
