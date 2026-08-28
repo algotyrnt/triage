@@ -29,22 +29,24 @@ func getVCSCommit() string {
 }
 
 type TelemetryPayload struct {
-	APIKey     string `json:"api_key"`
-	Commit     string `json:"commit,omitempty"`
-	File       string `json:"file"`
-	Line       int    `json:"line"`
-	StackTrace string `json:"stack_trace"`
-	TraceID    string `json:"trace_id,omitempty"`
+	APIKey       string `json:"api_key"`
+	Commit       string `json:"commit,omitempty"`
+	File         string `json:"file"`
+	Line         int    `json:"line"`
+	PanicMessage string `json:"panic_message,omitempty"`
+	StackTrace   string `json:"stack_trace"`
+	TraceID      string `json:"trace_id,omitempty"`
 }
 
 type TelemetryJob struct {
-	EngineURL  string
-	APIKey     string
-	Commit     string
-	File       string
-	Line       int
-	StackTrace string
-	TraceID    string
+	EngineURL    string
+	APIKey       string
+	Commit       string
+	File         string
+	Line         int
+	PanicMessage string
+	StackTrace   string
+	TraceID      string
 }
 
 var (
@@ -69,7 +71,7 @@ func init() {
 		go func() {
 			for job := range telemetryQueue {
 				atomic.AddUint64(&processedCount, 1)
-				sendTelemetry(job.EngineURL, job.APIKey, job.Commit, job.File, job.Line, job.StackTrace, job.TraceID)
+				sendTelemetry(job.EngineURL, job.APIKey, job.Commit, job.File, job.Line, job.PanicMessage, job.StackTrace, job.TraceID)
 			}
 		}()
 	}
@@ -150,16 +152,18 @@ func Middleware(apiKey, engineURL string) func(http.Handler) http.Handler {
 
 					file, line := parseTopApplicationFrame(stackStr)
 					traceID := parseOrGenerateTraceID(r)
+					panicMsg := fmt.Sprintf("%v", rerr)
 
 					// Non-blocking enqueue to bounded telemetry worker pool
 					enqueueTelemetry(TelemetryJob{
-						EngineURL:  engineURL,
-						APIKey:     apiKey,
-						Commit:     commit,
-						File:       file,
-						Line:       line,
-						StackTrace: stackStr,
-						TraceID:    traceID,
+						EngineURL:    engineURL,
+						APIKey:       apiKey,
+						Commit:       commit,
+						File:         file,
+						Line:         line,
+						PanicMessage: panicMsg,
+						StackTrace:   stackStr,
+						TraceID:      traceID,
 					})
 
 					// Respond with generic 500 Internal Server Error (no internal error leakage)
@@ -202,14 +206,15 @@ func parseTopApplicationFrame(stackTrace string) (string, int) {
 	return "", 0
 }
 
-func sendTelemetry(engineURL string, apiKey string, commit string, file string, line int, stackTrace string, traceID string) {
+func sendTelemetry(engineURL string, apiKey string, commit string, file string, line int, panicMsg string, stackTrace string, traceID string) {
 	payload := TelemetryPayload{
-		APIKey:     apiKey,
-		Commit:     commit,
-		File:       file,
-		Line:       line,
-		StackTrace: stackTrace,
-		TraceID:    traceID,
+		APIKey:       apiKey,
+		Commit:       commit,
+		File:         file,
+		Line:         line,
+		PanicMessage: panicMsg,
+		StackTrace:   stackTrace,
+		TraceID:      traceID,
 	}
 
 	data, err := json.Marshal(payload)
