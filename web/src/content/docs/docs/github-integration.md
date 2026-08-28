@@ -22,7 +22,7 @@ The Studio Dashboard provides an automated manifest-based GitHub App setup:
 1. Open your self-hosted Studio Dashboard and start the **Setup Wizard**.
 2. Click **Create GitHub App** — Triage generates a GitHub App manifest with the exact required permissions.
 3. You will be redirected to GitHub to confirm the App creation.
-4. GitHub redirects back with the App ID, Client ID, Client Secret, and Private Key, which Triage securely stores in your PostgreSQL database.
+4. GitHub redirects back with the App ID, Client ID, Client Secret, and Private Key, which Triage securely stores in your embedded SQLite database.
 
 ---
 
@@ -45,18 +45,18 @@ When configuring your GitHub App (or creating it manually), ensure the following
 When a crash is diagnosed, you can trigger an automated Pull Request from the Incident Detail page or via `POST /api/v1/incidents/create-pr`:
 
 ```
-1. Fetch latest file content via GitHub Contents API
+1. Fetch latest file content & verify base commit SHA via GitHub Contents API
    (with Monorepo path normalization if root_dir is configured)
               │
               ▼
-2. AI Engine synthesizes bugfix via ApplyFixToFile
-   (preserving existing imports, comments, and style)
+2. Validate patch target file against security policies
+   (rejects workflows, Dockerfiles, .env, private keys, path traversal)
               │
               ▼
-3. Query repository default branch & base commit SHA
+3. AI Engine synthesizes bugfix via ApplyFixToFile & verifies changes exist
               │
               ▼
-4. Create dedicated Git branch: triage/fix-<incident_id>-<timestamp>
+4. Create dedicated Git branch: triage/fix-<incident_id>-<random_hex>
               │
               ▼
 5. Commit updated file to branch via GitHub Contents API

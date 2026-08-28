@@ -23,16 +23,18 @@ Browser (Studio Dashboard)               Triage Go Engine (:8080)               
           │                                         ├── 8. Upsert user in the embedded database       │
           │                                         ├── 9. Determine RBAC Role Tier        │
           │                                         ├── 10. Issue 30-day signed HS256 JWT  │
-          │<── 11. Redirect with ?token=<JWT> ──────│                                      │
+          │<── 11. Set-Cookie: triage_session=<JWT> ──│                                      │
+          │    (HttpOnly, SameSite=Lax) + Redirect  │                                      │
           │                                         │                                      │
-          │── 12. GET /api/v1/auth/me (Bearer JWT) >│── Verify signature & return role ───>│
+          │── 12. GET /api/v1/auth/me (Cookie/Auth)>│── Verify signature & return role ───>│
 ```
 
 ### Security Highlights
 
 - **Zero Frontend Secret Exposure:** The frontend is a 100% static Single Page Application (SPA). OAuth client secrets and credentials remain securely locked in the embedded database.
 - **Cryptographic CSRF Protection:** Authorization redirects set a random, short-lived, `HttpOnly` state nonce cookie validated during callback.
-- **Stateless 30-Day HS256 JWTs:** The Engine signs user sessions using the instance's 256-bit `session_secret`. Tokens are validated in microseconds on each API request.
+- **Secure HttpOnly Cookie & Bearer JWTs:** The Engine signs user sessions using a 256-bit cryptographic `session_secret` generated on initial boot. Browser clients authenticate via `HttpOnly`, `SameSite=Lax` cookies with zero URL token exposure, while programmatic clients use standard `Authorization: Bearer <token>` headers.
+- **Centralized Route-Level RBAC:** Every API endpoint is wrapped with route middleware strictly enforcing permission tiers (`Owner`, `Admin`, `Developer`, `Viewer`) before request processing.
 
 ---
 

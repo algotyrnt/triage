@@ -136,12 +136,6 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
       if (status.oauth) setOauthConfigured(true);
       if (status.llm) {
         setLlmConfigured(true);
-        engineClient.getLlmConfig().then((cfg) => {
-          if (cfg.provider) setLlmProvider(cfg.provider as any);
-          if (cfg.api_key) setLlmApiKey(cfg.api_key);
-          if (cfg.model) setLlmModel(cfg.model);
-          if (cfg.base_url) setLlmBaseUrl(cfg.base_url);
-        });
       }
 
       if (status.github_app && status.installation && status.oauth && status.llm) {
@@ -267,7 +261,7 @@ export const SetupWizardPage: React.FC<SetupWizardPageProps> = ({ onNavigate }) 
     setTestingLlm(true);
     setLlmTestResult(null);
     try {
-      const res = await engineClient.testLlmConfig({
+      const res = await engineClient.testSetupLlmConfig({
         provider: llmProvider,
         apiKey: llmApiKey,
         model: llmModel,

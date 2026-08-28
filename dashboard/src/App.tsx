@@ -115,22 +115,15 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
   React.useEffect(() => {
     async function bootstrap() {
       try {
-        // Step 1: Immediately extract and persist OAuth callback token from URL
+        // Step 1: Clean up one-time URL query parameters
         const params = new URLSearchParams(window.location.search);
-        const urlToken = params.get('token');
         const setupStep = params.get('setup_step');
         const targetProject = params.get('project');
         const targetScreen = params.get('screen') as ScreenId | null;
         const isInstalledRedirect = params.get('installed') === 'true';
 
-        if (urlToken) {
-          localStorage.setItem('triage_session', urlToken);
-          engineClient.setAuthToken(urlToken);
-        }
-
-        // Clean up one-time URL query parameters so refresh does not replay them
         if (
-          urlToken ||
+          params.get('auth') ||
           isInstalledRedirect ||
           params.get('setup_error') ||
           params.get('installed') ||
@@ -139,31 +132,27 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
           window.history.replaceState({}, '', window.location.pathname);
         }
 
-        const storedToken = urlToken || localStorage.getItem('triage_session');
         let authenticatedUser: any = null;
 
-        // Step 2: Verify user session with Engine backend
-        if (storedToken) {
-          try {
-            engineClient.setAuthToken(storedToken);
-            const user = await engineClient.getAuthUser();
-            if (user) {
-              authenticatedUser = user;
-              setCurrentUser({
-                id: user.id,
-                username: user.username,
-                avatarUrl: user.avatar_url,
-                role: user.role,
-              });
-            } else {
-              localStorage.removeItem('triage_session');
-              engineClient.setAuthToken(null);
-            }
-          } catch (e) {
-            console.error('Failed to verify session with Engine', e);
+        // Step 2: Verify user session with Engine backend (cookie or Authorization header)
+        try {
+          const user = await engineClient.getAuthUser();
+          if (user) {
+            authenticatedUser = user;
+            setCurrentUser({
+              id: user.id,
+              username: user.username,
+              avatarUrl: user.avatar_url,
+              role: user.role,
+            });
+          } else {
             localStorage.removeItem('triage_session');
             engineClient.setAuthToken(null);
           }
+        } catch (e) {
+          console.error('Failed to verify session with Engine', e);
+          localStorage.removeItem('triage_session');
+          engineClient.setAuthToken(null);
         }
 
         // Step 3: Check setup status
@@ -310,6 +299,7 @@ export default function App({ initialScreen = 'projects' }: { initialScreen?: Sc
   };
 
   const handleLogout = () => {
+    engineClient.logout().catch(() => {});
     localStorage.removeItem('triage_session');
     try {
       sessionStorage.removeItem('triage_active_screen');

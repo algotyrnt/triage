@@ -25,6 +25,12 @@ type DetectedModule struct {
 
 func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
+		claims := s.getUserClaims(r)
+		if claims != nil && claims.Role == "Viewer" {
+			http.Error(w, `{"error":"Forbidden: Viewers cannot create projects"}`, http.StatusForbidden)
+			return
+		}
+
 		var req struct {
 			Repo          string `json:"repo"`
 			Owner         string `json:"owner"`
@@ -109,6 +115,12 @@ func (s *Server) HandleProjects(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleUpdateProjectContext(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut && r.Method != http.MethodPost && r.Method != http.MethodPatch {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims := s.getUserClaims(r)
+	if claims != nil && claims.Role == "Viewer" {
+		http.Error(w, `{"error":"Forbidden: Viewers cannot update project context"}`, http.StatusForbidden)
 		return
 	}
 

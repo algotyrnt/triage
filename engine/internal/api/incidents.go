@@ -5,10 +5,13 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,6 +19,50 @@ import (
 	"triage/engine/internal/db"
 	"triage/engine/internal/llm"
 )
+
+// ValidatePatchTargetFile enforces repository safety policies on modified files.
+func ValidatePatchTargetFile(filePath string) error {
+	clean := filepath.Clean(strings.TrimSpace(filePath))
+	if clean == "" || clean == "." || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
+		return fmt.Errorf("invalid target file path: %s", filePath)
+	}
+
+	lower := strings.ToLower(filepath.ToSlash(clean))
+	disallowedPrefixes := []string{
+		".github/",
+		".git/",
+		".vscode/",
+		".idea/",
+	}
+	for _, pref := range disallowedPrefixes {
+		if strings.HasPrefix(lower, pref) {
+			return fmt.Errorf("modifying files in %s is prohibited by security policy", pref)
+		}
+	}
+
+	disallowedSubstrings := []string{
+		"dockerfile",
+		"docker-compose",
+		".env",
+		"credential",
+		"secret",
+		"id_rsa",
+		"id_ed25519",
+	}
+	base := filepath.Base(lower)
+	for _, sub := range disallowedSubstrings {
+		if strings.Contains(base, sub) {
+			return fmt.Errorf("modifying %s is prohibited by security policy", base)
+		}
+	}
+
+	ext := filepath.Ext(lower)
+	if ext == ".pem" || ext == ".key" || ext == ".pfx" || ext == ".p12" {
+		return fmt.Errorf("modifying certificate or private key files is prohibited")
+	}
+
+	return nil
+}
 
 func (s *Server) HandleIncidents(w http.ResponseWriter, r *http.Request) {
 	if s.db == nil {
@@ -110,43 +157,35 @@ func (s *Server) HandleCreateIncidentIssue(w http.ResponseWriter, r *http.Reques
 	var owner, repo string
 	var installationID int64
 
-	if inc.RepositoryID != "" {
-		if projects, err := s.db.GetProjects(r.Context()); err == nil {
-			for _, p := range projects {
-				if p.ID == inc.RepositoryID {
-					owner = p.Owner
-					repo = p.Repo
-					installationID = p.InstallationID
-					break
-				}
+	if inc.RepositoryID == "" {
+		http.Error(w, "Incident is not associated with any tracked repository", http.StatusBadRequest)
+		return
+	}
+
+	if projects, err := s.db.GetProjects(r.Context()); err == nil {
+		for _, p := range projects {
+			if p.ID == inc.RepositoryID {
+				owner = p.Owner
+				repo = p.Repo
+				installationID = p.InstallationID
+				break
 			}
 		}
 	}
-	if owner == "" {
-		if projects, err := s.db.GetProjects(r.Context()); err == nil && len(projects) > 0 {
-			owner = projects[0].Owner
-			repo = projects[0].Repo
-			installationID = projects[0].InstallationID
-		}
+
+	if owner == "" || repo == "" {
+		http.Error(w, "Target repository for this incident not found", http.StatusNotFound)
+		return
 	}
-	if (installationID == 0 || installationID == 1001) && owner != "" && repo != "" {
+
+	if installationID == 0 {
 		if instID, err := s.db.GetInstallationForRepo(r.Context(), owner, repo); err == nil && instID > 0 {
 			installationID = instID
 		}
 	}
-	if installationID == 0 || installationID == 1001 {
-		if inst, err := s.db.GetInstallation(r.Context()); err == nil && inst != nil {
-			installationID = inst.InstallationID
-		}
-	}
-	if installationID == 0 || installationID == 1001 {
-		if appInstalls, err := s.githubApp.ListAppInstallations(r.Context()); err == nil && len(appInstalls) > 0 {
-			installationID = appInstalls[0].ID
-		}
-	}
 
-	if installationID == 0 || owner == "" || repo == "" {
-		http.Error(w, "Unable to resolve GitHub repository or App installation for this incident", http.StatusBadRequest)
+	if installationID == 0 {
+		http.Error(w, "Unable to resolve GitHub App installation for this repository", http.StatusBadRequest)
 		return
 	}
 
@@ -259,56 +298,62 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if inc.RepositoryID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Incident is not associated with any tracked repository"})
+		return
+	}
+
 	var owner, repo, rootDir string
 	var installationID int64
 
-	if inc.RepositoryID != "" {
-		if projects, err := s.db.GetProjects(r.Context()); err == nil {
-			for _, p := range projects {
-				if p.ID == inc.RepositoryID {
-					owner = p.Owner
-					repo = p.Repo
-					rootDir = p.RootDir
-					installationID = p.InstallationID
-					break
-				}
+	if projects, err := s.db.GetProjects(r.Context()); err == nil {
+		for _, p := range projects {
+			if p.ID == inc.RepositoryID {
+				owner = p.Owner
+				repo = p.Repo
+				rootDir = p.RootDir
+				installationID = p.InstallationID
+				break
 			}
 		}
 	}
-	if owner == "" {
-		if projects, err := s.db.GetProjects(r.Context()); err == nil && len(projects) > 0 {
-			owner = projects[0].Owner
-			repo = projects[0].Repo
-			rootDir = projects[0].RootDir
-			installationID = projects[0].InstallationID
-		}
+
+	if owner == "" || repo == "" {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"success": false, "error": "Target repository for this incident not found"})
+		return
 	}
-	if (installationID == 0 || installationID == 1001) && owner != "" && repo != "" {
+
+	if installationID == 0 {
 		if instID, err := s.db.GetInstallationForRepo(r.Context(), owner, repo); err == nil && instID > 0 {
 			installationID = instID
 		}
 	}
-	if installationID == 0 || installationID == 1001 {
-		if inst, err := s.db.GetInstallation(r.Context()); err == nil && inst != nil {
-			installationID = inst.InstallationID
-		}
-	}
-	if installationID == 0 || installationID == 1001 {
-		if appInstalls, err := s.githubApp.ListAppInstallations(r.Context()); err == nil && len(appInstalls) > 0 {
-			installationID = appInstalls[0].ID
-		}
-	}
 
-	if installationID == 0 || owner == "" || repo == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Unable to resolve GitHub repository or App installation for this incident"})
+	if installationID == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Unable to resolve GitHub App installation for this repository"})
 		return
 	}
 
 	// 1. Fetch file content from GitHub repository
 	normalizedFilePath := ast.NormalizeMonorepoPath(inc.File, rootDir)
+	commitFilePath := normalizedFilePath
+	if commitFilePath == "" {
+		commitFilePath = inc.File
+	}
+
+	// Validate target file safety policy (SEC-005, SEC-010)
+	if err := ValidatePatchTargetFile(commitFilePath); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": err.Error()})
+		return
+	}
+
 	currentFileBytes, currentFileSHA, fetchErr := s.githubApp.FetchFileContent(r.Context(), installationID, owner, repo, "", normalizedFilePath)
 	if fetchErr != nil {
 		currentFileBytes, currentFileSHA, fetchErr = s.githubApp.FetchFileContent(r.Context(), installationID, owner, repo, "", inc.File)
+	}
+	if fetchErr != nil || currentFileSHA == "" {
+		writeJSON(w, http.StatusConflict, map[string]interface{}{"success": false, "error": "Could not fetch target file from GitHub repository or file is missing"})
+		return
 	}
 
 	// 2. Generate updated file content using active LLM provider
@@ -352,18 +397,22 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if updatedContent == "" {
-		if len(currentFileBytes) > 0 {
-			updatedContent = string(currentFileBytes)
-		} else if patchCode != "" {
+		if patchCode != "" {
 			updatedContent = patchCode
 		} else {
-			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Could not determine file content to commit for Pull Request"})
+			writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "Could not determine modified file content to commit for Pull Request"})
 			return
 		}
 	}
 
 	if !strings.HasSuffix(updatedContent, "\n") {
 		updatedContent += "\n"
+	}
+
+	// Check unchanged file guard (SEC-005)
+	if len(currentFileBytes) > 0 && string(currentFileBytes) == updatedContent {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"success": false, "error": "No code changes were generated; refusing to commit unchanged file"})
+		return
 	}
 
 	// 3. Get Default Branch & Base SHA
@@ -373,9 +422,11 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 4. Create new Branch
+	// 4. Create new Branch with cryptographically unique name (SEC-016)
 	cleanIncID := strings.ToLower(strings.ReplaceAll(inc.ID, "-", ""))
-	branchName := fmt.Sprintf("triage/fix-%s-%d", cleanIncID, time.Now().Unix())
+	randSuffix := make([]byte, 4)
+	_, _ = rand.Read(randSuffix)
+	branchName := fmt.Sprintf("triage/fix-%s-%s", cleanIncID, hex.EncodeToString(randSuffix))
 	if err := s.githubApp.CreateBranch(r.Context(), installationID, owner, repo, branchName, baseSHA); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": fmt.Sprintf("Failed to create git branch: %v", err)})
 		return
@@ -383,10 +434,6 @@ func (s *Server) HandleCreateIncidentPR(w http.ResponseWriter, r *http.Request) 
 
 	// 5. Commit updated file to branch
 	commitMsg := fmt.Sprintf("fix(triage): resolve panic in %s:%d", inc.File, inc.Line)
-	commitFilePath := normalizedFilePath
-	if commitFilePath == "" {
-		commitFilePath = inc.File
-	}
 	if err := s.githubApp.UpdateFileContent(r.Context(), installationID, owner, repo, commitFilePath, commitMsg, updatedContent, branchName, currentFileSHA); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"success": false, "error": fmt.Sprintf("Failed to commit file update to branch: %v", err)})
 		return

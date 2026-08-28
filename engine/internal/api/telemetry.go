@@ -293,41 +293,22 @@ func (s *Server) HandleTelemetry(w http.ResponseWriter, r *http.Request) {
 		req.Owner = parts[0]
 		req.Repo = parts[1]
 	}
-	if req.Owner == "" && s.db != nil {
-		if projects, err := s.db.GetProjects(r.Context()); err == nil && len(projects) > 0 {
-			req.Owner = projects[0].Owner
-			req.Repo = projects[0].Repo
-			if projectContext == "" {
-				projectContext = projects[0].Context
-			}
-			if rootDir == "" {
-				rootDir = projects[0].RootDir
-			}
-			if installationID == 0 {
-				installationID = projects[0].InstallationID
-			}
-		}
-	}
 
 	if projectContext == "" && s.db != nil && req.Owner != "" && req.Repo != "" {
 		if proj, err := s.db.GetProjectByOwnerRepo(r.Context(), req.Owner, req.Repo, rootDir); err == nil && proj != nil {
 			projectContext = proj.Context
+			if repoID == "" {
+				repoID = proj.ID
+			}
+			if installationID == 0 {
+				installationID = proj.InstallationID
+			}
 		}
 	}
 
-	if (installationID == 0 || installationID == 1001) && req.Owner != "" && req.Repo != "" && s.db != nil {
+	if installationID == 0 && req.Owner != "" && req.Repo != "" && s.db != nil {
 		if instID, err := s.db.GetInstallationForRepo(r.Context(), req.Owner, req.Repo); err == nil && instID > 0 {
 			installationID = instID
-		}
-	}
-	if (installationID == 0 || installationID == 1001) && s.db != nil {
-		if inst, err := s.db.GetInstallation(r.Context()); err == nil && inst != nil {
-			installationID = inst.InstallationID
-		}
-	}
-	if (installationID == 0 || installationID == 1001) && s.githubApp != nil {
-		if appInstalls, err := s.githubApp.ListAppInstallations(r.Context()); err == nil && len(appInstalls) > 0 {
-			installationID = appInstalls[0].ID
 		}
 	}
 

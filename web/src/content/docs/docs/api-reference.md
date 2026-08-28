@@ -68,11 +68,8 @@ Streams live telemetry events, new panic incidents, and incident updates to conn
 **Headers:**
 
 - `Accept: text/event-stream`
-- `Authorization: Bearer <JWT>` _(optional, if session token is not provided via query)_
-
-**Query Parameters:**
-
-- `token` _(optional)_: JWT session token when connecting from browser `EventSource` (which cannot send custom headers).
+- `Authorization: Bearer <JWT>` _(optional when authenticated via cookie)_
+- `Cookie: triage_session=<JWT>` _(automatic for browser clients)_
 
 **Response (200 OK — `text/event-stream`):**
 
@@ -182,7 +179,7 @@ Creates a detailed GitHub Issue on the incident's target repository with AST cod
 
 ### `POST /api/v1/incidents/create-pr`
 
-Generates and opens an automated bugfix Pull Request on GitHub. The engine fetches the target file, synthesizes the fix using the active AI model, creates a new Git branch (`triage/fix-...`), commits the updated file, and opens a linked Pull Request.
+Generates and opens an automated bugfix Pull Request on GitHub. The engine verifies the repository association, enforces target file security policies (preventing modifications to `.github/workflows/*`, Dockerfiles, `.env*`, keys, certificates, and parent directory paths), verifies the base Git commit SHA, generates a cryptographically unique fix branch (`triage/fix-<clean_id>-<random_hex>`), commits the synthesized fix, and opens a linked Pull Request.
 
 **Request Body:**
 
@@ -201,7 +198,7 @@ Generates and opens an automated bugfix Pull Request on GitHub. The engine fetch
   "pull_request": {
     "number": 43,
     "html_url": "https://github.com/myorg/payments-service/pull/43",
-    "branch": "triage/fix-inc8094-1724123456"
+    "branch": "triage/fix-inc8094-a1b2c3d4"
   }
 }
 ```
@@ -544,7 +541,7 @@ Returns the indexed Go symbol tree, packages, files, exported/internal functions
 
 ### `POST /api/v1/ast/index`
 
-Pre-indexes a repository's package AST declarations into PostgreSQL for sub-millisecond `< 5ms` symbolication.
+Pre-indexes a repository's package AST declarations into SQLite database for sub-millisecond `< 5ms` symbolication.
 
 **Request Body:**
 
@@ -589,7 +586,7 @@ Returns runtime statistics including total projects, total panics ingested, and 
 
 ## Authentication & RBAC Identity
 
-Triage uses Go engine-driven GitHub OAuth and issues cryptographically signed JWT sessions.
+Triage uses Go engine-driven GitHub OAuth and issues cryptographically signed JWT sessions via secure `HttpOnly` cookies and `Bearer` tokens.
 
 ### `GET /api/v1/auth/github`
 
@@ -599,7 +596,22 @@ Initiates the GitHub OAuth authorization redirect with cryptographic CSRF state 
 
 ### `GET /api/v1/auth/github/callback`
 
-Receives GitHub OAuth authorization code, exchanges it securely with GitHub, upserts user profile, assigns role, and redirects to dashboard with session JWT.
+Receives GitHub OAuth authorization code, exchanges it securely with GitHub, upserts user profile, assigns role, sets a secure `triage_session` cookie, and redirects to dashboard with `?auth=success`.
+
+---
+
+### `POST /api/v1/auth/logout`
+
+Invalidates the active session by clearing the `triage_session` cookie (`Max-Age: -1`).
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "success",
+  "message": "logged out"
+}
+```
 
 ---
 
@@ -609,7 +621,7 @@ Returns the current authenticated caller profile and role.
 
 **Headers:**
 
-- `Authorization: Bearer <JWT>`
+- `Authorization: Bearer <JWT>` _(or automatically via `triage_session` cookie)_
 
 **Response (200 OK):**
 
