@@ -52,6 +52,15 @@ var (
 	queuedCount    uint64
 	processedCount uint64
 	droppedCount   uint64
+
+	telemetryHTTPClient = &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
 )
 
 func init() {
@@ -208,10 +217,6 @@ func sendTelemetry(engineURL string, apiKey string, commit string, file string, 
 		return
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
 	req, err := http.NewRequest(http.MethodPost, engineURL, bytes.NewBuffer(data))
 	if err != nil {
 		return
@@ -222,7 +227,7 @@ func sendTelemetry(engineURL string, apiKey string, commit string, file string, 
 		req.Header.Set("traceparent", fmt.Sprintf("00-%s-0000000000000001-01", traceID))
 	}
 
-	resp, err := client.Do(req)
+	resp, err := telemetryHTTPClient.Do(req)
 	if err == nil && resp != nil {
 		_ = resp.Body.Close()
 	}
