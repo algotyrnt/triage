@@ -48,7 +48,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser. The initial
 4. **AI Model Configuration** (Select Google Gemini, OpenAI, Claude, or local Ollama).
 5. **Verification** (Engine self-test).
 
-Once configured, copy your project API key (e.g. `...xxxx`).
+Once configured, your project API key is displayed **once** — copy it immediately and save it to your `.env` file or secrets manager. If lost, revoke the key and generate a new one from the dashboard.
 
 ---
 
@@ -98,7 +98,7 @@ Run your Go application (using `-trimpath` to generate production-accurate relat
 ```bash
 # Run test-services/simple-service on :8081 with your API key
 cd test-services/simple-service
-TRIAGE_API_KEY=your_sample_api_key go run -trimpath main.go
+TRIAGE_API_KEY=your_api_key go run -trimpath .
 ```
 
 In another terminal, trigger the crash:

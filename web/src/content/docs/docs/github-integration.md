@@ -99,11 +99,14 @@ Attempted to evaluate `req.Amount` on an uninitialized nil pointer (`*PaymentPay
 
 Allocate memory before access: `req := &PaymentPayload{}` and validate JSON decoding errors.
 
-- [ ] [**Generate Fix (PR)**](http://localhost:8080/?incident=INC-8094)
+[**Generate Bugfix PR via Triage Studio**](http://localhost:8080/?incident=INC-8094)
 
 ---
 
-### AST Context
+### Isolated Function AST Context
+
+<details open>
+<summary><b>View Isolated Code Context around line 28</b></summary>
 
 ```go
 func ProcessTransaction(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +116,8 @@ func ProcessTransaction(w http.ResponseWriter, r *http.Request) {
     }
 }
 ```
+
+</details>
 ````
 
 ---
