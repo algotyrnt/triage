@@ -416,33 +416,6 @@ func TestSetupManifest_Public(t *testing.T) {
 	}
 }
 
-func TestServerASTTree(t *testing.T) {
-	s := newTestAPIServer()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ast/tree?owner=algotyrnt&repo=triage", nil)
-	rec := httptest.NewRecorder()
-	s.HandleASTTree(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for HandleASTTree, got %d", rec.Code)
-	}
-
-	var res struct {
-		Status string        `json:"status"`
-		Owner  string        `json:"owner"`
-		Repo   string        `json:"repo"`
-		Total  int           `json:"total"`
-		Files  []interface{} `json:"files"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&res); err != nil {
-		t.Fatalf("failed to decode ast tree response: %v", err)
-	}
-
-	if res.Status != "success" {
-		t.Errorf("expected status success, got %s", res.Status)
-	}
-}
-
 func TestBuildGitHubMarkdownIssueAndPR(t *testing.T) {
 	issueBody := BuildGitHubIssueBody(GitHubIssueMarkdownParams{
 		IncidentID:   "INC-A1B2C3",

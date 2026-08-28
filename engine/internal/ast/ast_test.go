@@ -279,6 +279,26 @@ func TestASTCache(t *testing.T) {
 	if got != snippet {
 		t.Errorf("expected cached snippet %s, got %s", snippet, got)
 	}
+
+	// Test Function-wise range caching
+	funcSnippet := "func ProcessOrder(id string) error {\n\t// line 50\n\t// line 55\n\treturn nil\n}"
+	cache.SetFunction(owner, repo, commit, "pkg/order/order.go", "ProcessOrder", 45, 60, funcSnippet)
+
+	// Any line in [45, 60] should hit the cache
+	for _, targetLine := range []int{45, 48, 52, 58, 60} {
+		fnGot, fnFound := cache.Get(owner, repo, commit, "pkg/order/order.go", targetLine)
+		if !fnFound {
+			t.Fatalf("expected function-wise cache hit for line %d", targetLine)
+		}
+		if fnGot != funcSnippet {
+			t.Errorf("expected %s for line %d, got %s", funcSnippet, targetLine, fnGot)
+		}
+	}
+
+	// Line outside range should miss
+	if _, outFound := cache.Get(owner, repo, commit, "pkg/order/order.go", 61); outFound {
+		t.Errorf("expected cache miss for line 61 outside function range")
+	}
 }
 
 func TestNormalizeMonorepoPath(t *testing.T) {
@@ -335,6 +355,24 @@ func TestNormalizeMonorepoPath(t *testing.T) {
 			file:     "/Users/punjitha/projects/triage/apps/engine/main.go",
 			rootDir:  "apps/engine",
 			expected: "apps/engine/main.go",
+		},
+		{
+			name:     "nested monorepo with service base name prefix in stack file",
+			file:     "order-service/pkg/orders/service.go",
+			rootDir:  "test-services/order-service",
+			expected: "test-services/order-service/pkg/orders/service.go",
+		},
+		{
+			name:     "nested monorepo main.go with service base name prefix",
+			file:     "order-service/main.go",
+			rootDir:  "test-services/order-service",
+			expected: "test-services/order-service/main.go",
+		},
+		{
+			name:     "nested monorepo with clean subfolder path",
+			file:     "pkg/orders/service.go",
+			rootDir:  "test-services/order-service",
+			expected: "test-services/order-service/pkg/orders/service.go",
 		},
 	}
 

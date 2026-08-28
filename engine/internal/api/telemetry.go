@@ -99,11 +99,14 @@ func (s *Server) ExtractASTContext(ctx context.Context, owner, repo, commit, req
 	if s.astFetcher != nil {
 		content, fetchErr := s.astFetcher.FetchFile(ctx, owner, repo, commit, reqFile, rd)
 		if fetchErr == nil && len(content) > 0 {
-			snippet, parseErr := ast.ExtractFuncASTFromBytes(content, line)
-			if parseErr == nil && snippet != "" {
-				slog.Debug("AST on-demand fetched and extracted", "owner", owner, "repo", repo, "commit", commit, "path", normPath, "line", line)
+			extractedFn, snippet, parseErr := ast.ExtractEnclosingFuncASTFromBytes(content, line)
+			if parseErr == nil && snippet != "" && extractedFn != nil {
+				slog.Debug("AST on-demand fetched and extracted", "owner", owner, "repo", repo, "commit", commit, "path", normPath, "func", extractedFn.Name, "start", extractedFn.StartLine, "end", extractedFn.EndLine)
 				if s.astCache != nil {
-					s.astCache.Set(owner, repo, commit, normPath, line, snippet)
+					s.astCache.SetFunction(owner, repo, commit, normPath, extractedFn.Name, extractedFn.StartLine, extractedFn.EndLine, snippet)
+				}
+				if s.astManager != nil {
+					_ = s.astManager.SaveASTNode(ctx, owner, repo, commit, normPath, extractedFn.Name, extractedFn.StartLine, extractedFn.EndLine, snippet)
 				}
 				return snippet, nil
 			}

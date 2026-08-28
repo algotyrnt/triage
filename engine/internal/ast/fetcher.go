@@ -20,7 +20,8 @@ type FileFetcher interface {
 
 // NormalizeMonorepoPath combines rootDir and filePath if rootDir is specified
 // and filePath does not already contain rootDir as a prefix. It also strips any
-// developer host absolute paths leading up to rootDir.
+// developer host absolute paths leading up to rootDir, and resolves module-relative
+// paths where filePath starts with the base service directory name.
 func NormalizeMonorepoPath(filePath, rootDir string) string {
 	cleanFile := strings.TrimPrefix(filepath.ToSlash(filePath), "/")
 	for strings.HasPrefix(cleanFile, "./") {
@@ -32,16 +33,25 @@ func NormalizeMonorepoPath(filePath, rootDir string) string {
 	}
 
 	if cleanRoot != "" && cleanRoot != "." {
-		// If cleanFile contains cleanRoot/ somewhere in an absolute path, extract from cleanRoot
+		// 1. If cleanFile contains cleanRoot/ somewhere in an absolute path, extract from cleanRoot
 		if idx := strings.Index(cleanFile, cleanRoot+"/"); idx != -1 {
 			return cleanFile[idx:]
 		}
+		// 2. Exact match or already starts with cleanRoot/
 		if cleanFile == cleanRoot {
 			return cleanFile
 		}
 		if strings.HasPrefix(cleanFile, cleanRoot+"/") {
 			return cleanFile
 		}
+		// 3. If cleanRoot is nested (e.g. "test-services/order-service") and cleanFile
+		// starts with the base service directory (e.g. "order-service/pkg/..."),
+		// replace the base directory with cleanRoot.
+		baseRoot := filepath.Base(cleanRoot)
+		if baseRoot != "" && baseRoot != "." && strings.HasPrefix(cleanFile, baseRoot+"/") {
+			return cleanRoot + "/" + strings.TrimPrefix(cleanFile, baseRoot+"/")
+		}
+
 		return cleanRoot + "/" + cleanFile
 	}
 
@@ -88,9 +98,43 @@ func (f *OnDemandFetcher) FetchFileWithMeta(ctx context.Context, owner, repo, co
 		cleanOrig = strings.TrimPrefix(cleanOrig, "./")
 	}
 
-	candidatePaths := []string{normPath}
-	if cleanOrig != normPath {
-		candidatePaths = append(candidatePaths, cleanOrig)
+	candidateMap := make(map[string]struct{})
+	var candidatePaths []string
+
+	addCandidate := func(p string) {
+		p = strings.Trim(filepath.ToSlash(p), "/")
+		if p == "" || p == "." {
+			return
+		}
+		if _, exists := candidateMap[p]; !exists {
+			candidateMap[p] = struct{}{}
+			candidatePaths = append(candidatePaths, p)
+		}
+	}
+
+	// 1. Normalized monorepo path (e.g. "test-services/order-service/pkg/orders/service.go")
+	addCandidate(normPath)
+	// 2. Original clean file path (e.g. "order-service/pkg/orders/service.go")
+	addCandidate(cleanOrig)
+
+	// 3. If cleanOrig or normPath has rootDir prefix, add stripped path (e.g. "pkg/orders/service.go")
+	cleanRoot := strings.Trim(strings.TrimSpace(filepath.ToSlash(rd)), "/")
+	if cleanRoot != "" && cleanRoot != "." {
+		if strings.HasPrefix(cleanOrig, cleanRoot+"/") {
+			addCandidate(strings.TrimPrefix(cleanOrig, cleanRoot+"/"))
+		}
+		baseRoot := filepath.Base(cleanRoot)
+		if baseRoot != "" && strings.HasPrefix(cleanOrig, baseRoot+"/") {
+			addCandidate(strings.TrimPrefix(cleanOrig, baseRoot+"/"))
+		}
+	}
+
+	// 4. Also check if prefixing "test-services/" helps if not already present
+	if !strings.HasPrefix(normPath, "test-services/") {
+		addCandidate("test-services/" + normPath)
+	}
+	if !strings.HasPrefix(cleanOrig, "test-services/") {
+		addCandidate("test-services/" + cleanOrig)
 	}
 
 	var lastErr error

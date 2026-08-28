@@ -137,8 +137,6 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/incidents", s.withAuth(s.HandleIncidents))
 	mux.HandleFunc("/api/v1/projects", s.withAuth(s.HandleProjects))
 	mux.HandleFunc("/api/v1/stats", s.withAuth(s.HandleStats))
-	mux.HandleFunc("/api/v1/ast/index", s.withAuth(s.HandleASTIndex))
-	mux.HandleFunc("/api/v1/ast/tree", s.withAuth(s.HandleASTTree))
 	mux.HandleFunc("/api/v1/repos/detect-modules", s.withAuth(s.HandleDetectModules))
 	mux.HandleFunc("/api/v1/team/members", s.withAuth(s.HandleTeamMembers))
 

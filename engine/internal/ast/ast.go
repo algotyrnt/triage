@@ -418,17 +418,17 @@ func ExtractFuncAST(filePath string, targetLine int) (string, error) {
 	return pkgCtx.FormatContext(targetFn, types, helpers, vars), nil
 }
 
-// ExtractFuncASTFromBytes parses raw .go source bytes in memory and extracts
-// the target function along with type definitions and helpers defined in the same source.
-func ExtractFuncASTFromBytes(content []byte, targetLine int) (string, error) {
+// ExtractEnclosingFuncASTFromBytes parses raw .go source bytes in memory and extracts
+// the enclosing function metadata (name, start line, end line) and its formatted rich context snippet.
+func ExtractEnclosingFuncASTFromBytes(content []byte, targetLine int) (*ExtractedFunction, string, error) {
 	if len(content) == 0 {
-		return "", fmt.Errorf("file content is empty")
+		return nil, "", fmt.Errorf("file content is empty")
 	}
 
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, "src.go", content, parser.ParseComments)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse Go AST from bytes: %w", err)
+		return nil, "", fmt.Errorf("failed to parse Go AST from bytes: %w", err)
 	}
 
 	files := map[string]*ast.File{
@@ -438,11 +438,19 @@ func ExtractFuncASTFromBytes(content []byte, targetLine int) (string, error) {
 	pkgCtx := NewPackageContext(fset, node.Name.Name, files)
 	targetFn, err := pkgCtx.FindEnclosingFunction("src.go", targetLine)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	types, helpers, vars := pkgCtx.ResolveDependencies(targetFn)
-	return pkgCtx.FormatContext(targetFn, types, helpers, vars), nil
+	richSnippet := pkgCtx.FormatContext(targetFn, types, helpers, vars)
+	return targetFn, richSnippet, nil
+}
+
+// ExtractFuncASTFromBytes parses raw .go source bytes in memory and extracts
+// the target function along with type definitions and helpers defined in the same source.
+func ExtractFuncASTFromBytes(content []byte, targetLine int) (string, error) {
+	_, snippet, err := ExtractEnclosingFuncASTFromBytes(content, targetLine)
+	return snippet, err
 }
 
 // ExtractPackageContextASTFromBytes parses a collection of raw Go files in memory
