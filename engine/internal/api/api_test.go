@@ -342,11 +342,12 @@ func TestLLMSettingsAndTestRoute(t *testing.T) {
 		LatencyMs int64  `json:"latency_ms"`
 		Provider  string `json:"provider"`
 	}
-	if err := json.NewDecoder(testRec.Body).Decode(&testRes); err != nil {
-		t.Fatalf("failed to decode test response: %v", err)
+	bodyStr := testRec.Body.String()
+	if err := json.Unmarshal([]byte(bodyStr), &testRes); err != nil {
+		t.Fatalf("failed to decode test response: %v, body: %s", err, bodyStr)
 	}
 	if !testRes.Success || testRes.Provider != "openai" {
-		t.Errorf("unexpected test result: %+v", testRes)
+		t.Errorf("unexpected test result: %+v, body: %s", testRes, bodyStr)
 	}
 }
 
