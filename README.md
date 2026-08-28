@@ -57,7 +57,7 @@ Go HTTP Server (your app)
 
 ### 1. Start Triage
 
-#### Option A: Run Pre-Built Docker Image (Recommended)
+#### Option A: Run Official Docker Container (Preferred & Recommended)
 ```bash
 docker run -d \
   --name triage \
@@ -66,7 +66,7 @@ docker run -d \
   ghcr.io/algotyrnt/triage:latest
 ```
 
-#### Option B: Build and Run from Source
+#### Option B: Build and Run Standalone Binary (Alternative)
 ```bash
 git clone https://github.com/algotyrnt/triage.git
 cd triage
@@ -189,10 +189,11 @@ Local `make release`
   │  4. Pushes tags to GitHub
   ▼
 GitHub Actions (`release.yml`)
-  ├── Warms Go module proxy cache (pkg.go.dev indexing)
+  ├── Cross-compiles standalone binaries (Linux, macOS, Windows) & SHA256 checksums
   ├── Builds & pushes multi-arch Docker image (ghcr.io/algotyrnt/triage)
+  ├── Warms Go module proxy cache (pkg.go.dev indexing)
   ├── Deploys documentation to Cloudflare Pages
-  └── Publishes GitHub Release with automated notes and assets
+  └── Publishes GitHub Release with automated release notes and binary assets
 ```
 
 ---
