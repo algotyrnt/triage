@@ -108,11 +108,21 @@ make lint
 make format
 ```
 
+### Packaging Standalone Release Binaries
+
+To locally cross-compile and generate standalone release archives (`.tar.gz` for Linux and macOS, `.zip` for Windows) along with SHA256 checksums:
+
+```bash
+make package VERSION=vX.Y.Z
+```
+
+Outputs are bundled cleanly into `dist-bin/`.
+
 ---
 
 ## Release Automation
 
-Releases in Triage follow [Semantic Versioning](https://semver.org) and publish multi-arch Docker images, Go SDK packages, and web distribution bundles.
+Releases in Triage follow [Semantic Versioning](https://semver.org) and publish standalone cross-platform binaries, multi-arch Docker images, Go SDK packages, and web distribution bundles.
 
 ### 1. Dry-Run Verification
 
@@ -150,8 +160,9 @@ Local `make release`
   │  4. Pushes tags to GitHub
   ▼
 GitHub Actions (`release.yml`)
-  ├── Warms Go module proxy cache (pkg.go.dev indexing)
+  ├── Cross-compiles standalone binaries (Linux, macOS, Windows) & SHA256 checksums
   ├── Builds & pushes multi-arch Docker image (ghcr.io/algotyrnt/triage)
+  ├── Warms Go module proxy cache (pkg.go.dev indexing)
   ├── Deploys documentation to Cloudflare Pages
-  └── Publishes GitHub Release with automated notes and assets
+  └── Publishes GitHub Release with automated release notes and binary assets
 ```

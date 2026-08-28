@@ -5,9 +5,9 @@ description: Deploy zero-dependency single-container Triage on Docker, Kubernete
 
 Triage is designed for frictionless self-hosting. Just like Prometheus or PocketBase, the entire platform runs as a **single, zero-dependency container** (or standalone binary) containing both the server backend and the embedded React Studio Dashboard.
 
-## Production Deployment (Recommended)
+## Production Deployment with Docker (Preferred & Recommended)
 
-Run the official multi-architecture image published to GitHub Container Registry (`ghcr.io`):
+Run the official multi-architecture single-container image published to GitHub Container Registry (`ghcr.io`):
 
 ```bash
 docker run -d \

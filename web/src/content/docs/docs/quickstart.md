@@ -15,6 +15,8 @@ Follow this guide to spin up a local Triage instance and capture your first Go c
 
 ## 1. Start Triage
 
+### Option A: Run Official Docker Container (Preferred & Recommended)
+
 Run the official single-container Triage image (which includes the server, embedded SQLite database, and React Studio Dashboard):
 
 ```bash
@@ -25,7 +27,7 @@ docker run -d \
   ghcr.io/algotyrnt/triage:latest
 ```
 
-Alternatively, build and run from source:
+### Option B: Build and Run Standalone Binary (Alternative)
 
 ```bash
 git clone https://github.com/algotyrnt/triage.git
