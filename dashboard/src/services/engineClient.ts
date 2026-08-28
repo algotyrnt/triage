@@ -195,6 +195,35 @@ export class EngineClient {
     }
   }
 
+  async testSetupLlmConfig(config: {
+    provider?: string;
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+  }): Promise<{ success: boolean; latency_ms?: number; error?: string; provider?: string }> {
+    try {
+      const payload: any = {
+        provider: config.provider || 'gemini',
+        api_key: config.apiKey || '',
+        model: config.model || '',
+        base_url: config.baseUrl || '',
+      };
+      const res = await fetch(`${this.baseUrl}/setup/llm/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        const errText = errData?.error || (await res.text().catch(() => `HTTP ${res.status}`));
+        return { success: false, error: errText || `HTTP ${res.status}` };
+      }
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Connection test request failed' };
+    }
+  }
+
   async testLlmConfig(config: {
     provider?: string;
     apiKey?: string;
@@ -214,7 +243,8 @@ export class EngineClient {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const errText = await res.text();
+        const errData = await res.json().catch(() => null);
+        const errText = errData?.error || (await res.text().catch(() => `HTTP ${res.status}`));
         return { success: false, error: errText || `HTTP ${res.status}` };
       }
       return await res.json();

@@ -114,6 +114,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/setup/install/callback", s.public(s.HandleSetupInstallCallback))
 	mux.HandleFunc("/api/v1/setup/oauth", s.public(s.HandleSetupOAuth))
 	mux.HandleFunc("/api/v1/setup/llm", s.public(s.HandleSetupLLM))
+	mux.HandleFunc("/api/v1/setup/llm/test", s.public(s.HandleTestLLM))
 	mux.HandleFunc("/api/v1/setup/test", s.public(s.HandleSetupTest))
 	mux.HandleFunc("/api/v1/setup/repos", s.public(s.HandleSetupRepos))
 	mux.HandleFunc("/api/v1/setup/installed-repos", s.public(s.HandleInstalledRepos))
