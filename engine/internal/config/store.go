@@ -7,14 +7,19 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"triage/engine/internal/db"
 	"triage/engine/internal/github"
 	"triage/engine/internal/llm"
 )
+
+// InsecureDefaultSecret defines the rejected insecure legacy default key.
+const InsecureDefaultSecret = "dev-secret-change-me-in-production"
 
 // Keys used in the PostgreSQL instance_config table.
 const (
@@ -47,7 +52,9 @@ type GitHubAppParams struct {
 
 // Store manages reading and writing dynamic instance configuration from PostgreSQL.
 type Store struct {
-	db *db.DB
+	db               *db.DB
+	memMu            sync.Mutex
+	memSessionSecret string
 }
 
 // NewStore initializes a new configuration store with the given database instance.
@@ -208,13 +215,7 @@ func (s *Store) GetGitHubOAuth(ctx context.Context) (clientID, clientSecret stri
 		return "", ""
 	}
 	clientID, _ = s.db.GetInstanceConfig(ctx, KeyGitHubOAuthClientID)
-	if clientID == "" {
-		clientID, _ = s.db.GetInstanceConfig(ctx, "github_client_id")
-	}
 	clientSecret, _ = s.db.GetInstanceConfig(ctx, KeyGitHubOAuthClientSec)
-	if clientSecret == "" {
-		clientSecret, _ = s.db.GetInstanceConfig(ctx, "github_client_secret")
-	}
 	return strings.TrimSpace(clientID), strings.TrimSpace(clientSecret)
 }
 
@@ -246,26 +247,41 @@ func (s *Store) SaveGitHubAppSlug(ctx context.Context, slug string) error {
 	return s.db.SaveInstanceConfig(ctx, KeyGitHubAppSlug, strings.TrimSpace(slug))
 }
 
-// EnsureSessionSecret returns the existing session secret or auto-generates and persists a new one.
+// EnsureSessionSecret returns the existing secure session secret or auto-generates and persists a new 256-bit crypto key.
 func (s *Store) EnsureSessionSecret(ctx context.Context) (string, error) {
 	if s.db == nil {
-		return "dev-secret-change-me-in-production", nil
+		s.memMu.Lock()
+		defer s.memMu.Unlock()
+		if s.memSessionSecret != "" {
+			return s.memSessionSecret, nil
+		}
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return "", fmt.Errorf("failed to generate random session secret: %w", err)
+		}
+		s.memSessionSecret = hex.EncodeToString(b)
+		return s.memSessionSecret, nil
 	}
 
 	secret, err := s.db.GetInstanceConfig(ctx, KeySessionSecret)
-	if err == nil && secret != "" {
+	if err == nil && secret != "" && secret != InsecureDefaultSecret && len(secret) >= 32 {
 		return secret, nil
 	}
 
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate random session secret: %w", err)
 	}
 	newSecret := hex.EncodeToString(b)
 	if err := s.db.SaveInstanceConfig(ctx, KeySessionSecret, newSecret); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to persist session secret: %w", err)
 	}
 	return newSecret, nil
+}
+
+// GetSessionSecret retrieves the active session signing key, ensuring it exists and is secure.
+func (s *Store) GetSessionSecret(ctx context.Context) (string, error) {
+	return s.EnsureSessionSecret(ctx)
 }
 
 // IsSetupCompleted checks whether core required setup items have been configured.
