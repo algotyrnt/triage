@@ -16,10 +16,9 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      engine: ${{ steps.filter.outputs.engine }}
+      triage: ${{ steps.filter.outputs.triage }}
       sdk: ${{ steps.filter.outputs.sdk }}
       web: ${{ steps.filter.outputs.web }}
-      dashboard: ${{ steps.filter.outputs.dashboard }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -29,23 +28,48 @@ jobs:
         id: filter
         with:
           filters: |
-            engine:
+            triage:
               - 'engine/**'
+              - 'dashboard/**'
+              - 'Makefile'
+              - 'Dockerfile'
             sdk:
               - 'sdk/go/**'
+              - 'Makefile'
             web:
               - 'web/**'
-            dashboard:
-              - 'dashboard/**'
+              - 'Makefile'
 
-  engine:
-    name: engine
+  triage:
+    name: triage
     needs: changes
-    if: needs.changes.outputs.engine == 'true'
+    if: needs.changes.outputs.triage == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-dashboard-${{ hashFiles('dashboard/bun.lock*') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-dashboard-
+
+      - name: Install & Lint Dashboard
+        working-directory: dashboard
+        run: |
+          bun install --frozen-lockfile
+          bun run format:check
+
+      - name: Build Embedded Dashboard UI
+        run: make build-dashboard
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -55,7 +79,7 @@ jobs:
           cache: true
           cache-dependency-path: engine/go.sum
 
-      - name: Cache Go Build & Test Artifacts
+      - name: Cache Go Build Artifacts
         uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
@@ -70,8 +94,8 @@ jobs:
       - name: Run Engine Tests
         run: make test-engine
 
-      - name: Build Engine Binary
-        run: make build-engine
+      - name: Build Unified Triage Binary
+        run: make build-triage
 
   sdk:
     name: sdk/go
@@ -88,7 +112,7 @@ jobs:
           go-version: "1.26"
           check-latest: false
 
-      - name: Cache Go Build & Test Artifacts
+      - name: Cache Go Build Artifacts
         uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
@@ -137,35 +161,3 @@ jobs:
 
       - name: Build Web Application
         run: make build-web
-
-  dashboard:
-    name: dashboard
-    needs: changes
-    if: needs.changes.outputs.dashboard == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Cache Bun Dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-dashboard-${{ hashFiles('dashboard/bun.lock*') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-dashboard-
-
-      - name: Install Dashboard Dependencies
-        working-directory: dashboard
-        run: bun install --frozen-lockfile
-
-      - name: Check Dashboard Formatting
-        run: make lint-dashboard
-
-      - name: Build Dashboard Application
-        run: make build-dashboard
