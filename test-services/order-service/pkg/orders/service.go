@@ -36,8 +36,10 @@ func (s *OrderService) ProcessCheckout(order *Order) (*Order, error) {
 	}
 	order.Subtotal = subtotal
 
-	// PANIC SITE: Nested nil pointer dereference if order.Customer or order.Customer.ShippingAddress is nil
-	shippingZip := order.Customer.ShippingAddress.ZipCode
+	var shippingZip string
+	if order.Customer != nil && order.Customer.ShippingAddress != nil {
+		shippingZip = order.Customer.ShippingAddress.ZipCode
+	}
 	_ = shippingZip
 
 	// Calculate discount and tax
