@@ -30,9 +30,11 @@ func NewDiscountCalculator(campaign string) *DiscountCalculator {
 }
 
 // ComputeTotalDiscount applies the primary discount rule to an order subtotal.
-// NOTE: Bug simulation: Accesses rules[0] directly without checking len(rules).
 func (c *DiscountCalculator) ComputeTotalDiscount(subtotal float64, rules []DiscountRule) (float64, error) {
-	// PANIC SITE (bounds check missing): If rules slice is empty, rules[0] causes panic: runtime error: index out of range [0] with length 0
+	if len(rules) == 0 {
+		return 0, nil
+	}
+
 	primaryRule := rules[0]
 
 	if time.Now().After(primaryRule.ExpiresAt) && !primaryRule.ExpiresAt.IsZero() {
