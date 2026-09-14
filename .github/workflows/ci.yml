@@ -92,7 +92,17 @@ jobs:
         run: make lint-engine
 
       - name: Run Engine Tests
-        run: make test-engine
+        run: |
+          mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
+          cd engine && go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload Engine Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: engine/coverage.out
+          flags: engine
+          fail_ci_if_error: false
 
       - name: Build Unified Triage Binary
         run: make build-triage
@@ -125,7 +135,16 @@ jobs:
         run: make lint-sdk
 
       - name: Run Go SDK Tests
-        run: make test-sdk
+        run: |
+          cd sdk/go && go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload SDK Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: sdk/go/coverage.out
+          flags: sdk
+          fail_ci_if_error: false
 
       - name: Build Go SDK
         run: make build-sdk

@@ -3,6 +3,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/algotyrnt/triage?include_prereleases&logo=github&color=6366f1)](https://github.com/algotyrnt/triage/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/algotyrnt/triage/sdk/go.svg)](https://pkg.go.dev/github.com/algotyrnt/triage/sdk/go)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Falgotyrnt%2Ftriage-blue?logo=docker)](https://github.com/algotyrnt/triage/pkgs/container/triage)
+[![codecov](https://codecov.io/gh/algotyrnt/triage/branch/main/graph/badge.svg)](https://codecov.io/gh/algotyrnt/triage)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 Zero-overhead Go panic isolation, automated GitHub triage, and AI-powered incident diagnostics. When a panic occurs in a Go HTTP server, triage intercepts it non-blockingly, isolates the exact crash site along with cross-file package context (receiver struct definitions, referenced types, constructors, and helper functions), runs it through the pluggable AI engine (Gemini, OpenAI, Claude, Ollama) for root-cause analysis, and enables 1-click **automated GitHub issue filing** and **bugfix Pull Request generation** — all in a **single zero-dependency container or standalone binary**.
