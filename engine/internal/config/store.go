@@ -121,7 +121,7 @@ func (s *Store) SaveLLM(ctx context.Context, cfg llm.Config) error {
 // GetInstanceURL returns the public dashboard URL configured in the database,
 // or falls back to the HTTP request Origin header during initial setup.
 func (s *Store) GetInstanceURL(ctx context.Context, r ...*http.Request) string {
-	if s.db != nil && ctx != nil {
+	if s.db != nil {
 		if u, _ := s.db.GetInstanceConfig(ctx, KeyInstanceURL); u != "" {
 			return strings.TrimRight(strings.TrimSpace(u), "/")
 		}
@@ -147,7 +147,7 @@ func (s *Store) SaveInstanceURL(ctx context.Context, url string) error {
 
 // GetGitHubApp loads the GitHub App configuration from database settings.
 func (s *Store) GetGitHubApp(ctx context.Context) (*github.AppConfig, error) {
-	if s.db == nil || ctx == nil {
+	if s.db == nil {
 		return nil, nil
 	}
 
@@ -211,7 +211,7 @@ func (s *Store) SaveGitHubApp(ctx context.Context, params GitHubAppParams) error
 
 // GetGitHubOAuth retrieves the OAuth client ID and client secret.
 func (s *Store) GetGitHubOAuth(ctx context.Context) (clientID, clientSecret string) {
-	if s.db == nil || ctx == nil {
+	if s.db == nil {
 		return "", ""
 	}
 	clientID, _ = s.db.GetInstanceConfig(ctx, KeyGitHubOAuthClientID)
@@ -232,7 +232,7 @@ func (s *Store) SaveGitHubOAuth(ctx context.Context, clientID, clientSecret stri
 
 // GetGitHubAppSlug retrieves the configured GitHub App slug name.
 func (s *Store) GetGitHubAppSlug(ctx context.Context) string {
-	if s.db == nil || ctx == nil {
+	if s.db == nil {
 		return ""
 	}
 	slug, _ := s.db.GetInstanceConfig(ctx, KeyGitHubAppSlug)

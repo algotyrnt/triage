@@ -117,17 +117,17 @@ func TestStore_NilDB(t *testing.T) {
 		t.Errorf("expected false for IsSetupCompleted on nil db, got %v", completed)
 	}
 
-	// nil ctx branches
-	if s.GetGitHubAppSlug(nil) != "" {
-		t.Errorf("expected empty slug for nil ctx")
+	// store methods with context.TODO()
+	if s.GetGitHubAppSlug(context.TODO()) != "" {
+		t.Errorf("expected empty slug for nil db")
 	}
-	oID, oSec := s.GetGitHubOAuth(nil)
+	oID, oSec := s.GetGitHubOAuth(context.TODO())
 	if oID != "" || oSec != "" {
-		t.Errorf("expected empty oauth for nil ctx")
+		t.Errorf("expected empty oauth for nil db")
 	}
-	gApp, gErr := s.GetGitHubApp(nil)
+	gApp, gErr := s.GetGitHubApp(context.TODO())
 	if gErr != nil || gApp != nil {
-		t.Errorf("expected nil app for nil ctx")
+		t.Errorf("expected nil app for nil db")
 	}
 }
 
