@@ -1,5 +1,6 @@
 codecov:
   require_ci_to_pass: true
+  branch: main
 
 coverage:
   precision: 2
@@ -27,11 +28,11 @@ flags:
   engine:
     paths:
       - engine/
-    carryforward: false
+    carryforward: true
   sdk:
     paths:
       - sdk/go/
-    carryforward: false
+    carryforward: true
 
 comment:
   layout: "reach,diff,flags,files"
