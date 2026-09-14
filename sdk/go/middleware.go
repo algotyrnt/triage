@@ -65,6 +65,13 @@ var (
 	}
 )
 
+// SetTelemetryHTTPClient configures the HTTP client used for dispatching telemetry payloads.
+func SetTelemetryHTTPClient(client *http.Client) {
+	if client != nil {
+		telemetryHTTPClient = client
+	}
+}
+
 func init() {
 	// Fixed worker pool for async telemetry dispatch
 	for i := 0; i < 4; i++ {
