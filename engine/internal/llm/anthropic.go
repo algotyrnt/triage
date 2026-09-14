@@ -194,9 +194,12 @@ func (p *AnthropicProvider) ApplyFixToFile(ctx context.Context, file, currentCon
 }
 
 func (p *AnthropicProvider) TestConnection(ctx context.Context) error {
-	_, err := p.executeMessages(ctx, "Respond with 'OK'", 10)
+	resp, err := p.executeMessages(ctx, "Respond with 'OK'", 10)
 	if err != nil {
 		return fmt.Errorf("connection test failed: %w", err)
+	}
+	if strings.TrimSpace(resp) == "" {
+		return fmt.Errorf("anthropic returned empty response")
 	}
 	return nil
 }
