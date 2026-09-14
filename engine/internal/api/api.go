@@ -31,6 +31,7 @@ type Config struct {
 	ASTCache    *ast.ASTCache
 	ASTFetcher  *ast.OnDemandFetcher
 	EventBroker *EventBroker
+	LLMClient   *http.Client
 	Version     string
 }
 
@@ -43,6 +44,7 @@ type Server struct {
 	astCache    *ast.ASTCache
 	astFetcher  *ast.OnDemandFetcher
 	eventBroker *EventBroker
+	llmClient   *http.Client
 	appSlug     string
 	version     string
 }
@@ -73,6 +75,7 @@ func NewServer(cfg Config) *Server {
 		astCache:    cfg.ASTCache,
 		astFetcher:  cfg.ASTFetcher,
 		eventBroker: cfg.EventBroker,
+		llmClient:   cfg.LLMClient,
 		version:     cfg.Version,
 	}
 
@@ -252,7 +255,11 @@ func (s *Server) GetLLMConfig(ctx context.Context) llm.Config {
 	if s.configStore == nil {
 		return llm.Config{}
 	}
-	return s.configStore.GetLLM(ctx)
+	cfg := s.configStore.GetLLM(ctx)
+	if s.llmClient != nil {
+		cfg.HTTPClient = s.llmClient
+	}
+	return cfg
 }
 
 // GetLLMProvider initializes the active LLM provider from the stored configuration.
