@@ -1,12 +1,14 @@
 name: Triage CI Pipeline
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -33,17 +35,22 @@ jobs:
               - 'dashboard/**'
               - 'Makefile'
               - 'Dockerfile'
+              - '.github/workflows/**'
+              - 'codecov.yml'
             sdk:
               - 'sdk/go/**'
               - 'Makefile'
+              - '.github/workflows/**'
+              - 'codecov.yml'
             web:
               - 'web/**'
               - 'Makefile'
+              - '.github/workflows/**'
 
   triage:
     name: triage
     needs: changes
-    if: needs.changes.outputs.triage == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.triage == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -79,15 +86,6 @@ jobs:
           cache: true
           cache-dependency-path: engine/go.sum
 
-      - name: Cache Go Build Artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/go-build
-          key: ${{ runner.os }}-go-build-engine-${{ hashFiles('engine/go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-build-engine-${{ hashFiles('engine/go.sum') }}-
-            ${{ runner.os }}-go-build-engine-
-
       - name: Check Engine Formatting & Vet
         run: make lint-engine
 
@@ -110,7 +108,7 @@ jobs:
   sdk:
     name: sdk/go
     needs: changes
-    if: needs.changes.outputs.sdk == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -121,15 +119,8 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: false
-
-      - name: Cache Go Build Artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/go-build
-          key: ${{ runner.os }}-go-build-sdk-${{ hashFiles('sdk/go/go.mod') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-build-sdk-${{ hashFiles('sdk/go/go.mod') }}-
-            ${{ runner.os }}-go-build-sdk-
+          cache: true
+          cache-dependency-path: sdk/go/go.mod
 
       - name: Check SDK Formatting & Vet
         run: make lint-sdk
@@ -152,7 +143,7 @@ jobs:
   web:
     name: web
     needs: changes
-    if: needs.changes.outputs.web == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -180,3 +171,38 @@ jobs:
 
       - name: Build Web Application
         run: make build-web
+
+  ci-gate:
+    name: CI Checks Passed
+    needs: [changes, triage, sdk, web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify All Job Results
+        run: |
+          CHANGES_RESULT="${{ needs.changes.result }}"
+          TRIAGE_RESULT="${{ needs.triage.result }}"
+          SDK_RESULT="${{ needs.sdk.result }}"
+          WEB_RESULT="${{ needs.web.result }}"
+
+          echo "========================================"
+          echo "Job Evaluation Results:"
+          echo "  - changes: $CHANGES_RESULT"
+          echo "  - triage:  $TRIAGE_RESULT"
+          echo "  - sdk:     $SDK_RESULT"
+          echo "  - web:     $WEB_RESULT"
+          echo "========================================"
+
+          FAILED=0
+          for RESULT in "$CHANGES_RESULT" "$TRIAGE_RESULT" "$SDK_RESULT" "$WEB_RESULT"; do
+            if [ "$RESULT" = "failure" ] || [ "$RESULT" = "cancelled" ]; then
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::One or more CI jobs failed or were cancelled."
+            exit 1
+          fi
+
+          echo "All active jobs passed successfully."
