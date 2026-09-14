@@ -63,4 +63,14 @@ func TestGenerateRandomToken(t *testing.T) {
 	if len(tok) != 32 {
 		t.Fatalf("expected 32 chars for 16 bytes, got %d", len(tok))
 	}
+
+	tokDefault, err := GenerateRandomToken(0)
+	if err != nil || len(tokDefault) != 32 {
+		t.Fatalf("expected default 32 chars for 0 byteLength, got %s, err=%v", tokDefault, err)
+	}
+
+	tokNegative, err := GenerateRandomToken(-5)
+	if err != nil || len(tokNegative) != 32 {
+		t.Fatalf("expected default 32 chars for negative byteLength, got %s, err=%v", tokNegative, err)
+	}
 }
