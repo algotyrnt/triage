@@ -35,12 +35,17 @@ jobs:
               - 'dashboard/**'
               - 'Makefile'
               - 'Dockerfile'
+              - '.github/workflows/**'
+              - 'codecov.yml'
             sdk:
               - 'sdk/go/**'
               - 'Makefile'
+              - '.github/workflows/**'
+              - 'codecov.yml'
             web:
               - 'web/**'
               - 'Makefile'
+              - '.github/workflows/**'
 
   triage:
     name: triage
@@ -81,15 +86,6 @@ jobs:
           cache: true
           cache-dependency-path: engine/go.sum
 
-      - name: Cache Go Build Artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/go-build
-          key: ${{ runner.os }}-go-build-engine-${{ hashFiles('engine/go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-build-engine-${{ hashFiles('engine/go.sum') }}-
-            ${{ runner.os }}-go-build-engine-
-
       - name: Check Engine Formatting & Vet
         run: make lint-engine
 
@@ -123,15 +119,8 @@ jobs:
         with:
           go-version: "1.26"
           check-latest: false
-
-      - name: Cache Go Build Artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/go-build
-          key: ${{ runner.os }}-go-build-sdk-${{ hashFiles('sdk/go/go.mod') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-build-sdk-${{ hashFiles('sdk/go/go.mod') }}-
-            ${{ runner.os }}-go-build-sdk-
+          cache: true
+          cache-dependency-path: sdk/go/go.mod
 
       - name: Check SDK Formatting & Vet
         run: make lint-sdk
