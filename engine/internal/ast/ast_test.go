@@ -4,10 +4,16 @@
 package ast
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	gh "triage/engine/internal/github"
 )
 
 func TestExtractFuncAST_SingleFile(t *testing.T) {
@@ -383,5 +389,105 @@ func TestNormalizeMonorepoPath(t *testing.T) {
 				t.Errorf("expected %q, got %q", tc.expected, actual)
 			}
 		})
+	}
+}
+
+func TestManagerAndNode(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "ast_test.db")
+
+	mgr, err := NewManager(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("failed to create AST Manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// 1. Save AST Node
+	snippet := "func HandleCrash() { panic(\"boom\") }"
+	err = mgr.SaveASTNode(ctx, "owner", "repo", "commit123", "pkg/handler.go", "HandleCrash", 15, 25, snippet)
+	if err != nil {
+		t.Fatalf("failed to save AST node: %v", err)
+	}
+
+	// 2. Empty snippet does not error
+	if err := mgr.SaveASTNode(ctx, "owner", "repo", "commit123", "pkg/handler.go", "HandleCrash", 15, 25, ""); err != nil {
+		t.Errorf("expected nil error for empty snippet: %v", err)
+	}
+
+	// 3. Get AST Node exact match
+	node, err := mgr.GetASTNode(ctx, "owner", "repo", "commit123", "pkg/handler.go", 15)
+	if err != nil || node == nil {
+		t.Fatalf("failed to get AST node: %v", err)
+	}
+	if node.Snippet != snippet || node.StartLine != 15 {
+		t.Errorf("unexpected node: %+v", node)
+	}
+
+	// 4. Get AST Node via Monorepo path candidate
+	nodeCandidate, err := mgr.GetASTNode(ctx, "owner", "repo", "commit123", "handler.go", 15, "pkg")
+	if err != nil || nodeCandidate == nil {
+		t.Fatalf("failed to get AST node via monorepo candidate: %v", err)
+	}
+	if nodeCandidate.Snippet != snippet {
+		t.Errorf("unexpected candidate snippet: %s", nodeCandidate.Snippet)
+	}
+
+	// 5. Not found returns sql.ErrNoRows
+	_, err = mgr.GetASTNode(ctx, "owner", "repo", "commit123", "missing.go", 999)
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("expected sql.ErrNoRows for missing node, got %v", err)
+	}
+
+	// 6. Nil DB checks
+	nilMgr := NewManagerWithDB(nil)
+	nilMgr.Close()
+	if _, err := nilMgr.GetASTNode(ctx, "o", "r", "c", "f", 1); err == nil {
+		t.Errorf("expected error from GetASTNode on nil DB")
+	}
+	if err := nilMgr.SaveASTNode(ctx, "o", "r", "c", "f", "fn", 1, 2, "code"); err == nil {
+		t.Errorf("expected error from SaveASTNode on nil DB")
+	}
+
+	// 7. Node ID generation
+	id1 := generateNodeID("owner", "repo", "commit", "file.go", 10)
+	id2 := generateNodeID("owner", "repo", "commit", "file.go", 10)
+	id3 := generateNodeID("owner", "repo", "commit", "file.go", 11)
+	if !strings.HasPrefix(id1, "ast-") {
+		t.Errorf("expected 'ast-' prefix on node ID, got %s", id1)
+	}
+	if id1 != id2 {
+		t.Errorf("expected deterministic node ID, got %s vs %s", id1, id2)
+	}
+	if id1 == id3 {
+		t.Errorf("expected different IDs for different lines, got same: %s", id1)
+	}
+
+	// 8. NewManager invalid path
+	_, err = NewManager(ctx, "/dev/null/impossible/ast.db")
+	if err == nil {
+		t.Errorf("expected error from NewManager with impossible path")
+	}
+}
+
+func TestOnDemandFetcher(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. NewOnDemandFetcher without GitHubApp fails
+	fetcher := NewOnDemandFetcher()
+	_, err := fetcher.FetchFile(ctx, "owner", "repo", "commit", "main.go")
+	if err == nil {
+		t.Errorf("expected error fetching file without configured GitHubApp")
+	}
+
+	// 2. Fetcher with installation error
+	fetcher.GetInstallationID = func(ctx context.Context, owner, repo string) (int64, error) {
+		return 0, fmt.Errorf("no installation for %s/%s", owner, repo)
+	}
+	fetcher.GitHubApp = &gh.AppConfig{}
+
+	_, err = fetcher.FetchFile(ctx, "owner", "repo", "commit", "main.go")
+	if err == nil {
+		t.Errorf("expected error when GetInstallationID fails")
 	}
 }

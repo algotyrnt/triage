@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,14 +31,20 @@ var (
 	date    = ""
 )
 
-func main() {
+func run(ctx context.Context, args []string, stopChan <-chan os.Signal, serve bool) error {
 	opts := config.DefaultOptions()
 
-	portFlag := flag.String("port", opts.Port, "HTTP server port")
-	dataDirFlag := flag.String("data-dir", opts.DataDir, "Data directory for embedded SQLite storage")
-	dbPathFlag := flag.String("db", "", "Explicit SQLite database file path (defaults to <data-dir>/triage.db)")
-	logLevelFlag := flag.String("log-level", opts.LogLevel, "Log level: debug, info, warn, error")
-	flag.Parse()
+	fs := flag.NewFlagSet("triage", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	portFlag := fs.String("port", opts.Port, "HTTP server port")
+	dataDirFlag := fs.String("data-dir", opts.DataDir, "Data directory for embedded SQLite storage")
+	dbPathFlag := fs.String("db", "", "Explicit SQLite database file path (defaults to <data-dir>/triage.db)")
+	logLevelFlag := fs.String("log-level", opts.LogLevel, "Log level: debug, info, warn, error")
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("invalid arguments: %w", err)
+	}
 
 	if version != "" {
 		versionPkg.Version = version
@@ -60,13 +68,12 @@ func main() {
 
 	logger.InitLogger()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	database, err := db.NewDB(ctx, dbPath)
+	database, err := db.NewDB(runCtx, dbPath)
 	if err != nil {
-		slog.Error("fatal: failed to initialize embedded database", "path", dbPath, "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize embedded database at %s: %w", dbPath, err)
 	}
 	defer database.Close()
 	slog.Info("connected triage to embedded SQLite database", "path", database.Path, "version", currentVersion)
@@ -76,11 +83,11 @@ func main() {
 	slog.Info("initialized AST indexer")
 
 	configStore := config.NewStore(database)
-	if _, err := configStore.EnsureSessionSecret(ctx); err != nil {
+	if _, err := configStore.EnsureSessionSecret(runCtx); err != nil {
 		slog.Warn("failed to ensure session secret", "error", err)
 	}
 
-	githubApp, _ := configStore.GetGitHubApp(ctx)
+	githubApp, _ := configStore.GetGitHubApp(runCtx)
 
 	server := api.NewServer(api.Config{
 		DB:          database,
@@ -101,26 +108,42 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Graceful shutdown handling
-	stopChan := make(chan os.Signal, 1)
-	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+	if !serve {
+		return nil
+	}
 
+	serverErrChan := make(chan error, 1)
 	go func() {
 		slog.Info("triage server starting", "port", opts.Port, "ui", "embedded", "db", "sqlite")
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("HTTP server failed", "error", err)
-			os.Exit(1)
+			serverErrChan <- err
 		}
 	}()
 
-	<-stopChan
-	slog.Info("shutting down triage server gracefully...")
+	select {
+	case <-stopChan:
+		slog.Info("shutting down triage server gracefully...")
+	case err := <-serverErrChan:
+		return fmt.Errorf("http server failed: %w", err)
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP shutdown error", "error", err)
+		return err
 	}
 	slog.Info("triage server stopped cleanly")
+	return nil
+}
+
+func main() {
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+	if err := run(context.Background(), os.Args[1:], stopChan, true); err != nil {
+		slog.Error("fatal error", "error", err)
+		os.Exit(1)
+	}
 }

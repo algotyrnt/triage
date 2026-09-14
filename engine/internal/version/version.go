@@ -17,20 +17,27 @@ var (
 
 func init() {
 	if info, ok := debug.ReadBuildInfo(); ok {
-		if Version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
-			Version = info.Main.Version
-		}
-		if Commit == "none" {
-			for _, setting := range info.Settings {
-				if setting.Key == "vcs.revision" {
-					Commit = setting.Value
-					if len(Commit) > 7 {
-						Commit = Commit[:7]
-					}
+		populateFromBuildInfo(info)
+	}
+}
+
+func populateFromBuildInfo(info *debug.BuildInfo) {
+	if info == nil {
+		return
+	}
+	if Version == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		Version = info.Main.Version
+	}
+	if Commit == "none" {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				Commit = setting.Value
+				if len(Commit) > 7 {
+					Commit = Commit[:7]
 				}
-				if setting.Key == "vcs.time" {
-					Date = setting.Value
-				}
+			}
+			if setting.Key == "vcs.time" {
+				Date = setting.Value
 			}
 		}
 	}

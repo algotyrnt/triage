@@ -32,6 +32,15 @@ var githubHTTPClient = &http.Client{
 	},
 }
 
+// SetHTTPClient overrides the HTTP client for testing and returns a teardown function.
+func SetHTTPClient(client *http.Client) func() {
+	prev := githubHTTPClient
+	githubHTTPClient = client
+	return func() {
+		githubHTTPClient = prev
+	}
+}
+
 // SetDefaultHeaders attaches standard GitHub API headers including User-Agent and API version.
 func SetDefaultHeaders(req *http.Request) {
 	if req != nil {
@@ -84,6 +93,9 @@ func LoadAppConfig(appID int64, pemKeyData []byte, webhookSecret, clientID, clie
 }
 
 func (c *AppConfig) SignAppJWT() (string, error) {
+	if c == nil || c.PrivateKey == nil {
+		return "", fmt.Errorf("github app private key not configured")
+	}
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
 		Issuer:    strconv.FormatInt(c.AppID, 10),

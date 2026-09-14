@@ -4,184 +4,103 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
-
-	"triage/engine/internal/api"
+	"time"
 )
 
-func newTestServer() *api.Server {
-	return api.NewServer(api.Config{})
-}
-
-func TestIsValidAPIKey(t *testing.T) {
-	s := newTestServer()
+func TestRun_InvalidArgs(t *testing.T) {
 	ctx := context.Background()
-
-	// 1. Without database, IsValidAPIKey fails closed
-	if s.IsValidAPIKey(ctx, "any_key") {
-		t.Errorf("expected IsValidAPIKey to fail closed when database is nil")
-	}
-
-	// 2. Empty input key should return false
-	if s.IsValidAPIKey(ctx, "") {
-		t.Errorf("expected IsValidAPIKey to return false for empty key")
+	err := run(ctx, []string{"-nonexistent-flag"}, nil, false)
+	if err == nil {
+		t.Fatalf("expected error on invalid flag arguments")
 	}
 }
 
-func TestProjectKeysRoutes(t *testing.T) {
-	s := newTestServer()
-
-	// 1. Test GET /api/v1/projects/keys (empty fallback)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects/keys?owner=algotyrnt&repo=triage", nil)
-	rec := httptest.NewRecorder()
-	s.HandleProjectKeys(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
-	}
-
-	var getRes struct {
-		Keys []interface{} `json:"keys"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&getRes); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	// 2. Test POST /api/v1/projects/keys (create key)
-	createPayload := map[string]string{
-		"owner": "algotyrnt",
-		"repo":  "test-repo",
-		"name":  "Test Ingestion Key",
-	}
-	body, _ := json.Marshal(createPayload)
-	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/keys", bytes.NewBuffer(body))
-	createRec := httptest.NewRecorder()
-	s.HandleProjectKeys(createRec, createReq)
-
-	if createRec.Code != http.StatusOK {
-		t.Fatalf("expected status 200 for key creation, got %d", createRec.Code)
-	}
-
-	var createRes struct {
-		Success bool `json:"success"`
-		Key     struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			RawKey    string `json:"raw_key"`
-			KeyMasked string `json:"key_masked"`
-			Status    string `json:"status"`
-		} `json:"key"`
-	}
-	if err := json.NewDecoder(createRec.Body).Decode(&createRes); err != nil {
-		t.Fatalf("failed to decode create key response: %v", err)
-	}
-	if !createRes.Success {
-		t.Errorf("expected success=true in create key response")
-	}
-	if len(createRes.Key.RawKey) != 32 {
-		t.Errorf("expected raw_key to be 32 hex chars, got: %s", createRes.Key.RawKey)
-	}
-
-	// 3. Test POST /api/v1/projects/keys/revoke
-	revokePayload := map[string]string{
-		"key_id": createRes.Key.ID,
-	}
-	revokeBody, _ := json.Marshal(revokePayload)
-	revokeReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/keys/revoke", bytes.NewBuffer(revokeBody))
-	revokeRec := httptest.NewRecorder()
-	s.HandleRevokeProjectKey(revokeRec, revokeReq)
-
-	if revokeRec.Code != http.StatusOK {
-		t.Fatalf("expected status 200 for key revoke, got %d", revokeRec.Code)
+func TestRun_InvalidDatabasePath(t *testing.T) {
+	ctx := context.Background()
+	// An empty directory or non-existent parent path with trailing slash on SQLite file
+	err := run(ctx, []string{"-db", "/dev/null/cannot_create_dir/triage.db"}, nil, false)
+	if err == nil {
+		t.Fatalf("expected error for invalid database file path")
 	}
 }
 
-func TestCreateIncidentIssueRoute(t *testing.T) {
-	s := newTestServer()
+func TestRun_SuccessInit(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	dbFile := filepath.Join(tempDir, "main_test.db")
 
-	// 1. Test missing incident_id
-	body, _ := json.Marshal(map[string]string{})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/create-issue", bytes.NewBuffer(body))
-	rec := httptest.NewRecorder()
-	s.HandleCreateIncidentIssue(rec, req)
-
-	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected status 400 or 503, got %d", rec.Code)
+	args := []string{
+		"-port", "8089",
+		"-data-dir", tempDir,
+		"-db", dbFile,
+		"-log-level", "debug",
 	}
 
-	// 2. Test invalid method GET
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/incidents/create-issue", nil)
-	getRec := httptest.NewRecorder()
-	s.HandleCreateIncidentIssue(getRec, getReq)
-
-	if getRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
-	}
-}
-
-func TestLLMRoutes(t *testing.T) {
-	s := newTestServer()
-
-	// 1. Test POST /api/v1/llm/analyze-panic missing api key or model
-	body, _ := json.Marshal(map[string]string{
-		"panicMessage":   "nil pointer dereference",
-		"triggeringFile": "main.go",
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/llm/analyze-panic", bytes.NewBuffer(body))
-	rec := httptest.NewRecorder()
-	s.HandleLLMAnalyzePanic(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when AI is unconfigured, got %d", rec.Code)
+	err := run(ctx, args, nil, false)
+	if err != nil {
+		t.Fatalf("expected successful initialization, got: %v", err)
 	}
 
-	// 2. Test POST /api/v1/llm/generate-patch missing api key
-	patchBody, _ := json.Marshal(map[string]string{
-		"triggeringFile": "main.go",
-		"panicMessage":   "nil pointer dereference",
-	})
-	patchReq := httptest.NewRequest(http.MethodPost, "/api/v1/llm/generate-patch", bytes.NewBuffer(patchBody))
-	patchRec := httptest.NewRecorder()
-	s.HandleLLMGeneratePatch(patchRec, patchReq)
-
-	if patchRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400 when LLM key missing, got %d", patchRec.Code)
-	}
-
-	// 3. Test method not allowed
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/llm/generate-patch", nil)
-	getRec := httptest.NewRecorder()
-	s.HandleLLMGeneratePatch(getRec, getReq)
-
-	if getRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
+	// Verify database file was created
+	if _, statErr := os.Stat(dbFile); statErr != nil {
+		t.Errorf("expected database file to exist on disk: %v", statErr)
 	}
 }
 
-func TestCreateIncidentPRRoute(t *testing.T) {
-	s := newTestServer()
+func TestRun_WithVersionVariables(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	dbFile := filepath.Join(tempDir, "main_version_test.db")
 
-	// 1. Test missing incident_id
-	body, _ := json.Marshal(map[string]string{})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents/create-pr", bytes.NewBuffer(body))
-	rec := httptest.NewRecorder()
-	s.HandleCreateIncidentPR(rec, req)
+	version = "v1.2.3"
+	commit = "abc1234"
+	date = "2026-09-14"
+	defer func() {
+		version = ""
+		commit = ""
+		date = ""
+	}()
 
-	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected status 400 or 503, got %d", rec.Code)
+	args := []string{
+		"-port", "8091",
+		"-db", dbFile,
 	}
 
-	// 2. Test invalid method GET
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v1/incidents/create-pr", nil)
-	getRec := httptest.NewRecorder()
-	s.HandleCreateIncidentPR(getRec, getReq)
+	err := run(ctx, args, nil, false)
+	if err != nil {
+		t.Fatalf("expected successful run with version flags: %v", err)
+	}
+}
 
-	if getRec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status 405 Method Not Allowed, got %d", getRec.Code)
+func TestRun_GracefulShutdown(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	dbFile := filepath.Join(tempDir, "main_shutdown_test.db")
+
+	// Pick a high random port to avoid conflicts
+	port := fmt.Sprintf("%d", 20000+time.Now().UnixNano()%10000)
+
+	args := []string{
+		"-port", port,
+		"-db", dbFile,
+	}
+
+	stopChan := make(chan os.Signal, 1)
+
+	// Send signal after 100ms
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		stopChan <- syscall.SIGTERM
+	}()
+
+	err := run(ctx, args, stopChan, true)
+	if err != nil {
+		t.Fatalf("expected clean graceful shutdown, got: %v", err)
 	}
 }

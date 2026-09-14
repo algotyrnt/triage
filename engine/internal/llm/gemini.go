@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go/format"
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"google.golang.org/genai"
@@ -16,8 +17,9 @@ import (
 
 // GeminiProvider implements Provider using the official Google GenAI Go SDK.
 type GeminiProvider struct {
-	apiKey    string
-	modelName string
+	apiKey     string
+	modelName  string
+	httpClient *http.Client
 }
 
 // NewGeminiProvider creates a new Google Gemini LLM provider.
@@ -31,14 +33,16 @@ func NewGeminiProvider(cfg Config) (*GeminiProvider, error) {
 		model = "gemini-2.0-flash"
 	}
 	return &GeminiProvider{
-		apiKey:    apiKey,
-		modelName: model,
+		apiKey:     apiKey,
+		modelName:  model,
+		httpClient: cfg.HTTPClient,
 	}, nil
 }
 
 func (p *GeminiProvider) newClient(ctx context.Context) (*genai.Client, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey: p.apiKey,
+		APIKey:     p.apiKey,
+		HTTPClient: p.httpClient,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Gemini client: %w", err)
