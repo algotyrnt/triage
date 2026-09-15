@@ -111,11 +111,7 @@ func (s *Store) SaveLLM(ctx context.Context, cfg llm.Config) error {
 		}
 	}
 
-	if err := s.db.SaveInstanceConfig(ctx, KeyLLMBaseURL, strings.TrimSpace(cfg.BaseURL)); err != nil {
-		return err
-	}
-
-	return nil
+	return s.db.SaveInstanceConfig(ctx, KeyLLMBaseURL, strings.TrimSpace(cfg.BaseURL))
 }
 
 // GetInstanceURL returns the public dashboard URL configured in the database,

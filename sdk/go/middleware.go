@@ -224,7 +224,7 @@ func sendTelemetry(engineURL string, apiKey string, commit string, file string, 
 		TraceID:      traceID,
 	}
 
-	data, err := json.Marshal(payload)
+	data, err := json.Marshal(payload) //nolint:gosec // G117: APIKey is required for telemetry authentication
 	if err != nil {
 		return
 	}

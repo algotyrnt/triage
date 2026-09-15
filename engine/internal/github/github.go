@@ -886,8 +886,8 @@ func FetchUserRepositories(ctx context.Context, username string, accessToken ...
 				for _, org := range orgs {
 					orgPage := 1
 					for orgPage <= 5 {
-						orgUrl := fmt.Sprintf("https://api.github.com/orgs/%s/repos?type=all&per_page=100&page=%d", org.Login, orgPage)
-						oReq, rErr := http.NewRequestWithContext(ctx, "GET", orgUrl, nil)
+						orgURL := fmt.Sprintf("https://api.github.com/orgs/%s/repos?type=all&per_page=100&page=%d", org.Login, orgPage)
+						oReq, rErr := http.NewRequestWithContext(ctx, "GET", orgURL, nil)
 						if rErr != nil {
 							break
 						}
