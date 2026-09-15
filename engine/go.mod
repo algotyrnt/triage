@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	google.golang.org/genai v1.68.0
+	google.golang.org/genai v1.71.0
 	modernc.org/sqlite v1.57.0
 )
 
