@@ -30,8 +30,8 @@ updates:
       include: "scope"
     open-pull-requests-limit: 5
 
-  # Vite Studio Dashboard (Bun / npm)
-  - package-ecosystem: "npm"
+  # Vite Studio Dashboard (Bun)
+  - package-ecosystem: "bun"
     directory: "/dashboard"
     schedule:
       interval: "weekly"
@@ -40,8 +40,8 @@ updates:
       include: "scope"
     open-pull-requests-limit: 10
 
-  # Astro Web & Docs (Bun / npm)
-  - package-ecosystem: "npm"
+  # Astro Web & Docs (Bun)
+  - package-ecosystem: "bun"
     directory: "/web"
     schedule:
       interval: "weekly"
