@@ -29,6 +29,8 @@ BUILD_DATE      := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 GO              ?= go
 BUN             ?= bun
 DOCKER          ?= docker
+GOLANGCI_LINT   ?= golangci-lint
+GOVULNCHECK     ?= govulncheck
 
 # Go Build Flags
 LDFLAGS         := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(BUILD_DATE)
@@ -66,7 +68,7 @@ help: ## Show this help message
 			else if (target ~ /^test/) { category = "Testing & QA"; } \
 			else if (target ~ /^(lint|format|fmt|check)/) { category = "Testing & QA"; } \
 			else if (target ~ /^(docker|up|down|logs|prod-up|run|stop)/) { category = "Docker & Containers"; } \
-			else if (target ~ /^(dev|install|deps)/) { category = "Development"; } \
+			else if (target ~ /^(dev|install|deps|tools)/) { category = "Development"; } \
 			else if (target ~ /^clean/) { category = "Utilities"; } \
 			else { category = "General"; } \
 			categories[category] = categories[category] sprintf("  $(COLOR_GREEN)%-24s$(COLOR_RESET) %s\n", target, desc); \
@@ -205,7 +207,6 @@ test: test-engine test-sdk ## Run all Go test suites
 .PHONY: test-engine
 test-engine: ## Run Engine unit tests
 	@printf "$(COLOR_CYAN)==> Testing Engine (engine)...$(COLOR_RESET)\n"
-	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
 	@cd engine && $(GO) test -v ./...
 
 .PHONY: test-sdk
@@ -213,21 +214,62 @@ test-sdk: ## Run Go SDK unit tests
 	@printf "$(COLOR_CYAN)==> Testing Go SDK (sdk/go)...$(COLOR_RESET)\n"
 	@cd sdk/go && $(GO) test -v ./...
 
+.PHONY: test-race
+test-race: test-race-engine test-race-sdk ## Run all Go test suites with data race detector (-race)
+	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> All race detection suites passed!$(COLOR_RESET)\n"
+
+.PHONY: test-race-engine
+test-race-engine: ## Run Engine unit tests with data race detector
+	@printf "$(COLOR_CYAN)==> Testing Engine with race detector (engine)...$(COLOR_RESET)\n"
+	@cd engine && $(GO) test -v -race ./...
+
+.PHONY: test-race-sdk
+test-race-sdk: ## Run Go SDK unit tests with data race detector
+	@printf "$(COLOR_CYAN)==> Testing Go SDK with race detector (sdk/go)...$(COLOR_RESET)\n"
+	@cd sdk/go && $(GO) test -v -race ./...
+
 .PHONY: test-coverage
 test-coverage: ## Run tests with code coverage report
 	@printf "$(COLOR_CYAN)==> Running Go tests with coverage profiling...$(COLOR_RESET)\n"
-	@cd engine && $(GO) test -coverprofile=../coverage-engine.out ./...
-	@cd sdk/go && $(GO) test -coverprofile=../../coverage-sdk.out ./...
-	@echo "mode: set" > coverage.out
-	@grep -h -v "^mode:" coverage-engine.out coverage-sdk.out >> coverage.out 2>/dev/null || true
-	@rm -f coverage-engine.out coverage-sdk.out
-	@$(GO) tool cover -func=coverage.out
-	@$(GO) tool cover -html=coverage.out -o coverage.html
-	@printf "$(COLOR_GREEN)Generated coverage report at coverage.html$(COLOR_RESET)\n"
+	@printf "$(COLOR_CYAN)--> Engine Coverage:$(COLOR_RESET)\n"
+	@cd engine && $(GO) test -coverprofile=coverage.out ./... && $(GO) tool cover -func=coverage.out
+	@printf "\n$(COLOR_CYAN)--> Go SDK Coverage:$(COLOR_RESET)\n"
+	@cd sdk/go && $(GO) test -coverprofile=coverage.out ./... && $(GO) tool cover -func=coverage.out
+	@printf "$(COLOR_GREEN)==> Coverage profiling complete!$(COLOR_RESET)\n"
 
 .PHONY: lint
 lint: lint-go lint-web lint-dashboard ## Run all code linters and formatting checks
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Linting & formatting checks passed!$(COLOR_RESET)\n"
+
+.PHONY: lint-sec vulncheck
+lint-sec: ## Run govulncheck for dependency vulnerability scanning
+	@printf "$(COLOR_CYAN)==> Running govulncheck dependency vulnerability scans...$(COLOR_RESET)\n"
+	@if command -v $(GOVULNCHECK) >/dev/null 2>&1; then \
+		printf "$(COLOR_CYAN)--> Scanning Engine...$(COLOR_RESET)\n"; \
+		(cd engine && $(GOVULNCHECK) ./...); \
+		printf "$(COLOR_CYAN)--> Scanning Go SDK...$(COLOR_RESET)\n"; \
+		(cd sdk/go && $(GOVULNCHECK) ./...); \
+		printf "$(COLOR_GREEN)==> govulncheck completed successfully!$(COLOR_RESET)\n"; \
+	else \
+		printf "$(COLOR_RED)[ERROR] govulncheck is not installed or not in PATH.$(COLOR_RESET)\n"; \
+		printf "Install with '$(COLOR_YELLOW)make tools$(COLOR_RESET)' or 'go install golang.org/x/vuln/cmd/govulncheck@latest'\n"; \
+		exit 1; \
+	fi
+
+vulncheck: lint-sec
+
+.PHONY: lint-golangci
+lint-golangci: ## Run golangci-lint across Go modules
+	@printf "$(COLOR_CYAN)==> Running golangci-lint...$(COLOR_RESET)\n"
+	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
+		(cd engine && $(GOLANGCI_LINT) run --timeout=5m); \
+		(cd sdk/go && $(GOLANGCI_LINT) run --timeout=5m); \
+		printf "$(COLOR_GREEN)==> golangci-lint passed!$(COLOR_RESET)\n"; \
+	else \
+		printf "$(COLOR_RED)[ERROR] golangci-lint is not installed or not in PATH.$(COLOR_RESET)\n"; \
+		printf "Install with '$(COLOR_YELLOW)make tools$(COLOR_RESET)' or 'go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6'\n"; \
+		exit 1; \
+	fi
 
 .PHONY: lint-go
 lint-go: lint-engine lint-sdk ## Verify all Go formatting and static analysis
@@ -235,7 +277,6 @@ lint-go: lint-engine lint-sdk ## Verify all Go formatting and static analysis
 .PHONY: lint-engine
 lint-engine: ## Verify Engine formatting and vet
 	@printf "$(COLOR_CYAN)==> Checking Engine formatting and vet...$(COLOR_RESET)\n"
-	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
 	@UNFORMATTED=$$(gofmt -l engine); \
 	if [ -n "$$UNFORMATTED" ]; then \
 		printf "$(COLOR_RED)[ERROR] Unformatted Go files in engine:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
@@ -303,7 +344,6 @@ build-dashboard: ## Build Vite Studio Dashboard into Engine embed directory
 build-triage: ## Compile Triage server binary to bin/triage
 	@printf "$(COLOR_CYAN)==> Building Triage binary ($(VERSION))...$(COLOR_RESET)\n"
 	@mkdir -p $(BIN_DIR)
-	@mkdir -p engine/internal/ui/dist && touch engine/internal/ui/dist/.gitkeep
 	@cd engine && CGO_ENABLED=0 $(GO) build -trimpath -ldflags="$(LDFLAGS)" -o ../$(BIN_DIR)/triage main.go
 	@printf "$(COLOR_GREEN)Built $(BIN_DIR)/triage$(COLOR_RESET)\n"
 
@@ -391,9 +431,14 @@ install: ## Install all dependencies (Go modules & Bun packages)
 	@cd sdk/go && $(GO) mod download
 	@cd web && $(BUN) install && $(BUN) x astro sync
 	@cd dashboard && $(BUN) install
-	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Dependencies installed and types synchronized!$(COLOR_RESET)\n"
-
 deps: install
+
+.PHONY: tools
+tools: ## Install required Go development tools (golangci-lint & govulncheck)
+	@printf "$(COLOR_CYAN)==> Installing Go development tools...$(COLOR_RESET)\n"
+	@$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6
+	@$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Development tools installed!$(COLOR_RESET)\n"
 
 .PHONY: dev-engine
 dev-engine: ## Run Engine server locally with live logging
@@ -420,5 +465,5 @@ clean: ## Clean binaries, coverage reports, tarballs, and build artifacts
 	@rm -rf $(BIN_DIR) $(DIST_DIR)
 	@rm -rf coverage.out coverage.html coverage-engine.out coverage-sdk.out
 	@rm -rf web/dist
-	@rm -rf engine/internal/ui/dist
+	@find engine/internal/ui/dist -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true
 	@printf "$(COLOR_GREEN)Clean completed.$(COLOR_RESET)\n"
