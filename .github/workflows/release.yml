@@ -111,6 +111,18 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=triage
+            org.opencontainers.image.description=Zero-overhead Go panic isolation, AST slicing & AI triage server with embedded studio dashboard
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=Apache-2.0
+          annotations: |
+            index:org.opencontainers.image.title=triage
+            index:org.opencontainers.image.description=Zero-overhead Go panic isolation, AST slicing & AI triage server with embedded studio dashboard
+            index:org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.licenses=Apache-2.0
 
       - name: Build and Push Multi-Arch Docker Image
         uses: docker/build-push-action@v6
@@ -124,6 +136,7 @@ jobs:
             COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=triage
           cache-to: type=gha,mode=max,scope=triage
 
