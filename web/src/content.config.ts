@@ -9,7 +9,9 @@ import { docsSchema } from '@astrojs/starlight/schema';
 
 export const collections = {
   docs: defineCollection({
-    loader: docsLoader(),
+    loader: docsLoader({
+      generateId: ({ entry }) => `docs/${entry.replace(/\.[^.]+$/, '')}`,
+    }),
     schema: docsSchema(),
   }),
 };

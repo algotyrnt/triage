@@ -1,0 +1,56 @@
+---
+/**
+ * Copyright 2026 Punjitha Bandara (algotyrnt) <https://algotyrnt.com>
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { Navbar } from '@/components/Navbar';
+import { Footer } from '@/components/Footer';
+import '@/styles/custom.css';
+---
+
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>404 - Page Not Found | triage</title>
+    <meta name="description" content="The page you are looking for does not exist." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body
+    class="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white flex flex-col"
+  >
+    <Navbar client:load />
+    <main class="flex-1 flex flex-col items-center justify-center text-center px-4 py-20 sm:py-28">
+      <div
+        class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-mono mb-6 shadow-xs"
+      >
+        <span class="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+        HTTP 404 ERROR
+      </div>
+      <h1 class="text-7xl sm:text-9xl font-black tracking-tight text-slate-900 mb-4 font-mono">
+        404
+      </h1>
+      <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-3">Page Not Found</h2>
+      <p class="text-base text-slate-600 max-w-md mb-8 leading-relaxed">
+        The requested resource or documentation page could not be located. It may have been moved,
+        renamed, or does not exist.
+      </p>
+      <div class="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+        <a
+          href="/"
+          class="bg-black hover:bg-slate-800 text-white font-mono text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-sm flex items-center gap-2 shadow-xs transition-all"
+        >
+          Return Home
+        </a>
+        <a
+          href="/docs/overview"
+          class="bg-white hover:bg-slate-50 text-slate-900 font-mono text-xs sm:text-sm font-semibold px-5 py-2.5 rounded-sm border border-slate-300 flex items-center gap-2 shadow-xs transition-all"
+        >
+          Documentation
+        </a>
+      </div>
+    </main>
+    <Footer client:visible />
+  </body>
+</html>

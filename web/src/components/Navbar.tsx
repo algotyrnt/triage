@@ -24,19 +24,19 @@ export const Navbar: React.FC = () => {
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-mono text-slate-600 font-medium">
-          <a href="#simulator" className="hover:text-black transition-colors">
+          <a href="/#simulator" className="hover:text-black transition-colors">
             Simulator
           </a>
-          <a href="#architecture" className="hover:text-black transition-colors">
+          <a href="/#architecture" className="hover:text-black transition-colors">
             Architecture
           </a>
-          <a href="#features" className="hover:text-black transition-colors">
+          <a href="/#features" className="hover:text-black transition-colors">
             Features
           </a>
-          <a href="#sdk" className="hover:text-black transition-colors">
+          <a href="/#sdk" className="hover:text-black transition-colors">
             Go SDK
           </a>
-          <a href="#benchmarks" className="hover:text-black transition-colors">
+          <a href="/#benchmarks" className="hover:text-black transition-colors">
             Benchmarks
           </a>
           <a href="/docs/overview" className="hover:text-black transition-colors">
@@ -82,35 +82,35 @@ export const Navbar: React.FC = () => {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4 space-y-3 font-mono text-xs shadow-xl">
           <a
-            href="#simulator"
+            href="/#simulator"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
             Simulator
           </a>
           <a
-            href="#architecture"
+            href="/#architecture"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
             Architecture
           </a>
           <a
-            href="#features"
+            href="/#features"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
             Features
           </a>
           <a
-            href="#sdk"
+            href="/#sdk"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
             Go SDK
           </a>
           <a
-            href="#benchmarks"
+            href="/#benchmarks"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-slate-700 hover:text-black py-1"
           >
