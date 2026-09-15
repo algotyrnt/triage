@@ -1,4 +1,4 @@
 [tools]
 go = "1.26"
 bun = "latest"
-golangci-lint = "1.64.6"
+golangci-lint = "2.13.2"

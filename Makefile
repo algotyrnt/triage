@@ -267,7 +267,7 @@ lint-golangci: ## Run golangci-lint across Go modules
 		printf "$(COLOR_GREEN)==> golangci-lint passed!$(COLOR_RESET)\n"; \
 	else \
 		printf "$(COLOR_RED)[ERROR] golangci-lint is not installed or not in PATH.$(COLOR_RESET)\n"; \
-		printf "Install with '$(COLOR_YELLOW)make tools$(COLOR_RESET)' or 'go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6'\n"; \
+		printf "Install with '$(COLOR_YELLOW)make tools$(COLOR_RESET)' or 'go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2'\n"; \
 		exit 1; \
 	fi
 
@@ -275,26 +275,24 @@ lint-golangci: ## Run golangci-lint across Go modules
 lint-go: lint-engine lint-sdk ## Verify all Go formatting and static analysis
 
 .PHONY: lint-engine
-lint-engine: ## Verify Engine formatting and vet
-	@printf "$(COLOR_CYAN)==> Checking Engine formatting and vet...$(COLOR_RESET)\n"
+lint-engine: ## Verify Engine formatting
+	@printf "$(COLOR_CYAN)==> Checking Engine formatting...$(COLOR_RESET)\n"
 	@UNFORMATTED=$$(gofmt -l engine); \
 	if [ -n "$$UNFORMATTED" ]; then \
 		printf "$(COLOR_RED)[ERROR] Unformatted Go files in engine:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
 		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
 		exit 1; \
 	fi
-	@cd engine && $(GO) vet ./...
 
 .PHONY: lint-sdk
-lint-sdk: ## Verify Go SDK formatting and vet
-	@printf "$(COLOR_CYAN)==> Checking Go SDK formatting and vet...$(COLOR_RESET)\n"
+lint-sdk: ## Verify Go SDK formatting
+	@printf "$(COLOR_CYAN)==> Checking Go SDK formatting...$(COLOR_RESET)\n"
 	@UNFORMATTED=$$(gofmt -l sdk/go); \
 	if [ -n "$$UNFORMATTED" ]; then \
 		printf "$(COLOR_RED)[ERROR] Unformatted Go files in sdk/go:\n$$UNFORMATTED$(COLOR_RESET)\n"; \
 		printf "Run '$(COLOR_YELLOW)make format-go$(COLOR_RESET)' to auto-fix.\n"; \
 		exit 1; \
 	fi
-	@cd sdk/go && $(GO) vet ./...
 
 .PHONY: lint-web
 lint-web: ## Check Astro web formatting
@@ -436,7 +434,7 @@ deps: install
 .PHONY: tools
 tools: ## Install required Go development tools (golangci-lint & govulncheck)
 	@printf "$(COLOR_CYAN)==> Installing Go development tools...$(COLOR_RESET)\n"
-	@$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6
+	@$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 	@$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	@printf "$(COLOR_BOLD)$(COLOR_GREEN)==> Development tools installed!$(COLOR_RESET)\n"
 
