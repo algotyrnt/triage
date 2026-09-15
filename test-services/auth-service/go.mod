@@ -1,6 +1,6 @@
 module auth-service
 
-go 1.26.6
+go 1.26
 
 require github.com/algotyrnt/triage/sdk/go v0.0.0
 
