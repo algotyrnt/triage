@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -o /build/triage main.go
 
 # Stage 3: Minimal Production Image (Zero-Dependency Single Container)
-FROM alpine:3.21
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="triage" \
       org.opencontainers.image.description="Zero-overhead Go panic isolation, AST slicing & AI triage server with embedded studio dashboard" \
