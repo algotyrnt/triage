@@ -26,7 +26,11 @@ func Handler() http.Handler {
 			http.Error(w, "Dashboard UI not built. Run 'bun run build' in dashboard.", http.StatusServiceUnavailable)
 		})
 	}
+	return HandlerWithFS(subFS)
+}
 
+// HandlerWithFS returns an http.Handler that serves frontend assets from any fs.FS.
+func HandlerWithFS(subFS fs.FS) http.Handler {
 	indexHTML, indexErr := fs.ReadFile(subFS, "index.html")
 	fileServer := http.FileServer(http.FS(subFS))
 
@@ -36,7 +40,7 @@ func Handler() http.Handler {
 			reqPath = "index.html"
 		}
 
-		// Check if file exists in the embedded subFS
+		// Check if file exists in the subFS
 		f, err := subFS.Open(reqPath)
 		if err == nil {
 			_ = f.Close()
