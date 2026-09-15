@@ -1,0 +1,62 @@
+version: '2'
+
+run:
+  go: '1.26'
+  timeout: 5m
+  tests: true
+  concurrency: 4
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - misspell
+    - unconvert
+    - revive
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    gosec:
+      excludes:
+        - G104 # Errors are handled or tested explicitly
+        - G115 # Integer overflow conversion in Go 1.24+
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+          disabled: true
+  exclusions:
+    paths:
+      - bin
+      - dist-bin
+      - test-services
+      - node_modules
+      - engine/internal/ui/dist
+    rules:
+      # Test files can use mock credentials and relaxed error checking
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+          - revive
