@@ -14,6 +14,7 @@ export default defineConfig({
     react(),
     starlight({
       title: 'triage docs',
+      disable404Route: true,
       social: [
         {
           icon: 'github',
