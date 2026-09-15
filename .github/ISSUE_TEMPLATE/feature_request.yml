@@ -1,0 +1,53 @@
+name: Feature Request
+description: Propose a new feature, integration, or improvement for Triage
+labels: ["kind/feature", "status/triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an idea! Please explain how this will benefit the community and help us understand the problem.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Use Case
+      description: Is your feature request related to a problem or limitation? Please describe clearly.
+      placeholder: I am always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented.
+      placeholder: Add support for...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target Component
+      options:
+        - "Engine (AST Engine / Diagnostics / DB / Auth)"
+        - "Studio Dashboard (UI / UX)"
+        - "Go SDK"
+        - "AI Models (New LLM provider or prompting)"
+        - "GitHub Integration (PRs / Issues / OAuth)"
+        - "CLI / Deployment"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: A clear and concise description of any alternative solutions or features you've considered.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add any other context, mockups, or screenshots about the feature request here.

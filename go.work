@@ -1,0 +1,10 @@
+go 1.26
+
+use (
+	./engine
+	./sdk/go
+	./test-services/auth-service
+	./test-services/order-service
+	./test-services/payment-gateway
+	./test-services/simple-service
+)

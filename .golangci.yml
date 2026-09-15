@@ -1,0 +1,86 @@
+version: "2"
+run:
+  timeout: 5m
+  concurrency: 4
+  tests: true
+linters:
+  default: none
+  enable:
+    - errcheck
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+    gosec:
+      excludes:
+        - G101
+        - G104
+        - G115
+        - G117
+        - G124
+        - G704
+        - G710
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          disabled: true
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+        - -ST*
+        - -QF*
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gosec
+          - revive
+        path: _test\.go
+    paths:
+      - bin
+      - dist-bin
+      - test-services
+      - node_modules
+      - engine/internal/ui/dist
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

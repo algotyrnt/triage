@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Triage Documentation
+    url: https://triage.algotyrnt.com
+    about: Read guides, architecture overviews, SDK docs, and troubleshooting tips.
+  - name: Community Discussions and Q&A
+    url: https://github.com/algotyrnt/triage/discussions
+    about: Ask questions, get architecture advice, and discuss ideas with the community.
+  - name: Security Vulnerability Report
+    url: https://github.com/algotyrnt/triage/security/advisories/new
+    about: Report security vulnerabilities privately.

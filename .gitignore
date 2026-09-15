@@ -1,36 +1,38 @@
-# Binaries & build artifacts
+# Binaries and build artifacts
 bin/
 dist-bin/
+/dist/
+web/dist/
+dashboard/dist/
+engine/internal/ui/dist/*
+!engine/internal/ui/dist/.gitkeep
+build/
+out/
 *.exe
-*.exe~
 *.dll
 *.so
 *.dylib
 *.test
 *.out
 *.prof
+*.coverprofile
+coverage/
 *.tar.gz
 *.zip
-coverage.out
-coverage.html
-/vendor/
+vendor/
 
 # Dependencies
 node_modules/
 .pnpm-store/
 .bun/
+*.log
 
-# Framework & UI build outputs
+# Frameworks and tooling
 .astro/
-dist/
-web/dist/
-dashboard/dist/
-engine/internal/ui/dist/
-build/
-.vercel/
+.turbo/
 *.tsbuildinfo
 
-# SQLite databases & runtime data
+# SQLite databases and runtime data
 data/
 *.db
 *.db-journal
@@ -39,25 +41,20 @@ data/
 *.sqlite
 *.sqlite3
 
-# Secrets & certificates
+# Environment and secrets
 .env
 .env.*
+!.env.example
+!.env.template
 *.pem
 *.key
-*.p12
-*.pfx
+*.crt
 
-# IDE & system files
+# IDE and OS files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 Thumbs.db
-ehthumbs.db
 .idea/
 .vscode/
 *.swp
-*.swo
 *~
 .gemini/

@@ -46,13 +46,6 @@ func (db *DB) UpsertUserWithRole(ctx context.Context, githubID, username, email,
 	`, githubID).Scan(&existing.ID, &existing.GitHubID, &existing.Username, &existingEmail, &existingAvatar, &existing.Role, &existing.CreatedAt, &existing.UpdatedAt)
 
 	if err == nil {
-		if existingEmail != nil {
-			existing.Email = *existingEmail
-		}
-		if existingAvatar != nil {
-			existing.AvatarURL = *existingAvatar
-		}
-
 		var u User
 		var retEmail, retAvatar *string
 		updErr := db.SQL.QueryRowContext(ctx, `

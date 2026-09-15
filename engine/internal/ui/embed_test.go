@@ -8,10 +8,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestHandler_AllBranches(t *testing.T) {
-	handler := Handler()
+	mockFS := fstest.MapFS{
+		"index.html":                {Data: []byte("<!DOCTYPE html><html><body>Test</body></html>")},
+		"favicon.svg":               {Data: []byte("<svg></svg>")},
+		"assets/index-BjxQqYvZ.css": {Data: []byte("body { margin: 0; }")},
+	}
+	handler := HandlerWithFS(mockFS)
 
 	// 1. Test root "/"
 	reqRoot := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -68,5 +74,13 @@ func TestHandler_AllBranches(t *testing.T) {
 	}
 	if recSPA.Header().Get("Cache-Control") != "no-cache" {
 		t.Errorf("expected Cache-Control no-cache for SPA fallback, got %s", recSPA.Header().Get("Cache-Control"))
+	}
+
+	// 6. Test default Handler() invocation directly (does not panic)
+	defaultHandler := Handler()
+	recDefault := httptest.NewRecorder()
+	defaultHandler.ServeHTTP(recDefault, httptest.NewRequest(http.MethodGet, "/", nil))
+	if recDefault.Code == 0 {
+		t.Fatal("expected non-zero HTTP response code from default handler")
 	}
 }

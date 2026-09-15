@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"triage/engine/internal/ast"
@@ -19,8 +18,6 @@ import (
 	"triage/engine/internal/ui"
 	"triage/engine/internal/version"
 )
-
-var githubNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_\.\-]+$`)
 
 // Config holds initialization dependencies for the Server.
 type Config struct {

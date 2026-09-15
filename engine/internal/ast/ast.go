@@ -379,14 +379,14 @@ func ExtractFuncAST(filePath string, targetLine int) (string, error) {
 		return true
 	}
 
-	pkgs, err := parser.ParseDir(fset, dir, filter, parser.ParseComments)
+	pkgs, err := parser.ParseDir(fset, dir, filter, parser.ParseComments) //nolint:staticcheck // SA1019: ParseDir is retained for local AST parsing
 	if err != nil || len(pkgs) == 0 {
 		// Fallback: parse single file if directory parsing fails
 		return extractSingleFileAST(filePath, targetLine)
 	}
 
 	// Find the package that contains our target file
-	var targetPkg *ast.Package
+	var targetPkg *ast.Package //nolint:staticcheck // SA1019: ast.Package is retained for AST representation
 	cleanTarget := filepath.ToSlash(filePath)
 
 	for _, pkg := range pkgs {
