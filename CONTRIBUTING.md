@@ -50,7 +50,7 @@ Triage is structured as a modular monorepo containing the engine, studio dashboa
 
 Ensure you have the following installed on your machine:
 
-- **Go**: 1.24+ (Go 1.26+ recommended)
+- **Go**: 1.26+ for Engine (Go 1.22+ supported for Go SDK)
 - **Bun**: latest (used for dashboard and documentation workflows)
 - **golangci-lint**: 1.64+ (install via `make tools` or your package manager)
 - **Docker**: Optional, for containerized local testing

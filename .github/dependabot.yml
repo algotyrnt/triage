@@ -39,6 +39,12 @@ updates:
       prefix: "chore"
       include: "scope"
     open-pull-requests-limit: 10
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
 
   # Astro Web & Docs (Bun)
   - package-ecosystem: "bun"
@@ -49,6 +55,12 @@ updates:
       prefix: "chore"
       include: "scope"
     open-pull-requests-limit: 10
+    groups:
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
 
   # Production Dockerfile
   - package-ecosystem: "docker"
