@@ -7,7 +7,7 @@ Follow this guide to spin up a local Triage instance and capture your first Go c
 
 ## Prerequisites
 
-- **Go 1.26+**
+- **Go 1.22+** (for Go SDK integration; Go 1.26+ for server)
 - **Docker** (or run the standalone Go binary)
 - An API key for your preferred AI provider (**Google Gemini**, **OpenAI**, **Anthropic Claude**) or a local instance (**Ollama**, **vLLM**)
 

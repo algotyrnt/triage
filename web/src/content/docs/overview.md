@@ -57,7 +57,7 @@ Traditional application monitoring tools and crash loggers capture giant stack t
 | Component               | Port     | Technology              | Purpose                                                                         |
 | :---------------------- | :------- | :---------------------- | :------------------------------------------------------------------------------ |
 | **Triage Server**       | `:8080`  | Go 1.26+ (Embedded UI)  | Telemetry ingestion, AST slicing, Multi-provider AI, and React Studio Dashboard |
-| **Go Client SDK**       | Embedded | Go 1.26+                | Non-blocking HTTP middleware with panic recovery                                |
+| **Go Client SDK**       | Embedded | Go 1.22+                | Non-blocking HTTP middleware with panic recovery                                |
 | **Embedded Storage**    | Embedded | SQLite (WAL mode)       | Zero-config embedded persistence for incidents, keys, and settings              |
 | **Documentation & Web** | `:4321`  | Astro & Starlight (Bun) | Public landing site and technical reference                                     |
 

@@ -7,7 +7,7 @@ Triage includes a centralized `Makefile` to streamline local development, multi-
 
 ## Prerequisites
 
-- **Go 1.26+** (Required for Server and Go SDK)
+- **Go 1.26+** (Go 1.26+ for Engine, Go 1.22+ supported for Go SDK)
 - **Bun** (latest / 1.x+, used for Web & Dashboard build tooling)
 - **Docker** (For single-container builds and local testing)
 - **Make** (`/usr/bin/make` on macOS / Linux)
