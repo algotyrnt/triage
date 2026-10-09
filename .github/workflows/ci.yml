@@ -64,7 +64,7 @@ jobs:
           bun-version: latest
 
       - name: Cache Bun Dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-dashboard-${{ hashFiles('dashboard/bun.lock*') }}
@@ -179,7 +179,7 @@ jobs:
           bun-version: latest
 
       - name: Cache Bun Dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-web-${{ hashFiles('web/bun.lock*') }}
