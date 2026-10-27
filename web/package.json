@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@astrojs/react": "^7.0.0",
-    "@astrojs/starlight": "^0.42.5",
+    "@astrojs/starlight": "^0.42.7",
     "@astrojs/tailwind": "^6.0.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
